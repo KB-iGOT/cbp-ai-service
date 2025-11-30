@@ -1,0 +1,23 @@
+[project]
+name = "cbp-ai-service"
+version = "0.1.0"
+description = "iGOT AI Driven CBP"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi==0.111.0",
+    "google-genai>=1.20.0",
+    "psycopg2-binary==2.9.9",
+    "pydantic[email]==2.7.4",
+    "pydantic-settings>=2.9.1",
+    "sqlalchemy[asyncio]==2.0.30",
+    "uvicorn==0.30.1",
+    "pypdf2>=3.0.1",
+    "python-multipart>=0.0.20",
+    "python-jose[cryptography]>=3.5.0",
+    "google-cloud-storage>=3.4.1",
+    "asyncpg>=0.30.0",
+    "jinja2>=3.1.6",
+    "playwright>=1.56.0",
+    "pwdlib[argon2]>=0.3.0",
+]

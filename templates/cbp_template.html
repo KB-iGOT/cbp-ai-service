@@ -1,0 +1,1694 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <title>View CBP Plan</title>
+  <link href="https://fonts.googleapis.com/css2?family=Lato&display=swap" rel="stylesheet" />
+   <style>
+    @import url('https://fonts.googleapis.com/css2?family=Lato&display=swap');
+    @media print {
+
+      /* Remove shadows/background gradients */
+      * {
+        box-shadow: none !important;
+       
+      }
+
+      
+
+      body {
+        margin: 0;
+        padding: 0;
+        zoom: 80%;
+        
+        /* <-- ADJUST THIS TO FIT PAGE */
+      }
+       body * {
+      font-family: 'Lato', sans-serif !important;
+    }
+
+      * {
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+        color-adjust: exact !important;
+      }
+
+      .primary-heading {
+        color:#264092 !important;font-size: 40px !important;text-align: center !important;
+      }
+
+      .image-container .h-10 {
+      width: 240px;
+      height: 60px;
+      ;
+    }
+
+      /* Stop Flex/Grid issues */
+      .competency-container,
+      .competencis-grid,
+      .competency-grid,
+      .grid,
+      .competency-count-by-designation,
+      .header-flex,
+      .footer-container {
+        display: block !important;
+        width: 100% !important;
+        /* text-align: center; */
+      }
+
+      /* Fix page break issues */
+      .section-shadow,
+      .outside-layer-total,
+      .outside-layer-behavioral,
+      .outside-layer-functional,
+      .outside-layer-domain,
+      .org-footer,
+      header,
+      footer,
+      .designation-block {
+        page-break-inside: avoid !important;
+      }
+
+      /* Force long lists to break correctly */
+      .grid-list-item div,
+      .role-card,
+      .grid {
+        page-break-inside: avoid !important;
+      }
+
+      /* Avoid cropped images */
+      img {
+        max-width: 100% !important;
+        height: auto !important;
+      }
+
+      /* Sticky footer breaks PDF — disable it */
+      .popup-footer {
+        position: static !important;
+      }
+
+      .competency-container {
+        display: table !important;
+        width: 100% !important;
+        table-layout: fixed !important;
+      }
+
+      .competency-container>div {
+        display: table-cell !important;
+        width: 100% !important;
+        vertical-align: top;
+        padding: 8px !important;
+        margin: 10px !important
+      }
+
+      .competencis-grid {
+        display: table !important;
+        width: 100% !important;
+        table-layout: fixed !important;
+        border-spacing: 8px !important;
+        /* optional spacing */
+      }
+
+      .competencis-grid>div {
+        display: table-cell !important;
+        width: 33.33% !important;
+        vertical-align: top !important;
+        padding: 8px !important;
+        margin: 10px !important;
+      }
+
+      .competency-container,
+      .competencis-grid {
+        transform: scale(0.78);
+        /* adjust 0.70–0.90 depending on fit */
+        transform-origin: top left;
+      }
+
+      /* Ensure items inside do not break spreads */
+      .grid-list-item {
+        page-break-inside: avoid !important;
+      }
+
+      footer.org-footer img {
+        display: block !important;
+        margin-left: auto !important;
+        margin-right: auto !important;
+        margin-top: 8px !important;
+        margin-bottom: 8px !important;
+        float: none !important;
+      }
+
+      footer.org-footer .footer-logo-container {
+        text-align: center !important;
+        width: 100% !important;
+        display: block !important;
+      }
+
+      /* Remove any leftover flex or spacing in print */
+      footer.org-footer .footer-container {
+        display: block !important;
+        text-align: center !important;
+        margin: 0 auto !important;
+      }
+      .competency-container {
+    width: 100%;
+    display: flex !important;
+    justify-content: center !important;
+    flex-direction: row;
+    margin: 0 64px !important;
+  }
+
+  /* 2. Replace gap (does NOT work in print) with margin */
+  .competency-container > div {
+    /* margin-right: 0px !important;
+    margin-left: 64px !important; */
+  }
+
+  .competency-container > div:last-child {
+    margin-right: 0 !important;
+  } 
+      
+  .detailed-competency {
+    width: 100%;
+    display: flex !important;
+    justify-content: center !important;
+    flex-direction: row;
+  }
+    }
+
+
+    
+
+
+    .container {
+
+      margin: 10px auto;
+    }
+
+    .sub-heading p {
+      color: #000;
+      font-family: Montserrat;
+      font-size: 22px;
+      font-style: normal;
+      font-weight: 600;
+      line-height: normal;
+    }
+
+    .radio-group {}
+
+    .radio-label {
+      color: #000;
+
+      /* Body 1 */
+      font-family: Lato;
+      font-size: 16px;
+      font-style: normal;
+      font-weight: 400;
+      line-height: normal;
+    }
+
+    .radio-btn-group {
+      display: flex;
+      width: 32px;
+      height: 32px;
+      padding: 2px;
+      gap: 10px;
+    }
+
+    .label {
+      color: var(--Body-Text-Body-Color, #212529);
+      font-family: Lato;
+      font-size: 14px;
+      font-style: normal;
+      font-weight: 700;
+      line-height: 150%;
+      /* 21px */
+    }
+
+    ::ng-deep mat-form-field {
+      background-color: white !important;
+      border-radius: 25px !important;
+      padding-left: 12px;
+      padding-right: 12px;
+      height: 42px;
+      width: 100%;
+    }
+
+    ::ng-deep mat-select {
+      border-radius: 25px !important;
+      background-color: white !important;
+    }
+
+    ::ng-deep .mat-select-panel {
+      background-color: white !important;
+    }
+
+    ::ng-deep .mat-select-panel .mat-option {
+      border-radius: 0 !important;
+      /* Options with no border-radius */
+    }
+
+    ::ng-deep mat-form-field .mat-form-field-underline {
+      display: none !important;
+    }
+
+
+
+    ::ng-deep mat-select .mat-select-placeholder {
+      color: rgba(0, 0, 0, 0.40);
+      font-family: Lato;
+      font-size: 14px;
+      font-style: normal;
+      font-weight: 400;
+      line-height: normal;
+    }
+
+    ::ng-deep mat-select .mat-select-value-text {
+      color: rgba(0, 0, 0, 1);
+
+      font-family: Lato;
+      font-size: 14px;
+      font-style: normal;
+      font-weight: 400;
+      line-height: normal;
+      line-height: normal !important;
+      /* Prevent overflow push */
+      padding-top: 0 !important;
+      padding-bottom: 0 !important;
+    }
+
+    ::ng-deep mat-select .mat-select-value {
+      display: flex !important;
+      align-items: center !important;
+      /* Vertically center */
+      height: 100% !important;
+    }
+
+    .additional-details textarea {
+      display: flex;
+      padding: 16px 16px 0 16px;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 10px;
+      flex: 1 0 0;
+      align-self: stretch;
+      width: 100%;
+      color: #000;
+      font-family: Lato;
+      font-size: 14px;
+      font-style: normal;
+      font-weight: 400;
+      line-height: normal;
+      resize: none;
+    }
+
+
+    .section-header {
+      display: flex;
+      flex-direction: row;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .btn-disable {
+      border-radius: var(--Radius-Full-Round, 9999999px);
+      opacity: 0.4;
+      background: var(--Primary-KB-Primary-Light, #1B4CA1);
+      color: var(--white-kb-white-100, #FFF);
+      text-align: center;
+
+      /* Button */
+      font-family: Lato;
+      font-size: 14px;
+      font-style: normal;
+      font-weight: 700;
+      line-height: normal;
+      display: flex;
+      height: 32px;
+      padding: 0px 16px;
+      justify-content: center;
+      align-items: center;
+      gap: 8px;
+      border: none;
+    }
+
+    .btn-group {
+      display: flex;
+      flex-direction: row;
+      justify-content: space-between;
+
+    }
+
+    .pl-2 {
+      padding-left: 5px;
+    }
+
+    .search-filter-section {
+      display: flex;
+      flex-direction: row;
+      justify-content: space-between;
+    }
+
+    .search {
+      .rsearch {
+        position: relative;
+      }
+
+      .search-icon {
+        position: absolute;
+        top: 15px;
+        font-size: 20px;
+        left: 10px;
+      }
+
+      .sinput {
+        border-radius: 32px;
+        border: 1px solid #d5d0d0;
+        padding: 15px 36px;
+        /* stylelint-disable */
+        font: 400 14px Lato;
+        width: 800px
+          /* stylelint-enable */
+      }
+    }
+
+    .select-map-route-container {
+      display: flex;
+      flex-direction: row;
+    }
+
+    .selected-mapping-route p {
+      color: #1B4CA1;
+      font-family: Lato;
+      font-size: 20px;
+      font-style: normal;
+      font-weight: 400;
+      line-height: normal;
+      text-decoration-line: underline;
+      text-decoration-style: solid;
+      text-decoration-skip-ink: auto;
+      text-decoration-thickness: auto;
+      text-underline-offset: auto;
+      text-underline-position: from-font;
+    }
+
+    .edit-plan {
+      display: flex;
+      padding: 4px;
+      justify-content: center;
+      align-items: center;
+      gap: 8px;
+      border-radius: 4px;
+      background: rgba(27, 76, 161, 0.16);
+      color: #1B4CA1;
+      font-family: Lato;
+      font-size: 14px;
+      font-style: normal;
+      font-weight: 400;
+      line-height: normal;
+      margin-left: 10px;
+    }
+
+    .search-container {
+      display: flex;
+      flex-direction: row;
+    }
+
+    .course-container {
+      display: flex;
+      width: 100%;
+      padding: 16px;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 24px;
+      grid-row: 2 / span 1;
+      grid-column: 1 / span 1;
+      border-radius: 12px;
+      border: 1px solid var(--borders-black-border-16-black, rgba(0, 0, 0, 0.16));
+      background: #FFF;
+    }
+
+    .course-header {
+      display: flex;
+      flex-direction: row;
+      justify-content: space-between;
+      width: 100%;
+    }
+
+    .course-pill {
+      display: flex;
+      height: 24px;
+      padding: 8px;
+      align-items: center;
+      gap: 4px;
+      border-radius: 16px;
+      border: 1px solid var(--borders-border-fill-focussed-4-light-100, #EF951E);
+      background: #FEFAF4;
+    }
+
+    .ai-recommened-pill {
+      display: flex;
+      padding: 4px 8px;
+      align-items: center;
+      gap: 8px;
+      border-radius: var(--Radius-4, 4px);
+      border: 1px solid #1B4CA1;
+      background: rgba(27, 76, 161, 0.16);
+    }
+
+    .igot-platform-pill {
+      display: flex;
+      padding: 4px 8px;
+      align-items: center;
+      gap: 8px;
+      border-radius: var(--Radius-4, 4px);
+      border: 1px solid #EF951E;
+      background: rgba(239, 149, 30, 0.16);
+    }
+
+    .course-title {
+      color: var(--Primary-KB-Primary-Light, #1B4CA1);
+      font-family: Montserrat;
+      font-size: 20px;
+      font-style: normal;
+      font-weight: 600;
+      line-height: 30px;
+      /* 150% */
+    }
+
+    .course-desc {
+      color: rgba(0, 0, 0, 0.60);
+      font-family: Lato;
+      font-size: 14px;
+      font-style: normal;
+      font-weight: 400;
+      line-height: normal;
+    }
+
+    .relevancy,
+    .competencies-matched {
+      color: var(--accessbility-shades-with-opacity-kb-greys-black-60, rgba(0, 0, 0, 0.60));
+
+      /* Body 2 */
+      font-family: Lato;
+      font-size: 14px;
+      font-style: normal;
+      font-weight: 400;
+      line-height: normal;
+      align-items: center;
+    }
+
+    .percentage {
+      color: #1D8923;
+      font-family: Lato;
+      font-size: 14px;
+      font-style: normal;
+      font-weight: 800;
+      line-height: normal;
+    }
+
+    .relevancy-container {
+      display: flex;
+      flex-direction: row;
+      align-items: center;
+    }
+
+    .competencies-matched-container {
+      display: flex;
+      flex-direction: row;
+      align-items: center;
+    }
+
+    .dash {
+      padding: 0 5px;
+    }
+
+    ::ng-deep .mat-radio-checked .mat-radio-inner-circle {
+      background: #1B4CA1 !important;
+    }
+
+    .course-list-container {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 16px;
+      /* Optional spacing between cards */
+    }
+
+    .course-list-item {
+      flex: 0 0 48%;
+      /* Two items per row with space for gap */
+      box-sizing: border-box;
+      border: 1px solid #ccc;
+      padding: 16px;
+      background-color: white;
+      border-radius: 8px;
+    }
+
+    .checked-course-container {
+      display: flex
+    }
+
+    .ml-2 {
+      margin-left: 8px;
+    }
+
+    ::ng-deep .mat-checkbox-checked .mat-checkbox-background {
+      background: #1B4CA1 !important;
+    }
+
+    .ai-recommened-pill-text {
+      color: #1B4CA1;
+      font-family: Lato;
+      font-size: 12px;
+      font-style: normal;
+      font-weight: 700;
+      line-height: normal;
+    }
+
+    .igot-platform-pill-text {
+      color: #1B4CA1;
+      font-family: Lato;
+      font-size: 12px;
+      font-style: normal;
+      font-weight: 700;
+      line-height: normal;
+    }
+
+    .course-pill-text {
+      color: var(--accessbility-shades-without-opacity-kb-greys-black-87, #212121);
+      text-align: center;
+
+      /* Label_12px */
+      font-family: Poppins;
+      font-size: 12px;
+      font-style: normal;
+      font-weight: 400;
+      line-height: normal;
+    }
+
+    .ai-loader-icon img {
+      width: 15.714px;
+      height: 15.714px;
+      flex-shrink: 0;
+    }
+
+    .igot-platform-icon img {
+      width: 15.714px;
+      height: 15.714px;
+      flex-shrink: 0;
+    }
+
+    .competency-container {
+      display: flex;
+      justify-content: center;
+      flex-direction: row;
+      /* gap: 64px; */
+    }
+
+    .outside-layer-total {
+      display: flex;
+      padding: 4px 20px;
+      justify-content: left;
+      align-items: left;
+      gap: 8px;
+      border-radius: 12px 12px 12px 12px;
+      border-left: 2px solid #1B4CA1;
+      border-right: 2px solid #1B4CA1;
+      background: #EDF1F8;
+      flex-direction: column;
+      width: 50%;
+      margin-left:64px;
+    }
+
+    .outside-layer-functional {
+      display: flex;
+      padding: 4px 12px;
+      justify-content: left;
+      align-items: left;
+      gap: 8px;
+      border-radius: 12px 12px 12px 12px;
+      border-left: 2px solid #E24577;
+      border-right: 2px solid #E24577;
+      background: #F8D2DE;
+      flex-direction: column;
+      width: 50%;
+      margin-left:64px;
+    }
+
+
+    .outside-layer-domain {
+      display: flex;
+      padding: 4px 12px;
+      justify-content: left;
+      align-items: left;
+      gap: 8px;
+      border-radius: 12px 12px 12px 12px;
+      border-left: 2px solid #7B47A4;
+      border-right: 2px solid #7B47A4;
+      background: #DFD3E9;
+      flex-direction: column;
+      width: 50%;
+      margin-left:64px;
+    }
+
+    .outside-layer-behavioral {
+      display: flex;
+      padding: 4px 12px;
+      justify-content: left;
+      align-items: left;
+      gap: 8px;
+      border-radius: 12px 12px 12px 12px;
+      border-left: 2px solid #F8B861;
+      border-right: 2px solid #F8B861;
+      background: #FDE8CC;
+      flex-direction: column;
+      width: 50%;
+      margin-left:64px;
+    }
+
+    .inside-layer {
+      color: #1B4CA1;
+      font-family: Lato;
+      font-size: 12px;
+      font-style: normal;
+      font-weight: 400;
+      line-height: normal;
+    }
+
+    .count {
+      color: #1B4CA1;
+      font-family: Montserrat;
+      font-size: 16px;
+      font-style: normal;
+      font-weight: 600;
+      line-height: normal;
+    }
+
+    .suggest-courses-header {
+      display: flex;
+      flex-direction: row;
+      justify-content: space-between;
+    }
+
+
+    .suggest-course-control {
+      display: flex;
+      flex-direction: row;
+    }
+
+    .course-card-container {
+      width: 172px;
+      border-radius: 3.307px;
+      border: 0.827px solid var(--borders-border-8-black, rgba(0, 0, 0, 0.08));
+      background-color: white;
+
+    }
+
+    .highlight-ai {
+      font-family: Montserrat;
+      font-size: 24px;
+      font-style: normal;
+      font-weight: 600;
+      line-height: normal;
+      background: linear-gradient(90deg, #3B27FF 0%, #2DE3D6 100%);
+      background-clip: text;
+      -webkit-background-clip: text;
+      color: transparent;
+      -webkit-text-fill-color: transparent;
+      display: inline-block;
+      /* Required in some cases */
+    }
+
+    .ai-loader-icon-medium img {
+      width: 40px;
+      height: 40px;
+      flex-shrink: 0;
+
+    }
+
+    .heading {
+      color: #000;
+      /* Heading 2 */
+      font-family: Montserrat;
+      font-size: 20px;
+      font-style: normal;
+      font-weight: 600;
+      line-height: normal;
+      margin: 10px 0;
+    }
+
+    .heading-bg {
+      color: #fff;
+      /* Heading 2 */
+      font-family: Montserrat;
+      font-size: 20px;
+      font-style: normal;
+      font-weight: 600;
+      line-height: normal;
+      margin: 10px 0;
+    }
+
+
+    .progress-popup {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+    }
+
+    .progress-popup .heading {}
+
+    .progress-popup .desc {
+      color: rgba(0, 0, 0, 0.87);
+      text-align: center;
+      font-family: Lato;
+      font-size: 14px;
+      font-style: normal;
+      font-weight: 400;
+      line-height: normal;
+    }
+
+    .progress-popup .progress-icon {}
+
+    .progress-popup .progress-icon img {}
+
+    .behavioural-pill {
+      display: flex;
+      padding: 0px 8px;
+      justify-content: center;
+      align-items: center;
+      gap: 10px;
+      border-radius: 99px;
+      border: 1px solid #F8B861;
+      background: linear-gradient(0deg, rgba(248, 184, 97, 0.32) 0%, rgba(248, 184, 97, 0.32) 100%), #FFF;
+      margin: 5px 0;
+    }
+
+    .functional-pill {
+      display: flex;
+      padding: 0px 8px;
+      justify-content: center;
+      align-items: center;
+      gap: 10px;
+      border-radius: 99px;
+      border: 1px solid #E24577;
+      background: linear-gradient(0deg, rgba(226, 69, 119, 0.24) 0%, rgba(226, 69, 119, 0.24) 100%), #FFF;
+      margin: 5px 0;
+    }
+
+    .domain-pill {
+      display: flex;
+      padding: 0px 8px;
+      justify-content: center;
+      align-items: center;
+      gap: 10px;
+      border-radius: 99px;
+      border: 1px solid #7B47A4;
+      background: linear-gradient(0deg, rgba(123, 71, 164, 0.24) 0%, rgba(123, 71, 164, 0.24) 100%), #FFF;
+      margin: 5px 0;
+    }
+
+    .popup-header {
+      display: flex;
+      flex-direction: row;
+      justify-content: space-between;
+    }
+
+    .popup-footer {
+      display: flex;
+      flex-direction: row;
+      justify-content: center;
+    }
+
+    .view-cbp-plan {
+      margin: 10px;
+      padding: 10px
+    }
+
+
+
+    .view-cbp-plan-popup {
+      padding: 24px;
+      max-height: 70vh;
+      overflow-y: auto;
+    }
+
+    .section {
+      border-radius: 8px;
+      background: rgba(27, 76, 161, 0.08);
+      padding: 16px;
+
+    }
+
+    .popup-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+
+      border-bottom: 1px solid #ddd;
+      font-weight: bold;
+      flex-shrink: 0;
+    }
+
+    .popup-footer {
+      display: flex;
+      justify-content: center;
+      gap: 16px;
+      padding: 16px 24px;
+      background-color: #fff;
+      flex-shrink: 0;
+      position: sticky;
+      bottom: -15px;
+    }
+
+    .section-container {
+      overflow-y: auto;
+      flex: 1 1 auto;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+
+    }
+
+    .competency-list {
+      display: flex;
+      flex-direction: row;
+      gap: 16px;
+    }
+
+    .competency-text {
+      color: #000;
+      font-family: Lato;
+      font-size: 10px;
+      font-style: normal;
+      font-weight: 700;
+      line-height: normal;
+    }
+
+    .competency-sub-heading {
+      color: #1B4CA1;
+      font-family: Montserrat;
+      font-size: 12px;
+      font-style: normal;
+      font-weight: 600;
+      line-height: normal;
+    }
+
+    .cursor-pointer {
+      cursor: pointer;
+    }
+
+    .btn-active {
+      border-radius: var(--Radius-Full-Round, 9999999px);
+      opacity: 1;
+      background: var(--Primary-KB-Primary-Light, #1B4CA1);
+      color: var(--white-kb-white-100, #FFF);
+      text-align: center;
+
+      /* Button */
+      font-family: Lato;
+      font-size: 14px;
+      font-style: normal;
+      font-weight: 700;
+      line-height: normal;
+      display: flex;
+      height: 32px;
+      padding: 0px 16px;
+      justify-content: center;
+      align-items: center;
+      gap: 8px;
+      border: none;
+    }
+
+    .custom-textarea {
+      color: #000;
+      font-family: Lato;
+      font-size: 14px;
+      font-style: normal;
+      font-weight: 400;
+      line-height: normal;
+    }
+
+
+
+
+    /* KPI Cards */
+    .grid {
+      display: grid;
+      gap: 1.5rem;
+    }
+
+    .grid-cols-1 {
+      grid-template-columns: repeat(1, 1fr);
+    }
+
+    @media (min-width: 768px) {
+      .md\:grid-cols-2 {
+        grid-template-columns: repeat(2, 1fr);
+      }
+    }
+
+    @media (min-width: 1024px) {
+      .lg\:grid-cols-4 {
+        grid-template-columns: repeat(4, 1fr);
+      }
+    }
+
+    /* KPI Box */
+    .kpi-card {
+      background: white;
+      border-radius: 12px;
+      padding: 1.5rem;
+      box-shadow: 0 4px 14px rgba(0, 0, 0, 0.05);
+      border-left: 4px solid transparent;
+      transition: box-shadow 0.3s ease;
+    }
+
+    .kpi-card:hover {
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
+    }
+
+    .kpi-icon {
+      padding: 0.75rem;
+      border-radius: 0.5rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .kpi-text {
+      font-size: 1.25rem;
+      font-weight: 700;
+    }
+
+    /* Progress Bar */
+    .progress-container {
+      background: #e5e7eb;
+      height: 0.75rem;
+      border-radius: 9999px;
+      margin-top: 0.5rem;
+    }
+
+    .progress-bar {
+      height: 100%;
+      border-radius: 9999px;
+      transition: width 0.4s ease;
+    }
+
+    /* Competency Blocks */
+    .competency-block {
+      background-color: white;
+      border-radius: 12px;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.06);
+      overflow: hidden;
+    }
+
+    .competency-header {
+      padding: 1.5rem;
+      background: linear-gradient(to right, #4f46e5, #3b82f6);
+      color: white;
+    }
+
+    .competency-header h3 {
+      font-size: 1.25rem;
+      font-weight: 600;
+    }
+
+    .competency-body {
+      padding: 1rem;
+    }
+
+    /* Roles & Responsibilities */
+    .role-card {
+      background-color: #f9fafb;
+      padding: 0.5rem;
+      border-left: 4px solid #6366f1;
+      border-radius: 6px;
+    }
+
+    .role-title {
+      font-size: 1rem;
+      font-weight: 600;
+      margin-bottom: 0.75rem;
+      display: flex;
+      align-items: center;
+      color: #1e40af;
+    }
+
+    /* Competency Sections */
+    .comp-section {
+      border-radius: 0.5rem;
+      padding: 0.75rem;
+      background-color: #f0f9ff;
+      margin-bottom: 1rem;
+    }
+
+    .comp-section h4 {
+      font-weight: 600;
+      margin-bottom: 0.5rem;
+    }
+
+    .comp-item {
+      background-color: white;
+      border-left: 3px solid #3b82f6;
+      padding: 0.5rem;
+      border-radius: 4px;
+      margin-bottom: 0.25rem;
+      font-size: 0.875rem;
+    }
+
+    /* Color Variants */
+    .bg-blue-50 {
+      background-color: #FDE8CC;
+      border-radius: 4px;
+    }
+
+    .bg-green-50 {
+      background-color: #F8D2DE;
+      border-radius: 4px;
+    }
+
+    .bg-purple-50 {
+      background-color: #DFD3E9;
+      border-radius: 4px;
+    }
+
+    .text-blue-800 {
+      color: #1e3a8a;
+    }
+
+    .text-green-800 {
+      color: deeppink;
+    }
+
+    .text-purple-800 {
+      color: #6b21a8;
+    }
+
+
+    .border-blue-400 {
+      border-color: #60a5fa;
+    }
+
+    .border-green-400 {
+      border-color: #34d399;
+    }
+
+    .border-purple-400 {
+      border-color: #c084fc;
+    }
+
+    .text-sm {
+      font-size: 0.9rem;
+    }
+
+    .text-gray-700 {
+      color: #374151;
+    }
+
+    .icon-sm {
+      width: 24px;
+      height: 24px;
+    }
+
+    .heading-with-bg {
+      background: #4f46e5;
+      padding: 24px;
+      border-radius: 8px 8px 0 0;
+    }
+
+    .competencis-grid {
+      display: flex;
+      flex-direction: row;
+      justify-content: space-between;
+      gap: 16px;
+    }
+
+    .section-shadow {
+      padding: 16px;
+      border-radius: 4px;
+      background: white;
+      box-shadow: 0px 2px 4px rgba(0, 0, 0, 0.1),
+        0px 1px 10px rgba(0, 0, 0, 0.06);
+    }
+
+
+
+
+
+
+    .count {
+      color: #1B4CA1;
+      font-family: Montserrat;
+      font-size: 16px;
+      font-style: normal;
+      font-weight: 600;
+      line-height: normal;
+    }
+
+    .competency-grid {
+      display: flex;
+      flex-direction: row;
+      gap: 16px;
+      justify-content: space-between;
+
+    }
+
+    .text-blue-600 {
+      color: #1B4CA1;
+      font-weight: 600;
+    }
+
+    .text-green-600 {
+      color: deeppink;
+      ;
+      font-weight: 600;
+    }
+
+    .text-purple-600 {
+      color: #6b21a8;
+      ;
+      font-weight: 600;
+    }
+
+    .horizontal-flex {
+      display: flex;
+      align-items: center;
+      /* optional: vertically center icon and text */
+      justify-content: space-between;
+      width: 100%;
+    }
+
+    .progress-bar {
+      width: 100%;
+      height: 10px;
+      background-color: #e0e0e0;
+      /* light gray background */
+      border-radius: 10px;
+      overflow: hidden;
+      box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.2);
+    }
+
+    .progress-bar-fill {
+      height: 100%;
+      background-color: #1B4CA1;
+      /* blue fill */
+      width: 0;
+      border-radius: 10px 0 0 10px;
+      transition: width 0.5s ease-in-out;
+    }
+
+    .progress-bar-fill-behavioural {
+      height: 100%;
+      background-color: #F8B861;
+      /* blue fill */
+      width: 0;
+      border-radius: 10px 0 0 10px;
+      transition: width 0.5s ease-in-out;
+    }
+
+    .progress-bar-fill-functional {
+      height: 100%;
+      background-color: #E24577;
+      /* blue fill */
+      width: 0;
+      border-radius: 10px 0 0 10px;
+      transition: width 0.5s ease-in-out;
+    }
+
+    .progress-bar-fill-domain {
+      height: 100%;
+      background-color: #7B47A4;
+      /* blue fill */
+      width: 0;
+      border-radius: 10px 0 0 10px;
+      transition: width 0.5s ease-in-out;
+    }
+
+    .sub-text {
+      font-size: 20px;
+      font-weight: 600;
+      font-family: Lato;
+    }
+
+    .competency-count-by-designation {
+      display: flex;
+      gap: 10px;
+      flex-direction: row;
+    }
+
+    .competencies-grid-3 {
+      width: 33%;
+    }
+
+    .grid-list-item div {
+      padding: 5px 10px;
+      margin: 10px 0px;
+    }
+
+    .grid-list-item-behavioral div {
+      border-left: 2px solid darkorange;
+    }
+
+    .grid-list-item-functional div {
+      border-left: 2px solid #ff1493;
+    }
+
+    .grid-list-item-domain div {
+      border-left: 2px solid #6b21a8;
+    }
+
+    .header-flex {
+      display: flex;
+      flex-direction: row;
+      width: 100%;
+      justify-content: space-between;
+      gap: 30px
+    }
+
+    .header-border {
+      border-bottom: 1px solid #ccc;
+      margin: 10px;
+      padding: 10px;
+    }
+
+    .text-gray-600 {
+      font-family: 'Lato';
+      font-size: 14px;
+      font-weight: 600;
+    }
+
+    .image-container .h-10 {
+      width: 240px;
+      height: 60px;
+      ;
+    }
+
+    .h-10 {
+      width: 240px;
+      height: 60px;
+      ;
+    }
+
+    .image-container .h-15 {
+      height: 50px;
+      ;
+    }
+
+    .image-container {
+      display: flex;
+      gap: 10px;
+      flex-direction: row;
+    }
+
+    .org-footer {
+      display: flex;
+      flex-direction: row;
+      background: #fff;
+      gap: 16px;
+      color: #000;
+      width: 100%;
+      justify-content: center;
+      align-items: center;
+      border-top: 1px solid #ccc;
+      border-bottom: 1px solid #ccc;
+    }
+
+    .dialog-scrollable-content {
+      max-height: 70vh;
+      /* limits height */
+      overflow-y: auto;
+      /* enables vertical scroll */
+    }
+
+    .org-footer a {
+      color: #000 !important
+    }
+
+
+    h1 {
+      font-size: 1.75rem !important;
+    }
+
+    @media print {
+
+      .org-footer,
+      .header-border {
+        page-break-inside: avoid;
+      }
+    }
+
+
+
+    .header-border {
+      padding-top: 10px;
+      padding-bottom: 10px;
+      background-color: white;
+    }
+
+    .footer-container {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      flex-direction: column;
+    }
+
+    .footer-logo-container {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      flex-direction: row;
+      width: 30%;
+    }
+  </style>  
+</head>
+
+<body>
+
+  <div class="view-cbp-plan" #dialogContent>
+    <div class="popup-container">
+      <div class="section-container" id="pdf-content" #pdfContent>
+        <header class="bg-white header-border">
+          <div class="header-flex justify-between" style="width:100%">
+            <div class="flex items-center space-x-4" style="width:50%">
+              <div class="image-container">
+                <div>
+                  <img src="https://portal.uat.karmayogibharat.net/training-pla-ai/assets/icons/dopt-logo.png"
+                    alt="Department of Personnel & Training" class="h-15" />
+                </div>
+                <div>
+                  <img src="https://portal.uat.karmayogibharat.net/training-pla-ai/assets/icons/CBC_logo.svg"
+                    alt="Capacity Building Commission Logo" class="h-10" />
+                </div>
+                <div>
+                  <img src="https://portal.uat.karmayogibharat.net/training-pla-ai/assets/icons/karmayogiLogo-min.png"
+                    alt="Karmayogi Bharat Logo" class="h-10" />
+                </div>
+              </div>
+            </div>
+
+          </div>
+          <div class="text-right" style="width:100%">
+            <h1 class="text-2xl font-bold text-gray-900" style="color:#264092;font-size: 40px;text-align: center;">
+              {{stats.center_department_name}} - Capacity Building Plan
+            </h1>
+            <p class="text-gray-600" style="font-size: 34px;">Comprehensive Role-Based Competency Analysis</p>
+          </div>
+        </header>
+        <div class="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100">
+          <!-- Header -->
+
+
+          <div class="max-w-7xl mx-auto px-6 py-8" style="margin-top:200px;">
+            <!-- KPI Dashboard -->
+            <div class="competency-container mt-2 text-center">
+              <div class="outside-layer-total">
+                <div class="horizontal-flex mt-2">
+                  <div>
+                    <svg class="h-8 w-8 icon-sm" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor"
+                      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
+                      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                      <path d="M14 2v6h6" />
+                      <path d="M16 13H8" />
+                      <path d="M16 17H8" />
+                      <path d="M10 9H8" />
+                    </svg>
+                  </div>
+                  <div>
+                    <div class="count">{{stats.total_competencies}}</div>
+                  </div>
+                </div>
+
+                <div class="mt-4">
+                  <div class="sub-heading">
+                    <p>Total Competencies</p>
+                  </div>
+                </div>
+                <div class="progress-bar mt-2">
+                  <div class="progress-bar-fill" style="width: 100%;"></div>
+                </div>
+                <div>
+                  <div class="sub-text" style="margin: 10px 0">Total: {{stats.total_competencies}}</div>
+                </div>
+              </div>
+              <div class="outside-layer-behavioral">
+                <div class="horizontal-flex mt-2">
+                  <div>
+                    <svg class="h-8 w-8 icon-sm" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor"
+                      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
+                      <path d="M15.5 17a4 4 0 0 1-5 0" />
+                      <path d="M13 14h.01" />
+                      <path d="M11 11h.01" />
+                      <path d="M17 14h.01" />
+                      <path d="M13 10h.01" />
+                      <path d="M13 18h.01" />
+                      <path d="M13 6h.01" />
+                      <path d="M17 18h.01" />
+                      <path d="M17 6h.01" />
+                      <path d="M21 12a9 9 0 0 1-9 9a9 9 0 0 1-9-9a9 9 0 0 1 9-9a9 9 0 0 1 9 9z" />
+                    </svg>
+                  </div>
+                  <div>
+                    <div class="count" style="margin: 10px 0">{{stats["total_behavioral"]}}</div>
+                  </div>
+                </div>
+
+                <div class="mt-2">
+                  <div class="sub-heading">
+                    <p>Behavioral Competencies</p>
+                  </div>
+                </div>
+                <div class="progress-bar mt-2">
+                  <div class="progress-bar-fill-behavioural" style="width: {{stats['behavioral_percentage']}}%;"></div>
+                </div>
+                <div>
+                  <div class="sub-text" style="margin: 10px 0">{{stats["total_behavioral"]}}</div>
+                </div>
+              </div>
+
+            </div>
+
+          </div>
+          <div class="max-w-7xl mx-auto px-6 py-8 mt-4">
+            <div class="competency-container mt-2">
+              <div class="outside-layer-functional">
+                <div class="horizontal-flex mt-2">
+                  <div>
+                    <svg class="h-8 w-8 icon-sm" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor"
+                      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
+                      <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" />
+                      <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" />
+                    </svg>
+                  </div>
+                  <div>
+                    <div class="count">{{stats["total_functional"]}}</div>
+                  </div>
+                </div>
+
+                <div class="mt-2">
+                  <div class="sub-heading">
+                    <p>Functional Competencies</p>
+                  </div>
+                </div>
+                <div class="progress-bar mt-2">
+                  <div class="progress-bar-fill-functional" style="width: {{stats['functional_percentage']}}%;"></div>
+                </div>
+                <div>
+                  <div class="sub-text" style="margin: 10px 0">{{stats["total_functional"]}}</div>
+
+                </div>
+
+
+              </div>
+              <div class="outside-layer-domain">
+                <div class="horizontal-flex mt-2">
+                  <div>
+                    <svg class="h-8 w-8 icon-sm" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor"
+                      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
+                      <circle cx="12" cy="12" r="10" />
+                      <circle cx="12" cy="12" r="6" />
+                      <circle cx="12" cy="12" r="2" />
+                    </svg>
+                  </div>
+                  <div>
+                    <div class="count">{{stats["total_domain"]}}</div>
+                  </div>
+                </div>
+
+                <div class="mt-2">
+                  <div class="sub-heading">
+                    <p>Domain Competencies</p>
+                  </div>
+                </div>
+                <div class="progress-bar mt-2">
+                  <div class="progress-bar-fill-domain" style="width: {{stats['domain_percentage']}}%;"></div>
+                </div>
+                <div>
+                  <div class="sub-text" style="margin: 10px 0">{{stats["total_domain"]}}</div>
+                </div>
+
+              </div>
+            </div>
+          </div>
+
+
+          <!-- Designation Reports -->
+          <div class="space-y-8 mt-4">
+            <h2 class="text-2xl font-bold text-gray-900 mb-6 heading text-center detailed-competency"
+              style="font-size: 24px;;">Detailed Competency Framework by
+              Designation</h2>
+
+            {% for designation in designations %}
+            <div class="bg-white rounded-xl  overflow-hidden section-shadow">
+              <!-- Header -->
+              <div class="bg-gradient-to-r from-indigo-600 to-blue-600 text-white p-6 heading-with-bg">
+                <div class="flex items-center justify-between">
+                  <div>
+                    <h3 class="text-2xl font-bold mb-2 heading-bg">{{designation.designation}}
+                    </h3>
+                    <p class="text-indigo-100 mb-1" style="color: #fff;">{{designation.wing}}</p>
+                  </div>
+                  <div class="flex items-center space-x-4 competency-count-by-designation" style="color: #fff;">
+                    <span class="font-semibold text-sm">Behavioral:
+                      {{ designation.behavioralCompetencies | length }} total</span>
+                    <span class="font-semibold text-sm">Functional:
+                      {{ designation.functionalCompetencies | length }} total</span>
+                    <span class="font-semibold text-sm">Domain:
+                      {{ designation.domainCompetencies | length }} total</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Body -->
+              <div class="p-4 section-shadow">
+                <!-- Roles -->
+                <div class="mb-6">
+                  <h4 class="text-xl font-semibold text-gray-900 mb-3 flex items-center">
+                    <svg class="h-5 w-5 mr-2 text-indigo-600 icon-sm" fill="none" viewBox="0 0 24 24"
+                      stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                    </svg>
+                    Roles & Responsibilities
+                  </h4>
+                  <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+                    {% for role in designation.rolesResponsibilities %}
+                    <div class="bg-gray-50 p-2 rounded border-l-3 border-indigo-500">
+                      <p class="text-sm text-gray-700 leading-relaxed">
+                        - {{role}}
+                      </p>
+                    </div>
+                    {% endfor %}
+                  </div>
+                </div>
+                <!-- Activities -->
+                <div class="mb-6 mt-4">
+                  <h4 class="text-xl font-semibold text-gray-900 mb-3 flex items-center">
+                    <svg class="h-5 w-5 mr-2 text-indigo-600 icon-sm" fill="none" viewBox="0 0 24 24"
+                      stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                    </svg>
+                    Activities
+                  </h4>
+                  <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+                    {% for act in designation.activities %}
+                    <div class="bg-gray-50 p-2 rounded border-l-3 border-indigo-500">
+                      <p class="text-sm text-gray-700 leading-relaxed">- {{act}}</p>
+                    </div>
+                    {% endfor %}
+                  </div>
+                </div>
+                <!-- Competencies -->
+                <div class="competencis-grid mt-4">
+                  <!-- Behavioral -->
+                  <div class="bg-blue-50 rounded-lg p-3 competencies-grid-3">
+                    <h4 class="font-semibold text-blue-800 text-base mb-2">Behavioral</h4>
+                    <div class="space-y-1 grid-list-item grid-list-item-behavioral">
+                      {% for comp in designation.behavioralCompetencies %}
+                      <div class="bg-white p-1.5 rounded text-sm text-gray-700 border-l-2 border-blue-400">
+                        {{comp}}
+                      </div>
+                      {% endfor %}
+
+
+                    </div>
+                    <div class="mt-2 text-sm text-blue-600 font-medium">
+                      {{ designation.behavioralCompetencies | length }} total
+                    </div>
+                  </div>
+
+                  <!-- Functional -->
+                  <div class="bg-green-50 rounded-lg p-3 competencies-grid-3">
+                    <h4 class="font-semibold text-green-800 text-base mb-2">Functional</h4>
+                    <div class="space-y-1 grid-list-item grid-list-item-functional">
+                      {% for comp in designation.functionalCompetencies %}
+                      <div class="bg-white p-1.5 rounded text-sm text-gray-700 border-l-2 border-green-400">
+                        {{comp}}
+                      </div>
+                      {% endfor %}
+
+                    </div>
+                    <div class="mt-2 text-sm text-green-600 font-medium">
+                      {{ designation.functionalCompetencies | length }} total
+                    </div>
+                  </div>
+
+                  <!-- Domain -->
+                  <div class="bg-purple-50 rounded-lg p-3 competencies-grid-3">
+                    <h4 class="font-semibold text-purple-800 text-base mb-2">Domain</h4>
+                    <div class="space-y-1 grid-list-item grid-list-item-domain">
+                      {% for comp in designation.domainCompetencies %}
+                      <div class="bg-white p-1.5 rounded text-sm text-gray-700 border-l-2 border-purple-400">
+                        {{comp}}
+                      </div>
+                      {% endfor %}
+
+
+                    </div>
+                    <div class="mt-2 text-sm text-purple-600 font-medium">
+                      {{ designation.domainCompetencies | length }} total
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            {% endfor %}
+          </div>
+        </div>
+
+        <!-- Footer -->
+
+      </div>
+      <footer class="org-footer">
+        <div class="max-w-7xl mx-auto px-6 flex flex-col md:flex-row items-center justify-between">
+          <div class="flex items-center space-x-4 mb-4 mt-4 md:mb-0 footer-container">
+            <div class="footer-logo-container">
+              <img src="https://portal.uat.karmayogibharat.net/training-pla-ai/assets/icons/karmayogiLogo-min.png"
+                alt="Karmayogi Bharat Logo" class="h-10" style="margin-left:20px" />
+            </div>
+            <div style="margin-left: 50px;">
+              <a href="https://karmayogibharat.gov.in" target="_blank" rel="noopener noreferrer"
+                class="text-sm font-semibold transition-colors">
+                karmayogibharat.gov.in
+              </a>
+            </div>
+
+
+          </div>
+          <div class="text-sm text-center md:text-right mb-4" style="margin-left: 50px;">
+            <p>&copy; {{current_year}} All Rights Reserved.</p>
+          </div>
+        </div>
+      </footer>
+    </div>
+
+  </div>
+
+
+
+</body>
+
+</html>

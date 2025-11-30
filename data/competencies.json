@@ -1,0 +1,299 @@
+[
+    {
+        "name": "Behavioural",
+        "competency_theme": [
+            {
+                "name": "Self-Awareness",
+                "competency_sub_theme": [
+                    "Self-Analysis",
+                    "Self Confidence",
+                    "Purposefulness",
+                    "Self-Learning"
+                ]
+            },
+            {
+                "name": "Personal Effectiveness",
+                "competency_sub_theme": [
+                    "Stress Management",
+                    "Resilience",
+                    "Navigating Ambiguity"
+                ]
+            },
+            {
+                "name": "Solution Orientation",
+                "competency_sub_theme": [
+                    "Analytical Thinking",
+                    "Attention to Detail",
+                    "Systems Thinking"
+                ]
+            },
+            {
+                "name": "Communication",
+                "competency_sub_theme": [
+                    "Active Listening",
+                    "Reading & Comprehension",
+                    "Verbal & Non-Verbal Fluency",
+                    "Presentation Skills"
+                ]
+            },
+            {
+                "name": "Outcome Orientation",
+                "competency_sub_theme": [
+                    "Goal Setting",
+                    "Accountability",
+                    "Initiative and Drive",
+                    "Commitment to Quality"
+                ]
+            },
+            {
+                "name": "Collaboration",
+                "competency_sub_theme": [
+                    "Relationship Management",
+                    "Diversity & Inclusion",
+                    "Knowledge Sharing"
+                ]
+            },
+            {
+                "name": "Service Orientation",
+                "competency_sub_theme": [
+                    "Empathy",
+                    "Responsiveness",
+                    "Service Excellence (wrt citizens)"
+                ]
+            },
+            {
+                "name": "Operational Excellence",
+                "competency_sub_theme": [
+                    "Planning & Prioritization",
+                    "Resource Management",
+                    "Process Excellence",
+                    "Continuous Improvement"
+                ]
+            },
+            {
+                "name": "Creativity & Innovation",
+                "competency_sub_theme": [
+                    "Lateral Thinking",
+                    "Transformation Orientation"
+                ]
+            },
+            {
+                "name": "Strategic Leadership",
+                "competency_sub_theme": [
+                    "Global mindset",
+                    "Forward Thinking",
+                    "Executive Presence",
+                    "Sustainable mindset"
+                ]
+            },
+            {
+                "name": "Collaborative Leadership",
+                "competency_sub_theme": [
+                    "Influencing and Negotiation",
+                    "Conflict Management"
+                ]
+            },
+            {
+                "name": "Team Leadership",
+                "competency_sub_theme": [
+                    "Mentoring",
+                    "Sharing constructive feedback",
+                    "Inspiring others"
+                ]
+            },
+            {
+                "name": "Decision Making",
+                "competency_sub_theme": [
+                    "Logical Reasoning",
+                    "Sound Judgement"
+                ]
+            }
+        ]
+    },
+    {
+        "name": "Functional",
+        "competency_theme": [
+            {
+                "name": "Citizen Centricity",
+                "competency_sub_theme": [
+                    "Design Thinking",
+                    "Citizen Partnering & Collaboration",
+                    "PEST (Political, Economic, Social, Technological) Consciousness"
+                ]
+            },
+            {
+                "name": "Policy Architecture",
+                "competency_sub_theme": [
+                    "Research & Need Analysis",
+                    "Policy design/ amendment",
+                    "Policy implementation",
+                    "Policy monitoring & impact assessment"
+                ]
+            },
+            {
+                "name": "Cabinet note preparation",
+                "competency_sub_theme": [
+                    "Rules of business (AoB/ToB)",
+                    "Cabinet note writing"
+                ]
+            },
+            {
+                "name": "Government Program Formulation",
+                "competency_sub_theme": [
+                    "Research & Need Analysis",
+                    "Scheme/Program Design",
+                    "Feasibility & Risk Assessment",
+                    "Implementation & Outreach"
+                ]
+            },
+            {
+                "name": "Project Management",
+                "competency_sub_theme": [
+                    "Project Planning",
+                    "Project Implementation",
+                    "Project Evaluation & Monitoring"
+                ]
+            },
+            {
+                "name": "Public Procurement (GFR)",
+                "competency_sub_theme": [
+                    "Procurement Mgmt. through GeM",
+                    "Procurement of Services / Goods / Works",
+                    "Contract Management",
+                    "Vendor / Consultant Management"
+                ]
+            },
+            {
+                "name": "Material Management",
+                "competency_sub_theme": [
+                    "Maintenance and Disposal of materials",
+                    "Inventory Management"
+                ]
+            },
+            {
+                "name": "Monitoring & Evaluation",
+                "competency_sub_theme": [
+                    "Creation of M&E Framework",
+                    "Evaluation of outcomes / outputs"
+                ]
+            },
+            {
+                "name": "Financial Management",
+                "competency_sub_theme": [
+                    "Budget Formulation & Implementation",
+                    "Expenditure Management",
+                    "Government accounts",
+                    "PFMS Portal Management",
+                    "Financial Management"
+                ]
+            },
+            {
+                "name": "Digital Fluency",
+                "competency_sub_theme": [
+                    "Digital Tools ( MS office, Excel, PPT & AI tools) & Platforms",
+                    "Digital Service Design"
+                ]
+            },
+            {
+                "name": "Data Analytics",
+                "competency_sub_theme": [
+                    "Data Management",
+                    "Data Analysis & Visualization",
+                    "Data led Decision making",
+                    "Data Use and Governance",
+                    "Data Analytics"
+                ]
+            },
+            {
+                "name": "Establishment & HR",
+                "competency_sub_theme": [
+                    "Handling Establishment Matters",
+                    "Handling matters of Reservations",
+                    "Handling Fundamental Rules /Supplementary Rules",
+                    "Handling matters of Prevention of Sexual Harassment Policy",
+                    "Handling APAR matters"
+                ]
+            },
+            {
+                "name": "Office Management",
+                "competency_sub_theme": [
+                    "E-Office",
+                    "File/DAK Management",
+                    "Office Procedures",
+                    "Noting & Drafting of official Communications",
+                    "Technical Proposal / Report writing"
+                ]
+            },
+            {
+                "name": "Handling Parliamentary Matters",
+                "competency_sub_theme": [
+                    "Submission of briefs, supply of information",
+                    "Maintaining records of parliamentary matters"
+                ]
+            },
+            {
+                "name": "Handling RTI Matters",
+                "competency_sub_theme": [
+                    "RTI Responsiveness",
+                    "RTI Records Management"
+                ]
+            },
+            {
+                "name": "Grievance Redressal",
+                "competency_sub_theme": [
+                    "CPGRAMS Portal Management",
+                    "Public Grievance Handling"
+                ]
+            },
+            {
+                "name": "Vigilance Administration",
+                "competency_sub_theme": [
+                    "Conduct Rules",
+                    "Provisions on Suspension",
+                    "Proposal preparation for disciplinary proceedings",
+                    "Handling prosecution cases",
+                    "Preventive Vigilance"
+                ]
+            },
+            {
+                "name": "Litigation Management",
+                "competency_sub_theme": [
+                    "Legal Know-How",
+                    "Court case management",
+                    "LIMBS Portal Management"
+                ]
+            },
+            {
+                "name": "Information & Communication Management",
+                "competency_sub_theme": [
+                    "Dissemination of Information",
+                    "Handling social media",
+                    "Management of information on official websites"
+                ]
+            },
+            {
+                "name": "Change Management",
+                "competency_sub_theme": [
+                    "Change Readiness",
+                    "Change Implementation",
+                    "Change Impact Assessment"
+                ]
+            },
+            {
+                "name": "Administration Matters",
+                "competency_sub_theme": [
+                    "Handling Allowances & Reimbursement",
+                    "Handling Leave and Travel",
+                    "Handling Miscellaneous Matters (Car, Residence, Personal Staff etc.)",
+                    "Implementing Official Language"
+                ]
+            },
+            {
+                "name": "Data Protection",
+                "competency_sub_theme": [
+                    "Data Use and Governance"
+                ]
+            }
+        ]
+    }
+]
