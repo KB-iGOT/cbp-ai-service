@@ -45,3 +45,9 @@ class UserResponse(UserBase):
             datetime: lambda v: v.isoformat(),
             uuid.UUID: lambda v: str(v)
         }
+
+class PaginatedUserResponse(BaseModel):
+    total: int
+    limit: int
+    offset: int
+    data: List[UserResponse]
