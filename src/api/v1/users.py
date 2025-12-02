@@ -7,7 +7,7 @@ from ...models.user import User
 from ...crud.user import crud_user
 from ...crud.role import crud_role
 
-from ...schemas.user import UserCreate, UserResponse, UserUpdate
+from ...schemas.user import PaginatedUserResponse, UserCreate, UserResponse, UserUpdate
 
 from ...api.dependencies import get_current_active_user, require_role
 from ...core.database import get_db_session
@@ -154,11 +154,11 @@ current_user: User = Depends(get_current_active_user)
 async def get_user(
     user_id: uuid.UUID,
     db: AsyncSession = Depends(get_db_session),
-current_user: User = Depends(get_current_active_user)
+    current_user: User = Depends(get_current_active_user)
 ):
     """Get a specific user by ID"""
     try:
-        user = await crud_user.get_by_id_with_relations(db, current_user.user_id)
+        user = await crud_user.get_by_id_with_relations(db, user_id)
         
         if not user:
             raise HTTPException(
@@ -260,4 +260,38 @@ async def delete_user(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to delete user"
+        )
+
+@router.get("/users", response_model=PaginatedUserResponse)
+async def list_users(
+    limit: int = 10,
+    offset: int = 0,
+    # username: str | None = None,
+    # email: str | None = None,
+    # role_id: uuid.UUID | None = None,
+    is_active: bool | None = None,
+    db: AsyncSession = Depends(get_db_session),
+    current_user: User = Depends(require_role("Super Admin"))
+):
+    try:
+        filters = {
+            # "username": username,
+            # "email": email,
+            # "role_id": role_id,
+            "is_active": is_active
+        }
+
+        total, users = await crud_user.list_users(db, limit, offset, filters)
+        users = [await _prepare_user_response(user) for user in users]
+        return PaginatedUserResponse(
+            total=total,
+            limit=limit,
+            offset=offset,
+            data=users
+        )
+    except Exception as e:
+        # Catch any unexpected error
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Failed to fetch users: {str(e)}"
         )
