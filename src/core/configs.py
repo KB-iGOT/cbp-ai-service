@@ -1,18 +1,29 @@
+from enum import Enum
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+class EnvironmentOption(str, Enum):
+    LOCAL = "local"
+    STAGING = "staging"
+    PRODUCTION = "production"
+
+class DocumentStorageOption(str, Enum):
+    LOCAL = "local"
+    GCP = "gcp"
 
 class Settings(BaseSettings):
     """
     Application settings loaded from environment variables or a .env file.
     """
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+
+    ENVIRONMENT: EnvironmentOption = EnvironmentOption.LOCAL
     LOG_LEVEL: str = "INFO"
 
     APP_NAME: str = "AI-Driven CBP Training Plan Creation System"
     APP_DESC: str = "API for managing state centers and training organizations for competency-based program development"
     APP_VERSION: str = "1.0.0"
     APP_ROOT_PATH: str = "/cbp-tpc-ai"
-
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     DATABASE_URL: str
 
@@ -21,8 +32,8 @@ class Settings(BaseSettings):
     EMBEDDING_MODEL_NAME: str = "text-multilingual-embedding-002"
     GOOGLE_PROJECT_ID: str
 
-    KB_BASE_URL:str
-    KB_AUTH_TOKEN:str
+    KB_BASE_URL: str
+    KB_AUTH_TOKEN: str
 
      # File upload settings
     PDF_MAX_FILE_SIZE: int = 50 * 1024 * 1024  # 50MB in bytes
@@ -30,10 +41,7 @@ class Settings(BaseSettings):
     ALLOWED_FILE_TYPES: list = [".pdf"]
 
     # Document storage settings
-    DOCUMENT_STORAGE_TYPE: str = Field(
-        default="local",
-        description="Storage type: 'local' or 'gcp'"
-    )
+    DOCUMENT_STORAGE_TYPE: DocumentStorageOption = DocumentStorageOption.LOCAL
     DOCUMENT_STORAGE_ROOT: str = Field(
         default="storage/documents",
         description="Root directory (relative or absolute) where uploaded documents are stored (for local storage)"

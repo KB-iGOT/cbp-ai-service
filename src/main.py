@@ -4,7 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from .core.database import Base, sessionmanager
 from .api import router
-from .core.configs import settings
+from .core.configs import EnvironmentOption, settings
 from .core.logger import logger
 
 @asynccontextmanager
@@ -30,6 +30,9 @@ app = FastAPI(
     title=settings.APP_NAME,
     description=settings.APP_DESC,
     version=settings.APP_VERSION,
+    docs_url = None if settings.ENVIRONMENT == EnvironmentOption.PRODUCTION else "/docs",
+    redoc_url = None if settings.ENVIRONMENT == EnvironmentOption.PRODUCTION else "/redoc",
+    openapi_url = None if settings.ENVIRONMENT == EnvironmentOption.PRODUCTION else "/openapi.json",
     lifespan=lifespan
 )
 
@@ -40,15 +43,5 @@ app.add_middleware(
     allow_methods=["*"],      # Allow all HTTP methods
     allow_headers=["*"],      # Allow all headers
 )
-
-@app.get("/")
-def read_root():
-    return {"message": "Welcome to the AI-Driven CBP Training Plan Creation System!"}
-
-# Health check endpoint
-@app.get("/health")
-async def health_check():
-    logger.info("Health check requested")
-    return {"status": "healthy"}
 
 app.include_router(router)
