@@ -1,5 +1,6 @@
 import uuid
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from pydantic import Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...core.security import get_password_hash
@@ -264,8 +265,17 @@ async def delete_user(
 
 @router.get("/users", response_model=PaginatedUserResponse)
 async def list_users(
-    limit: int = 10,
-    offset: int = 0,
+    offset: int = Query(
+        default=0,
+        ge=0,
+        description="Number of items to skip (offset)"
+    ),
+    limit: int = Query(
+        default=10,
+        ge=1,
+        le=1000,
+        description="Maximum number of items to return (page size)"
+    ),
     # username: str | None = None,
     # email: str | None = None,
     # role_id: uuid.UUID | None = None,
