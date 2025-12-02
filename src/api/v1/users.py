@@ -35,7 +35,7 @@ async def create_user(
         if existing_user:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail=f"Username/Email '{user.username}' already exists"
+                detail=f"Username/Email already exists"
             )
         
         # Verify role exists
@@ -201,7 +201,7 @@ async def update_user(
             if existing_user:
                 raise HTTPException(
                     status_code=status.HTTP_409_CONFLICT,
-                    detail=f"Username/Email '{user_update.username}' already exists"
+                    detail=f"Username/Email already exists"
                 )
         
         # Verify role exists if being updated
