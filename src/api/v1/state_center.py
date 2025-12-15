@@ -16,7 +16,7 @@ router = APIRouter(tags=["State Centers"])
 @router.get("/state-center/", response_model=List[StateCenterResponse])
 async def get_all_state_centers(
     query: Optional[str] = None,
-    limit: int = 200,
+    limit: int = 1000,
     offset: int = 0,
     sub_org_type: Optional[OrgTypeEnum] = OrgTypeEnum.ministry,
     current_user: User = Depends(get_current_active_user)
