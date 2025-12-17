@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>View Course Recommendation</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <link href="https://fonts.googleapis.com/css2?family=Lato:wght@400;600;700&family=Montserrat:wght@500;600&family=Poppins:wght@400&display=swap" rel="stylesheet">
+
+  <style>
+    * {
+      box-sizing: border-box;
+      word-break: break-word;
+    }
+
+    body {
+      margin: 0;
+      font-family: Lato, sans-serif;
+      background: #f4f6fb;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+
+    /* ================= CONTAINER ================= */
+    .view-cbp-plan {
+      background: #fff;
+      margin: 16px;
+      padding: 16px;
+      border-radius: 12px;
+    }
+
+    /* ================= HEADINGS ================= */
+    .ministry-heading {
+      font-family: Montserrat;
+      font-size: 22px;
+      font-weight: 600;
+      color: #1B4CA1;
+    }
+
+    /* ================= COUNTS ================= */
+    .competency-container {
+      display: flex;
+      gap: 16px;
+      margin: 16px 0 24px;
+    }
+
+    .outside-layer-total {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: #EDF1F8;
+      border-left: 3px solid #1B4CA1;
+      padding: 8px 12px;
+      border-radius: 10px;
+      width: 160px;
+    }
+
+    /* ================= COURSE LIST (SCREEN) ================= */
+    .course-list-container {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 14px;
+    }
+
+    .course-list-item {
+      flex: 0 0 calc(50% - 14px);
+      max-width: calc(50% - 14px);
+      background: #fff;
+      border-radius: 12px;
+      padding: 14px;
+      border: 1px solid #ddd;
+    }
+
+    /* ================= HEADER ================= */
+    .course-header {
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+    }
+
+    .course-pill {
+  display: inline-flex;              /* FIX */
+  align-items: center;               /* vertical center */
+  gap: 6px;
+  border: 1px solid #EF951E;
+  border-radius: 16px;
+  padding: 4px 10px;
+  background: #FEFAF4;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;                    /* 🔥 CRITICAL */
+  height: 30px;
+  white-space: nowrap;
+}
+
+.course-pill img {
+  width: 14px;                       /* normalize icon */
+  height: 14px;
+  display: block;                    /* remove baseline gap */
+}
+
+    .ai-green {
+      background: rgba(0,128,0,0.2);
+      color: darkgreen;
+      padding: 4px 6px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 600;
+    }
+
+    .provider-badge {
+      font-size: 11px;
+      margin-top: 4px;
+    }
+
+    /* ================= TEXT ================= */
+    .course-title {
+      margin-top: 10px;
+      font-family: Montserrat;
+      font-size: 15px;
+      font-weight: 600;
+      color: #1B4CA1;
+    }
+
+    /* ================= COMPETENCIES ================= */
+    .competency-sub-heading {
+      margin-top: 10px;
+      font-size: 13px;
+      font-weight: 600;
+      color: #1B4CA1;
+    }
+
+    .competency-list {
+      list-style: none;
+      padding: 0;
+      margin: 6px 0 0;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+
+    .behavioural-pill,
+    .functional-pill,
+    .domain-pill {
+      padding: 3px 8px;
+      font-size: 11px;
+      border-radius: 14px;
+    }
+
+    .behavioural-pill {
+      background: rgba(248,184,97,0.45);
+      border: 1px solid #F8B861;
+    }
+
+    .functional-pill {
+      background: rgba(226,69,119,0.35);
+      border: 1px solid #E24577;
+    }
+
+    .domain-pill {
+      background: rgba(123,71,164,0.35);
+      border: 1px solid #7B47A4;
+    }
+
+    /* ================= RELEVANCY ================= */
+    .relevancy-container {
+      margin-top: 10px;
+      font-size: 12px;
+    }
+
+    .percentage {
+      font-weight: 600;
+      color: #1B4CA1;
+    }
+
+    .provider-badge {
+      background-color: #EF951E;
+      color: #fff;
+      padding: 4px 8px;
+      border-radius: 8px;
+      font-size: 12px;
+      display: inline-block;
+      margin-top: 4px;
+      font-weight: 600;
+    }
+
+    /* ==================================================
+       ✅ PRINT LAYOUT (GRID – FIXES 1 ITEM ISSUE)
+    ================================================== */
+    @media print {
+
+@page {
+  size: A4 portrait;
+  margin: 12mm;
+}
+
+body {
+  margin: 0;
+  background: #fff;
+  font-size: 13px;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+
+.course-pill {
+    line-height: 1 !important;
+    padding: 4px 10px !important;
+  }
+
+  .course-pill img {
+    width: 14px !important;
+    height: 14px !important;
+  }
+
+/* 🔥 IMPORTANT: remove centering + max-width */
+.view-cbp-plan {
+  width: 100vw !important;
+  max-width: none !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border-radius: 0 !important;
+}
+
+/* 🔥 HARD OVERRIDE screen flex */
+.course-list-container {
+  display: grid !important;
+  grid-template-columns: 1fr 1fr !important; /* TRUE 50/50 */
+  column-gap: 16px !important;
+  row-gap: 16px !important;
+  width: 100% !important;
+  margin: 0 !important;
+}
+
+.course-list-item {
+  width: 100% !important;
+  max-width: none !important;
+  padding: 14px !important;
+  border-radius: 10px;
+  page-break-inside: avoid !important;
+  break-inside: avoid !important;
+}
+
+/* Typography */
+.course-title {
+  font-size: 15px;
+  line-height: 1.4;
+}
+
+.competency-sub-heading {
+  font-size: 13px;
+}
+
+.behavioural-pill,
+.functional-pill,
+.domain-pill {
+  font-size: 11px;
+  padding: 4px 8px;
+}
+
+/* Ensure colors print */
+.provider-badge,
+.ai-green,
+.course-pill {
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+}
+
+
+  </style>
+
+</head>
+<body>
+
+  <div class="view-cbp-plan">
+    <div class="section-container">
+      <div class="ministry-heading">{{stats.center_department_name}} / {{designation_name}}</div>
+
+      <div class="competency-container">
+        <div class="outside-layer-total">
+          <div class="inside-layer">Total Courses</div>
+          <div class="count">{{stats.total_courses}}</div>
+        </div>
+        <div class="outside-layer-total">
+          <div class="inside-layer">iGOT Platform</div>
+          <div class="count">{{stats.igot_courses}}</div>
+        </div>
+        <div class="outside-layer-total">
+          <div class="inside-layer">Public Courses</div>
+          <div class="count">{{stats.public_courses}}</div>
+        </div>
+      </div>
+
+      <div class="course-list-container">
+        {% for course in courses %}
+        <div class="course-list-item">
+          <div class="course-header">
+            <div class="course-pill"><img src="https://portal.igotkarmayogi.gov.in/training-pla-ai/assets/icons/course.svg"> Course</div>
+            <div>
+              <div class="ai-green">
+                {% if course.is_public %}
+                AI Recommended - Public
+              {% else %}
+                AI Recommended - iGOT
+              {% endif %}
+              </div>
+              {% if course.provider %}
+              <div class="provider-badge">
+                Provider - {{ course.provider }}
+              </div>
+            {% endif %}
+            </div>
+          </div>
+
+          <div class="course-title">{{course.title}}</div>
+
+          {% if course.behavioral %}
+          <div class="competency-sub-heading">Behavioral Competencies</div>
+          <ul class="competency-list">
+            {% for item in course.behavioral %}
+              <li class="behavioural-pill">{{ item }}</li>
+            {% endfor %}
+          </ul>
+        {% endif %}
+
+        {% if course.functional %}
+          <div class="competency-sub-heading">Functional Competencies</div>
+          <ul class="competency-list">
+            {% for item in course.functional %}
+              <li class="functional-pill">{{ item }}</li>
+            {% endfor %}
+          </ul>
+        {% endif %}
+
+        <!-- Domain Competencies -->
+        {% if course.domain %}
+          <div class="competency-sub-heading">Domain Competencies</div>
+          <ul class="competency-list">
+            {% for item in course.domain %}
+              <li class="domain-pill">{{ item }}</li>
+            {% endfor %}
+          </ul>
+        {% endif %}
+
+        <div class="relevancy-container">
+          <div>Relevancy - <span class="percentage">{{course.relevancy}}%</span></div>
+        </div>
+        </div>
+
+        {% endfor %}
+
+      </div>
+
+    </div>
+  </div>
+
+</body>
+</html>
