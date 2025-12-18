@@ -72,12 +72,12 @@ async def get_departments_by_state_center(
             else:
                 departments = data.get("data", [])
             
-            if not departments:
-                logger.warning(f"No departments found for state/center ID: {state_center_id}")
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail="No departments found for this state/center"
-                )
+            # if not departments:
+            #     logger.warning(f"No departments found for state/center ID: {state_center_id}")
+            #     raise HTTPException(
+            #         status_code=status.HTTP_404_NOT_FOUND,
+            #         detail="No departments found for this state/center"
+            #     )
             
             logger.info(f"Retrieved {len(departments)} departments for state/center ID: {state_center_id}")
             
