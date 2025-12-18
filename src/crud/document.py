@@ -37,6 +37,13 @@ class CRUDDocument:
         result = await db.execute(stmt)
         return result.scalars().one_or_none()
 
+    async def get_all_documents_async(
+        self, 
+        state_center_id: int | None = None,
+        department_id: int | None = None):
+        async with sessionmanager.session() as db:
+            return await self.get_documents(db, summary_status='COMPLETED', state_center_id=state_center_id, department_id=department_id, limit=1000)
+
     async def get_documents(
         self,
         db: AsyncSession,

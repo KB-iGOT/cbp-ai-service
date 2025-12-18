@@ -8,12 +8,11 @@ import uuid
 from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from jinja2 import Environment, FileSystemLoader
-from playwright.async_api import async_playwright
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...schemas.role_mapping import RoleMappingResponse
 
-from ...schemas.cbp_plan import CBPPlanSaveRequest, CBPPlanSaveResponse, CBPPlanUpdateRequest
+from ...schemas.cbp_plan import CBPPlanSaveRequest, CBPPlanSaveResponse, CBPPlanUpdateRequest, DesignationData
 from ...models.user import User
 
 from ...crud.cbp_plan import crud_cbp_plan
@@ -26,7 +25,7 @@ from ...core.database import get_db_session
 from ...core.configs import settings
 from ...core.logger import logger
 
-from ...utils.common import convert_for_json
+from ...utils.common import convert_for_json, convert_html_to_pdf
 
 router = APIRouter(tags=["CBP Plans"])
 
@@ -320,42 +319,6 @@ async def update_cbp_plan(
             detail=f"Failed to update CBP plan: {str(e)}"
         )
 
-class DesignationData:
-    """Formatted designation data for template rendering"""
-    def __init__(self, cbp_record: RoleMappingResponse):
-        self.designation = cbp_record.designation_name
-        self.wing = cbp_record.wing_division_section
-        self.roles_responsibilities = cbp_record.role_responsibilities
-        self.activities = cbp_record.activities
-        
-        # Group competencies by type
-        self.behavioral_competencies = []
-        self.functional_competencies = []
-        self.domain_competencies = []
-
-        for comp in cbp_record.competencies:
-            comp_str = f"{comp['theme']} - {comp['sub_theme']}"
-            comp_type = comp['type'].lower()
-           
-            if "behavioral" in comp_type:
-                self.behavioral_competencies.append(comp_str)
-            elif "functional" in comp_type:
-                self.functional_competencies.append(comp_str)
-            elif "domain" in comp_type:
-                self.domain_competencies.append(comp_str)
-    
-    def to_dict(self) -> Dict[str, Any]:
-        return {
-            "designation": self.designation,
-            "wing": self.wing,
-            "rolesResponsibilities": self.roles_responsibilities,
-            "activities": self.activities,
-            "behavioralCompetencies": self.behavioral_competencies,
-            "functionalCompetencies": self.functional_competencies,
-            "domainCompetencies": self.domain_competencies
-        }
-
-
 def _render_template_sync(cbp_records: List[RoleMappingResponse], center_department_name: str) -> str:
     """
     Generate HTML by binding CBP data to Jinja2 template
@@ -399,55 +362,7 @@ async def generate_html_content(cbp_records: List[RoleMappingResponse], center_d
     loop = asyncio.get_running_loop()
     # partial is used to pass arguments to the function in the executor
     return await loop.run_in_executor(None, partial(_render_template_sync, cbp_records, center_department_name))
-   
-async def convert_html_to_pdf(html_content: str) -> bytes:
-    """
-    Convert HTML to PDF using Playwright (Chromium headless)
-
-    Args:
-        html_content: HTML string to convert
-    Returns:
-        PDF bytes
-    """
-    browser = None
-
-    try:
-        async with async_playwright() as p:
-            # Launch options can be tuned for performance
-            browser = await p.chromium.launch(headless=True, args=['--no-sandbox'])
-            
-            # Open a new page
-            page = await browser.new_page()
-            
-            # OPTIMIZATION: Use set_content instead of writing to a temp file
-            # This keeps everything in memory and avoids disk I/O
-            await page.set_content(html_content, wait_until="networkidle")
-
-            pdf_bytes = await page.pdf(
-                format="A4",
-                print_background=True,
-                margin={"top": "20px", "bottom": "20px", "left": "20px", "right": "20px"}
-            )
-
-            await browser.close()
-            return pdf_bytes
-    except Exception as e:
-        logger.error(f"Error in Playwright PDF generation: {str(e)}")
-        raise HTTPException(
-            status_code=500,
-            detail="Error generating PDF with Playwright"
-        )
-    finally:
-        # Ensure cleanup
-        if browser:
-            try:
-                logger.info("Closing Playwright browser...")
-                await browser.close()
-            except Exception as e:
-                logger.exception("Error closing browser")
-        
-
-
+      
 @router.get("/cbp-plan/download")
 async def download_cbp_plan(
     state_center_id: str,
