@@ -57,19 +57,31 @@ cd cbp-ai-service
 # Install dependencies
 uv sync
 
-# Create `.env.` file and Set environment variables
+# Activate Virtual environment
+source venv/bin/activate  # On Windows: venv\Scripts\activate
 ```
 
 ### Environment Variables
-
+Create a `.env` file in the project root:
 ```bash
+LOG_LEVEL="INFO"
+ENVIRONMENT="local" # staging, production
+
 # Database
 DATABASE_URL=postgresql://user:password@localhost/dbname
 
 # Google AI
+GOOGLE_PROJECT_LOCATION=""
 GOOGLE_PROJECT_ID=your-project-id
 GOOGLE_APPLICATION_CREDENTIALS=path/to/credentials.json
 EMBEDDING_MODEL_NAME=text-multilingual-embedding-002
+
+# Storage Configuration
+DOCUMENT_STORAGE_TYPE=local  # Options: local, gcp
+DOCUMENT_STORAGE_ROOT=./data/uploads  # For local storage
+GCP_STORAGE_BUCKET=your-bucket-name  # For GCP storage
+GCP_STORAGE_PREFIX=documents
+GCP_STORAGE_CREDENTIALS=/path/to/gcs-credentials.json  # Optional
 
 # Knowledge Base API
 KB_BASE_URL=https://your-kb-api.com/v1
@@ -94,4 +106,19 @@ uvicorn src.main:app --reload --host 0.0.0.0 --port 8000
 - **Swagger UI**: `http://localhost:8000/docs`
 - **ReDoc**: `http://localhost:8000/redoc`
 - **OpenAPI JSON**: `http://localhost:8000/openapi.json`
+
+
+### Storage Configuration
+#### Local Storage (Default)
+```
+DOCUMENT_STORAGE_TYPE=local
+DOCUMENT_STORAGE_ROOT=./data/uploads
+```
+#### Google Cloud Storage
+```
+DOCUMENT_STORAGE_TYPE=gcp
+GCP_STORAGE_BUCKET=your-bucket-name
+GCP_STORAGE_PREFIX=documents
+GCP_STORAGE_CREDENTIALS=/path/to/credentials.json
+```
 

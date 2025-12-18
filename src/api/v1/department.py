@@ -1,6 +1,8 @@
-from typing import List
+from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status
 import httpx
+
+from ...schemas.state_center import OrgTypeEnum
 
 from ...schemas.department import DepartmentResponse
 from ...core.configs import settings
@@ -17,6 +19,7 @@ async def get_departments_by_state_center(
     state_center_id: str,  # Changed from uuid.UUID to str
     limit: int = 9999,
     offset: int = 0,
+    sub_org_type: Optional[OrgTypeEnum] = OrgTypeEnum.state,
     current_user: User = Depends(get_current_active_user)
 ):
     """
@@ -36,7 +39,7 @@ async def get_departments_by_state_center(
             "request": {
                 "filters": {
                     "status": 1,
-                    "ministryOrStateType": "state",
+                    "ministryOrStateType": sub_org_type,
                     "ministryOrStateId": state_center_id
                 },
                 "sort_by": {
@@ -69,12 +72,12 @@ async def get_departments_by_state_center(
             else:
                 departments = data.get("data", [])
             
-            if not departments:
-                logger.warning(f"No departments found for state/center ID: {state_center_id}")
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail="No departments found for this state/center"
-                )
+            # if not departments:
+            #     logger.warning(f"No departments found for state/center ID: {state_center_id}")
+            #     raise HTTPException(
+            #         status_code=status.HTTP_404_NOT_FOUND,
+            #         detail="No departments found for this state/center"
+            #     )
             
             logger.info(f"Retrieved {len(departments)} departments for state/center ID: {state_center_id}")
             
