@@ -16,6 +16,7 @@ from .users import router as users_router
 from .document_routes import router as document_routes_new
 from .meta_summary_routes import router as meta_summary_routes_new
 from .health import router as health_routes
+from .dashboard import router as dashboard_routes
 
 router = APIRouter(prefix="/v1")
 
@@ -32,4 +33,5 @@ router.include_router(roles_router)
 router.include_router(users_router)
 router.include_router(document_routes_new)
 router.include_router(meta_summary_routes_new)
+router.include_router(dashboard_routes)
 router.include_router(health_routes)
