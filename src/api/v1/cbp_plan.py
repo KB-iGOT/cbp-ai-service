@@ -319,6 +319,92 @@ async def update_cbp_plan(
             detail=f"Failed to update CBP plan: {str(e)}"
         )
 
+@router.delete("/cbp-plan/{cbp_plan_id}/course/{course_identifier}")
+async def delete_course_from_cbp_plan(
+    cbp_plan_id: uuid.UUID,
+    course_identifier: str,
+    db: AsyncSession = Depends(get_db_session),
+    current_user: User = Depends(get_current_active_user)
+):
+    """
+    Delete an individual course from selected_courses in a CBP plan.
+
+    Args:
+        cbp_plan_id: UUID of the CBP plan
+        course_identifier: Identifier of the course to remove (can be UUID or do_xxx format)
+
+    Returns:
+        Updated CBP plan details
+    """
+    try:
+        logger.info(f"Deleting course '{course_identifier}' from CBP plan: {cbp_plan_id}")
+        
+        # Get existing CBP plan
+        cbp_plan = await crud_cbp_plan.get_by_id(db, cbp_plan_id, current_user.user_id)
+        
+        if not cbp_plan:
+            logger.warning(f"CBP plan with ID {cbp_plan_id} not found")
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="CBP plan not found or access denied"
+            )
+        
+        # Get current selected courses
+        selected_courses = cbp_plan.selected_courses or []
+        
+        if not selected_courses:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="No courses found in this CBP plan"
+            )
+        
+        # Filter out the course to delete
+        original_count = len(selected_courses)
+        
+        # Handle both UUID and string identifiers
+        updated_courses = [
+            course for course in selected_courses
+            if str(course.get("identifier")) != str(course_identifier)
+        ]
+        
+        new_count = len(updated_courses)
+        
+        # Check if course was found and removed
+        if original_count == new_count:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Course with identifier '{course_identifier}' not found in CBP plan"
+            )
+        
+        # # Check if at least one course remains
+        # if new_count == 0:
+        #     raise HTTPException(
+        #         status_code=status.HTTP_400_BAD_REQUEST,
+        #         detail="Cannot delete the last course. CBP plan must have at least one course."
+        #     )
+        
+        # Update CBP plan with filtered courses
+        update_records = {'selected_courses': updated_courses}
+        updated_cbp_plan = await crud_cbp_plan.update(db, cbp_plan_id, update_records)
+        
+        logger.info(f"Successfully deleted course '{course_identifier}' from CBP plan {cbp_plan_id}. Remaining courses: {new_count}")
+        
+        return {
+            "message": f"Successfully deleted course '{course_identifier}' from CBP plan",
+            "cbp_plan_id": str(cbp_plan_id),
+            "deleted_course_identifier": course_identifier,
+            "remaining_courses": new_count
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error deleting course from CBP plan: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to delete course from CBP plan: {str(e)}"
+        )
+
 def _render_template_sync(cbp_records: List[RoleMappingResponse], center_department_name: str) -> str:
     """
     Generate HTML by binding CBP data to Jinja2 template

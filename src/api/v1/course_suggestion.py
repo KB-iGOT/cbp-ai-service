@@ -132,10 +132,11 @@ async def get_course_suggestions(
         suggestion = await crud_suggested_course.get_by_role_mapping_and_user(db, role_mapping_id,current_user.user_id)
         
         if not suggestion:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="No course suggestions found for this role mapping"
-            )
+            return []
+            # raise HTTPException(
+            #     status_code=status.HTTP_404_NOT_FOUND,
+            #     detail="No course suggestions found for this role mapping"
+            # )
         
         if not suggestion.course_identifiers:
             return []
