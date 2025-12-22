@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 from datetime import datetime
 import uuid
 
@@ -34,6 +34,21 @@ class RoleMappingUpdate(BaseModel):
     competencies: Optional[List[Competency]] = Field(None, description="List of competencies")
     sort_order: Optional[int] = Field(None, description="Sort order for hierarchical arrangement")
 
+class CBPPlan(BaseModel):
+    """Schema for CBP plan save response"""
+    id: uuid.UUID = Field(..., description="Unique identifier")
+    user_id: uuid.UUID = Field(..., description="User ID")
+    created_at: datetime = Field(..., description="Creation timestamp")
+    updated_at: datetime = Field(..., description="Last update timestamp")
+    selected_courses: List[Dict[str, Any]] = Field(..., description="Selected course details")
+
+    class Config:
+        from_attributes = True
+        json_encoders = {
+            datetime: lambda v: v.isoformat(),
+            uuid.UUID: lambda v: str(v)
+        }
+
 class RoleMappingResponse(RoleMappingBase):
     """Schema for Role Mapping response"""
     id: uuid.UUID = Field(..., description="Unique identifier")
@@ -48,6 +63,8 @@ class RoleMappingResponse(RoleMappingBase):
     created_at: datetime = Field(..., description="Creation timestamp")
     updated_at: datetime = Field(..., description="Last update timestamp")
     
+    # Add CBP plans relationship
+    cbp_plans: List[CBPPlan] = Field(default=[], description="List of CBP plans associated with this role mapping")
     class Config:
         from_attributes = True
         json_encoders = {

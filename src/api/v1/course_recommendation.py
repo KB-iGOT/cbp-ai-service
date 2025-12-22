@@ -6,7 +6,7 @@ import json
 import os
 import uuid
 from typing import Any, Dict, List, Optional
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Path, Query, status
 from fastapi.responses import JSONResponse, StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from jinja2 import Environment, FileSystemLoader
@@ -29,6 +29,8 @@ from ...core.configs import settings
 from ...crud.course_recommendation import crud_recommended_course
 from ...crud.role_mapping import crud_role_mapping
 from ...crud.cbp_plan import crud_cbp_plan
+from ...crud.course_suggestion import crud_suggested_course
+from ...crud.user_added_course import crud_user_added_course
 
 from ...api.dependencies import get_current_active_user
 
@@ -534,76 +536,125 @@ async def delete_course_recommendations_by_role_mapping(
             detail=f"Failed to delete course recommendations: {str(e)}"
         )
 
-@router.delete("/course-recommendations/{role_mapping_id}/course/{course_identifier}")
-async def delete_individual_course(
-    role_mapping_id: uuid.UUID,
-    course_identifier: str,
+@router.delete("/course-recommendations/{role_mapping_id}/course/{course_id}")
+async def delete_course(
+    course_id: str = Path(..., description="Course identifier"),
+    role_mapping_id: uuid.UUID = Path(..., description="Role mapping ID (required to identify the context)"),
     db: AsyncSession = Depends(get_db_session),
     current_user: User = Depends(get_current_active_user)
 ):
     """
-    Delete an individual course from recommended courses for a specific role mapping.
-
+    Delete a course. Automatically determines the course type by checking in order:
+    1. Recommendations
+    2. Suggestions
+    3. User-added courses
+    
     Args:
-        role_mapping_id: UUID of the role mapping
-        course_identifier: Identifier of the course to remove
-
+        course_id: UUID for user-added courses, or identifier for recommendations/suggestions
+        role_mapping_id: Role mapping ID (required)
+        
     Returns:
-        Updated recommendation record or deletion summary
+        Deletion confirmation with appropriate details
     """
     try:
-        # Verify role mapping exists
+        logger.info(f"Searching for course '{course_id}' in role mapping: {role_mapping_id}")
+        
+        # Step 1: Try recommendations first
         recommendation = await crud_recommended_course.get_by_role_mapping_id(db, role_mapping_id, current_user.user_id)
         
-        if not recommendation:
-            logger.info(f"No course recommendations found for role mapping: {role_mapping_id}")
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="No course recommendations found for this role mapping"
+        if recommendation:
+            # Check if course exists in recommendations
+            course_found = any(
+                course.get("identifier") == course_id 
+                for course in recommendation.filtered_courses
             )
-        
-        if recommendation.status == RecommendationStatus.IN_PROGRESS:
-            logger.info("Cannot modify course list while generation is currently in progress.")
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail = {
-                    'message':"Cannot modify course list while generation is currently in progress.",
-                    'status': RecommendationStatus.IN_PROGRESS,
+            
+            if course_found:
+                logger.info(f"Deleting recommended course '{course_id}' for role mapping: {role_mapping_id}")
+                if recommendation.status == RecommendationStatus.IN_PROGRESS:
+                    logger.info("Cannot modify course list while generation is currently in progress.")
+                    raise HTTPException(
+                        status_code=status.HTTP_409_CONFLICT,
+                        detail={
+                            'message': "Cannot modify course list while generation is currently in progress.",
+                            'status': RecommendationStatus.IN_PROGRESS,
+                        }
+                    )
+                
+                # Delete from recommendations
+                filtered_courses = [
+                    course for course in recommendation.filtered_courses
+                    if course.get("identifier") != course_id
+                ]
+                new_count = len(filtered_courses)
+                
+                await crud_recommended_course.update_status_and_data(
+                    recommendation.id,
+                    recommendation.vector_query,
+                    recommendation.embedding,
+                    recommendation.actual_courses,
+                    filtered_courses
+                )
+                
+                logger.info(f"Successfully deleted recommended course: {course_id}")
+                return {
+                    "message": f"Successfully deleted course '{course_id}' from recommendations",
+                    "course_id": course_id,
+                    "course_type": "recommendation",
+                    "role_mapping_id": str(role_mapping_id),
+                    "remaining_courses": new_count
                 }
-            )
         
-        # Filter out the course to delete
-        original_count = len(recommendation.filtered_courses)
-        filtered_courses = [
-            course for course in recommendation.filtered_courses
-            if course.get("identifier") != course_identifier
-        ]
-        new_count = len(filtered_courses)
+        # Step 2: Try suggestions
+        suggested_course = await crud_suggested_course.get_by_role_mapping_and_user(db, role_mapping_id, current_user.user_id)
         
-        if original_count == new_count:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Course with identifier '{course_identifier}' not found in recommendations"
-            )
+        if suggested_course and course_id in suggested_course.course_identifiers:
+            logger.info(f"Deleting suggested course '{course_id}' for role mapping: {role_mapping_id}")
+            # Delete from suggestions
+            course_identifiers = [
+                identifier for identifier in suggested_course.course_identifiers
+                if identifier != course_id
+            ]
+            new_count = len(course_identifiers)
+            update_records = {'course_identifiers': course_identifiers}
+            await crud_suggested_course.update(db, suggested_course.id, update_records)
+            
+            logger.info(f"Successfully deleted suggested course: {course_id}")
+            return {
+                "message": f"Successfully deleted course '{course_id}' from suggestions",
+                "course_id": course_id,
+                "course_type": "suggestion",
+                "role_mapping_id": str(role_mapping_id),
+                "remaining_courses": new_count
+            }
         
-        await crud_recommended_course.update_status_and_data(
-            recommendation.id,
-            recommendation.vector_query,
-            recommendation.embedding,
-            recommendation.actual_courses,
-            filtered_courses
+        # Step 3: Try as user-added course (check if valid UUID)
+        logger.info(f"Attempting to delete as user-added course with ID: {course_id}")
+        
+        db_course = await crud_user_added_course.get_by_identifier(db, role_mapping_id, course_id, current_user.user_id)
+        
+        if db_course:
+            course_name = db_course.name
+            await crud_user_added_course.delete_by_identifier(db, role_mapping_id, course_id, current_user.user_id)
+            
+            logger.info(f"Successfully deleted user-added course: {course_name}")
+            return {
+                "message": f"User-added course '{course_name}' deleted successfully",
+                "course_id": str(course_id),
+                "course_type": "user_added",
+                "role_mapping_id": str(role_mapping_id)
+            }
+        
+        # If we reach here, course not found in any category
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Course '{course_id}' not found in recommendations, suggestions, or user-added courses for role mapping '{role_mapping_id}'"
         )
-        
-        return {
-            "message": f"Successfully deleted course '{course_identifier}' from recommendations",
-            "role_mapping_id": str(role_mapping_id),
-            "remaining_courses": new_count
-        }
-
+    
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error deleting individual course: {str(e)}")
+        logger.error(f"Error deleting course: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to delete course: {str(e)}"

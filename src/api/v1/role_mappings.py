@@ -3,7 +3,7 @@ import json
 import os
 from typing import Dict, List, Optional
 import uuid
-from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, UploadFile, status
+from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, Query, UploadFile, status
 from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -419,6 +419,7 @@ async def get_role_mapping(
 @router.get("/role-mapping/state-center/{state_center_id}", response_model=List[RoleMappingResponse])
 async def get_role_mappings_by_state_center(
     state_center_id: str,
+    load_cbp_plans: bool = Query(False, description="Include CBP plans in the response"),
     db: AsyncSession = Depends(get_db_session),
     current_user: User = Depends(get_current_active_user)
 ):
@@ -426,7 +427,7 @@ async def get_role_mappings_by_state_center(
     try:
         logger.info(f"Fetching role mappings for state/center ID: {state_center_id}")
         
-        role_mappings = await crud_role_mapping.get_all_completed_mapping(db, state_center_id, current_user.user_id)
+        role_mappings = await crud_role_mapping.get_all_completed_mapping(db, state_center_id, current_user.user_id, load_cbp_plans=load_cbp_plans)
         
         logger.info(f"Retrieved {len(role_mappings)} role mappings for state/center {state_center_id}")
         return role_mappings
@@ -444,6 +445,7 @@ async def get_role_mappings_by_state_center(
 async def get_role_mappings_by_state_center_and_department(
     state_center_id: str,
     department_id: str,
+    load_cbp_plans: bool = Query(False, description="Include CBP plans in the response"),
     db: AsyncSession = Depends(get_db_session),
     current_user: User = Depends(get_current_active_user)
 ):
@@ -451,15 +453,15 @@ async def get_role_mappings_by_state_center_and_department(
     try:
         logger.info(f"Fetching role mappings for state/center ID: {state_center_id} and Department ID: {department_id}")
         
-        role_mappings = await crud_role_mapping.get_all_completed_mapping(db, state_center_id, current_user.user_id, department_id)
-        
+        role_mappings = await crud_role_mapping.get_all_completed_mapping(db, state_center_id, current_user.user_id, department_id, load_cbp_plans=load_cbp_plans)
+        print(role_mappings)
         logger.info(f"Retrieved {len(role_mappings)} role mappings for department {department_id}")
         return role_mappings
         
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error fetching role mappings by state/center and department: {str(e)}")
+        logger.exception(f"Error fetching role mappings by state/center and department: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to fetch role mappings"
