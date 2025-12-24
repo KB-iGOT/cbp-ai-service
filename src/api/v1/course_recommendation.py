@@ -1,26 +1,18 @@
 import asyncio
-from datetime import datetime
-from functools import partial
-import io
 import json
 import os
 import uuid
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Path, Query, status
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
-from jinja2 import Environment, FileSystemLoader
 
 from google import genai
 from google.genai import types
 
-from ...utils.common import convert_html_to_pdf
-
-from ...schemas.cbp_plan import CBPPlanSaveResponse
-
 from ...models.course_recommendation import RecommendationStatus
 from ...models.user import User
-from ...schemas.course_recommendation import CourseCardData, RecommendCourseCreate, RecommendedCourseResponse
+from ...schemas.course_recommendation import RecommendCourseCreate, RecommendedCourseResponse
 
 from ...core.database import get_db_session
 from ...core.logger import logger
@@ -28,7 +20,6 @@ from ...core.configs import settings
 
 from ...crud.course_recommendation import crud_recommended_course
 from ...crud.role_mapping import crud_role_mapping
-from ...crud.cbp_plan import crud_cbp_plan
 from ...crud.course_suggestion import crud_suggested_course
 from ...crud.user_added_course import crud_user_added_course
 
@@ -659,94 +650,3 @@ async def delete_course(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to delete course: {str(e)}"
         )
-
-def _render_template_sync(course_records: CBPPlanSaveResponse, center_department_name: str, designation_name: str) -> str:
-    """
-    Generate HTML by binding Course Recommendation data to Jinja2 template
-    """
-    selected_courses = course_records.selected_courses
-
-    courses = [CourseCardData(course).to_dict() for course in selected_courses]
-
-    stats = {
-        "center_department_name": center_department_name,
-        "total_courses": len(courses),
-        "igot_courses": sum(1 for c in courses if not c.get("is_public")),
-        "public_courses": sum(1 for c in courses if c.get("is_public")),
-    }
-
-    # Render template
-    env = Environment(loader=FileSystemLoader("templates"))
-    template = env.get_template("view_course_recommendation_template.html")
-    html_output = template.render(
-        courses=courses,
-        stats=stats,
-        designation_name=designation_name,
-        current_year=datetime.now().year
-    )
-    with open("html_output.html", "w", encoding="utf-8") as f:
-        f.write(html_output)
-    return html_output
-
-async def generate_html_content(course_records: CBPPlanSaveResponse, center_department_name: str, designation_name: str) -> str:
-    """
-    Async wrapper that offloads rendering to a thread.
-    REMOVED: File writing to "report.html" to improve I/O speed.
-    """
-    loop = asyncio.get_running_loop()
-    # partial is used to pass arguments to the function in the executor
-    return await loop.run_in_executor(None, partial(_render_template_sync, course_records, center_department_name, designation_name))
-   
-@router.get("/course-recommendations/report/download")
-async def download_course_recommendation_report(
-    role_mapping_id: uuid.UUID,
-    db: AsyncSession = Depends(get_db_session),
-    current_user: User = Depends(get_current_active_user)
-):
-    """
-    Generate and download Course Recommendation report as PDF
-
-    Returns a downloadable PDF file
-    """
-    logger.info(f"Fetching course recommendation details for pdf: {role_mapping_id}")
-    try:  
-        course_recommendations = await crud_cbp_plan.get_by_role_mapping(db,role_mapping_id, current_user.user_id)
-        
-        if not course_recommendations:
-            logger.info(f"Role mapping with ID {role_mapping_id} not found")
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Role Mapping with ID {role_mapping_id} not found"
-            )
-        role_mapping = await crud_role_mapping.get_by_id(role_mapping_id)
-        designation_name = role_mapping.designation_name
-        center_department_name = role_mapping.state_center_name
-        if role_mapping.department_name:
-            center_department_name = role_mapping.department_name
-        
-        # Generate HTML with data binding
-        html_content = await generate_html_content(course_recommendations, center_department_name, designation_name)
-        
-        # Convert to PDF
-        pdf_bytes = await convert_html_to_pdf(html_content)
-        
-        # Create streaming response
-        pdf_stream = io.BytesIO(pdf_bytes)
-        
-        # Generate filename
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = f"course_Report_{role_mapping_id}_{timestamp}.pdf"
-        logger.info(f"Generated PDF report for course recommedation : {filename}")
-        return StreamingResponse(
-            pdf_stream,
-            media_type="application/pdf",
-            headers={
-                "Content-Disposition": f"attachment; filename={filename}",
-                "Content-Type": "application/pdf"
-            }
-        )
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.exception("Error while downloading course recommendation report")
-        raise HTTPException(status_code=500, detail="Error generating PDF report for course recommendation")

@@ -65,7 +65,10 @@ async def get_all_state_centers(
         }
         
         async with httpx.AsyncClient(timeout=30.0) as client:
-            response = await client.post(api_url, json=request_body)
+            response = await client.post(api_url, json=request_body, headers={
+                    "Content-Type": "application/json",
+                    "Authorization": f"Bearer {settings.KB_AUTH_TOKEN}"
+                })
             response.raise_for_status()
             
             data = response.json()

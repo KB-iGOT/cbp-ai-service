@@ -2,12 +2,11 @@
 from typing import List
 import uuid
 import httpx
-from fastapi import APIRouter, Depends, HTTPException, status, Path
+from fastapi import APIRouter, Body, Depends, HTTPException, status, Path
 
-from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ...schemas.course_suggestion import CourseSuggestionRequest, CourseSuggestionRespose, CourseSuggestionSave, CourseSuggestionSaveResponse
+from ...schemas.course_suggestion import CourseSuggestionRespose, CourseSuggestionSave, CourseSuggestionSaveResponse
 from ...models.user import User
 from ...api.dependencies import get_current_active_user
 from ...core.database import get_db_session
@@ -18,9 +17,9 @@ from ...crud.course_suggestion import crud_suggested_course
 router = APIRouter(tags=["Course Suggestions"])
 
 # iGOT Course Suggestion APIs
-@router.post("/course/suggestions", response_model=List[CourseSuggestionRespose])
-async def fetch_course_suggestions(
-    request: CourseSuggestionRequest,
+@router.post("/course/suggestions")
+async def fetch_course_from_igot_platform(
+    body: dict = Body(...),
     db: AsyncSession = Depends(get_db_session),
     current_user: User = Depends(get_current_active_user), 
 ):
@@ -29,45 +28,36 @@ async def fetch_course_suggestions(
     Returns:
         Course suggestions with pagination info
     """
-    logger.info(f"Fetching course suggestion requuest: {request.model_dump()}")
+    # body = await request.json()
+    logger.info(f"Fetching course suggestion requuest: {body}")
     try:
-        # Prepare the payload for the external API call
-        payload = {
-            "request": {
-                "filters": {
-                    "primaryCategory": ["Course"],
-                    "status": ["Live"],
-                    "courseCategory": ["Course"]
-                },
-                "fields": ["name", "identifier", "description", "keywords", "organisation", "competencies_v6", "language", 'duration'],
-                "sortBy": {"createdOn": "Desc"},
-                "limit": request.limit,
-                "offset": request.skip,
-                "query": request.search_term
-            }
-        }
-        
         # Use an async HTTP client to make the request
         async with httpx.AsyncClient() as client:
             response = await client.post(
                 f"{settings.KB_BASE_URL}/api/content/v1/search",
-                json=payload,
-                headers={"Content-Type": "application/json"}
+                json=body,
+                headers={
+                    "Content-Type": "application/json",
+                    "Authorization": f"Bearer {settings.KB_AUTH_TOKEN}"
+                }
             )
             response.raise_for_status() # Raise an exception for bad status codes (4xx or 5xx)
             
             # Parse the JSON response
             data = response.json()
-            courses_data = data.get("result", {}).get("content", [])
             logger.info("Fetched list of courses from iGOT platform")
-            return courses_data
-    except HTTPException:
-        raise
+            return data
+    except httpx.HTTPStatusError as e:
+        logger.error(f"fetch courses from iGOT platform Upstream error: {e.response.text}")
+        raise HTTPException(
+            status_code=e.response.status_code,
+            detail=e.response.text,
+        )
     except Exception as e:
-        logger.error(f"Error getting course suggestions: {str(e)}")
+        logger.error(f"Error fetching the list of courses from iGOT platform: {str(e)}")
         raise HTTPException(
             status_code=500,
-            detail="Failed to get course suggestions"
+            detail="Failed to fetch the list of courses from iGOT platform"
         )
     
 @router.post("/course/suggestions/save", response_model=CourseSuggestionSaveResponse, status_code=status.HTTP_201_CREATED)
@@ -161,7 +151,10 @@ async def get_course_suggestions(
             response = await client.post(
                 f"{settings.KB_BASE_URL}/api/content/v1/search",
                 json=payload,
-                headers={"Content-Type": "application/json"}
+                headers={
+                    "Content-Type": "application/json",
+                    "Authorization": f"Bearer {settings.KB_AUTH_TOKEN}"
+                }
             )
             response.raise_for_status() # Raise an exception for bad status codes (4xx or 5xx)
             
