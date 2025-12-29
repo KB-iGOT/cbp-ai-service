@@ -67,6 +67,7 @@ async def process_role_mapping_task(
         # 2. Generate Data (Blocking Call)
         try:
             generated_data_list = await role_mapping_service.generate_role_mapping(
+                user_id=user_id,
                 state_center_id=state_center_id,
                 state_center_name=state_center_name,
                 additional_document_contents=additional_document_contents,

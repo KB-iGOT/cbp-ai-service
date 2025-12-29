@@ -1,6 +1,6 @@
 import uuid
 from io import BytesIO
-from typing import Optional
+from typing import List, Optional
 
 from fastapi.responses import StreamingResponse
 from fastapi import APIRouter, UploadFile, File, Form, Depends, HTTPException, status, Query, BackgroundTasks
@@ -13,7 +13,7 @@ from ...core.configs import settings
 from ...api.dependencies import get_current_active_user
 from ...core.database import get_db_session
 
-from ...schemas.document import DocumentResponse, DocumentListResponse, SummaryTriggerResponse, DocumentDeleteResponse, SummaryDeleteResponse
+from ...schemas.document import BatchUploadResponse, DocumentResponse, DocumentListResponse, SummaryTriggerResponse, DocumentDeleteResponse, SummaryDeleteResponse, UploadFailure
 from ...services.storage_service import get_storage_service
 from ...prompts.prompts import DOCUMENT_SUMMARY_PROMPT
 from ...crud.document import crud_document
@@ -46,56 +46,132 @@ router = APIRouter(prefix="/files", tags=["Documents"])
 # Get storage service instance
 storage_service = get_storage_service()
 
-@router.post("", response_model=DocumentResponse, status_code=status.HTTP_201_CREATED)
-async def upload_file(
+@router.post("", response_model=BatchUploadResponse, status_code=status.HTTP_201_CREATED)
+async def upload_files(
     state_center_id: str = Form(...),
     department_id: Optional[str] = Form(None),
-    document_name: Optional[str] = Form(None, description="Custom name for the document. If not provided, filename will be used."),
-    file: UploadFile = File(...),
+    files: List[UploadFile] = File(...),
     db: AsyncSession = Depends(get_db_session),
     current_user=Depends(get_current_active_user)
 ):
-    """Upload a single PDF file. Reject if same filename already exists for (state_center, department)."""
+    """Upload multiple PDF files (1-10 files). Validation errors fail the entire request. Storage errors are tracked per file."""
     
-    original_filename = file.filename
-    if not original_filename.lower().endswith('.pdf'):
-        raise HTTPException(status_code=415, detail="Only PDF files are supported")
-
-    # Check duplicate
-    existing = await crud_document.get_by_state_center_and_department(db, state_center_id, original_filename, department_id)
-    if existing:
-        raise HTTPException(status_code=409, detail="File already exists for this scope")
-
-    # Check file size early (read first to get size)
-    file.file.seek(0, 2)  # Seek to end
-    size = file.file.tell()
-    file.file.seek(0)  # Reset to beginning
-    
-    if size > settings.PDF_MAX_FILE_SIZE:
-        raise HTTPException(status_code=400, detail="File exceeds maximum allowed size")
-
     try:
-        # Save file using storage service
-        stored_path, file_size = storage_service.save_file(
-            file.file, original_filename, state_center_id, department_id
-        )
+        # Validate file count
+        if not files or len(files) == 0:
+            raise HTTPException(status_code=400, detail="At least 1 file is required")
+        
+        if len(files) > 10:
+            raise HTTPException(status_code=400, detail="Maximum 10 files allowed per upload")
+        
+        total_files = len(files)
+    
+        # Validate ALL files first - any validation error fails the entire request
+        validated_files = []
+        for idx, file in enumerate(files):
+            original_filename = file.filename
+            
+            # Check file extension
+            if not original_filename.lower().endswith('.pdf'):
+                raise HTTPException(
+                    status_code=415, 
+                    detail=f"File '{original_filename}' is not a PDF. Only PDF files are supported"
+                )
+            
+            # Check for duplicates
+            existing = await crud_document.get_by_state_center_and_department(
+                db, state_center_id, original_filename, current_user.user_id, department_id
+            )
+            if existing:
+                raise HTTPException(
+                    status_code=409, 
+                    detail=f"File '{original_filename}' already exists for this scope"
+                )
+            
+            # Check file size
+            file.file.seek(0, 2)
+            size = file.file.tell()
+            file.file.seek(0)
+            
+            if size > settings.PDF_MAX_FILE_SIZE:
+                raise HTTPException(
+                    status_code=400, 
+                    detail=f"File '{original_filename}' exceeds maximum allowed size of {settings.PDF_MAX_FILE_SIZE} bytes"
+                )
+            
+            validated_files.append({
+                'file': file,
+                'filename': original_filename,
+                'size': size
+            })
+        
+        # All files passed validation - now attempt upload and save to DB
+        successful_uploads = []
+        failed_uploads = []
+        
+        for file_info in validated_files:
+            try:
+                # Save file using storage service
+                stored_path, file_size = storage_service.save_file(
+                    file_info['file'].file, 
+                    file_info['filename'], 
+                    state_center_id, 
+                    department_id
+                )
 
-        doc = Document(
-            file_id=uuid.uuid4(),
-            state_center_id=state_center_id,
-            department_id=department_id,
-            uploader_id=current_user.user_id,
-            filename=original_filename,
-            document_name=document_name,
-            stored_path=stored_path,
-            file_size_bytes=file_size,
-            summary_status="NOT_STARTED"
+                # Save to database
+                doc = Document(
+                    file_id=uuid.uuid4(),
+                    state_center_id=state_center_id,
+                    department_id=department_id,
+                    uploader_id=current_user.user_id,
+                    filename=file_info['filename'],
+                    stored_path=stored_path,
+                    file_size_bytes=file_size,
+                    summary_status="NOT_STARTED"
+                )
+                doc = await crud_document.create(db, doc)
+                successful_uploads.append(doc)
+                
+            except Exception as e:
+                logger.error(f"Error uploading/saving file '{file_info['filename']}': {e}", exc_info=True)
+                failed_uploads.append(UploadFailure(
+                    filename=file_info['filename'],
+                    error=f"Upload/storage failed"
+                ))
+        
+        # Determine status and message
+        successful_count = len(successful_uploads)
+        failed_count = len(failed_uploads)
+        
+        if successful_count == total_files:
+            status_str = "complete"
+            message = f"All {total_files} file(s) uploaded successfully"
+        elif successful_count > 0:
+            status_str = "partial"
+            message = f"{successful_count} of {total_files} file(s) uploaded successfully, {failed_count} failed"
+        else:
+            status_str = "failed"
+            message = f"All {total_files} file(s) failed to upload"
+        
+        return BatchUploadResponse(
+            status=status_str,
+            message=message,
+            total_files=total_files,
+            successful_count=successful_count,
+            failed_count=failed_count,
+            successful_uploads=successful_uploads,
+            failed_uploads=failed_uploads
         )
-        doc = await crud_document.create(db, doc)
-        return doc
+    except HTTPException:
+        # Re-raise HTTP exceptions as-is
+        raise
     except Exception as e:
-        logger.error(f"Error saving file: {e}")
-        raise HTTPException(status_code=500, detail="Failed to save file")
+        logger.exception(f"Unexpected error in upload_files endpoint:")
+        raise HTTPException(
+            status_code=500, 
+            detail=f"Failed to upload files"
+        )
 
 @router.get("", response_model=DocumentListResponse)
 async def list_files(
@@ -112,7 +188,7 @@ async def list_files(
     current_user=Depends(get_current_active_user)
 ):
     try:
-        
+        uploader_id = uploader_id if uploader_id else current_user.user_id
         total, docs = await crud_document.get_documents(
             db,
             summary_status,
@@ -191,7 +267,7 @@ async def _run_document_summary(document_id: uuid.UUID):
                 ],
             )
 
-            response = client.models.generate_content(
+            response = await client.aio.models.generate_content(
                 model="gemini-2.5-pro",
                 contents=contents,
                 config=generate_content_config

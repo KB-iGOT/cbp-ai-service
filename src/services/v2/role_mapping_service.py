@@ -2,6 +2,7 @@
 
 import json
 from typing import Dict, Any, List, Optional
+import uuid
 from google import genai
 from google.genai import types
 
@@ -205,9 +206,9 @@ class RoleMappingService:
             logger.error(f"Error generating role mapping from Gemini: {str(e)}")
             raise Exception(f"Role mapping generation failed: {str(e)}")
     
-    async def get_documents_summary(self, state_center_id, department_id = None) -> str:
+    async def get_documents_summary(self, user_id,state_center_id, department_id = None) -> str:
         # Start with base query
-        _, retrieved_docs = await crud_document.get_all_documents_async(state_center_id, department_id)
+        _, retrieved_docs = await crud_document.get_all_documents_async(user_id, state_center_id, department_id)
         if not retrieved_docs:
             return []
         
@@ -216,6 +217,7 @@ class RoleMappingService:
 
     async def generate_role_mapping(
         self,
+        user_id: uuid.UUID,
         state_center_id: str,
         state_center_name: str,
         additional_document_contents: List[bytes] | None,
@@ -245,7 +247,7 @@ class RoleMappingService:
             logger.info(f"Starting role mapping generation for state_center_id: {state_center_id}")
             
             # Fetch state center data
-            docs_summary = await self.get_documents_summary(state_center_id, department_id)
+            docs_summary = await self.get_documents_summary(user_id,state_center_id, department_id)
             
             # if not docs_summary:
             #     logger.warning(f"No document data found for ID: {state_center_id}")
