@@ -223,7 +223,6 @@ def _render_template_sync_acbp(cbp_records: List[RoleMappingResponse], center_de
     # Prepare designation data
     designation_list = [DesignationData(record) for record in cbp_records]
     designation_data = [d.to_dict() for d in designation_list]
-    print(designation_data)
     total_behavioral = sum(len(d["behavioralCompetencies"]) for d in designation_data)
     total_functional = sum(len(d["functionalCompetencies"]) for d in designation_data)
     total_domain = sum(len(d["domainCompetencies"]) for d in designation_data)

@@ -454,7 +454,6 @@ async def get_role_mappings_by_state_center_and_department(
         logger.info(f"Fetching role mappings for state/center ID: {state_center_id} and Department ID: {department_id}")
         
         role_mappings = await crud_role_mapping.get_all_completed_mapping(db, state_center_id, current_user.user_id, department_id, load_cbp_plans=load_cbp_plans)
-        print(role_mappings)
         logger.info(f"Retrieved {len(role_mappings)} role mappings for department {department_id}")
         return role_mappings
         
