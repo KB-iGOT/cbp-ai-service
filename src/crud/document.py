@@ -74,6 +74,9 @@ class CRUDDocument:
 
         if department_id:
             filters.append(Document.department_id == department_id)
+        
+        if state_center_id and not department_id:
+            filters.append(Document.department_id.is_(None))
 
         if filename:
             filters.append(Document.filename == filename)
