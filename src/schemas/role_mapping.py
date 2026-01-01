@@ -1,9 +1,15 @@
+from enum import Enum
 from pydantic import BaseModel, Field
 from typing import Any, Dict, List, Optional
 from datetime import datetime
 import uuid
 
 # Role Mapping Schema
+
+class OrgType(str, Enum):
+    ministry = "ministry"
+    state = "state"
+
 class Competency(BaseModel):
     """Schema for competency"""
     type: str = Field(..., description="Type of competency (Behavioral, Functional, Domain)")

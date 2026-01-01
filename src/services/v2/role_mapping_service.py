@@ -6,6 +6,8 @@ import uuid
 from google import genai
 from google.genai import types
 
+from src.schemas.role_mapping import OrgType
+
 from ...core.configs import settings
 from ...prompts.v2.prompts import ROLE_MAPPING_PROMPT_V2, ROLE_MAPPING_PROMPT_V5_STATE
 from ...crud.document import crud_document
@@ -95,9 +97,10 @@ class RoleMappingService:
                 "source": "[ACBP, Work Allocation Order, KCM, AI Suggested]"
             },
             ]
-            logger.info(f"Role Mapping is using prompt :: {'STATE_PROMPT' if organization_data["department_id"] else "CENTER_PROMPT"}")
-            PROMPT = ROLE_MAPPING_PROMPT_V5_STATE if organization_data["department_id"] else ROLE_MAPPING_PROMPT_V2
-            output_json_format = state_json_output if organization_data["department_id"] else center_json_output
+            
+            logger.info(f"Role Mapping is using prompt :: {'STATE_PROMPT' if organization_data["org_type"] == OrgType.state.value else "CENTER_PROMPT"}")
+            PROMPT = ROLE_MAPPING_PROMPT_V5_STATE if organization_data["org_type"] == OrgType.state.value else ROLE_MAPPING_PROMPT_V2
+            output_json_format = state_json_output if organization_data["org_type"] == OrgType.state.value else center_json_output
             base_prompt = PROMPT.format(
                 organization_name=organization_data.get('organization_name'),
                 department_name=organization_data.get('department_name'),
@@ -218,6 +221,7 @@ class RoleMappingService:
     async def generate_role_mapping(
         self,
         user_id: uuid.UUID,
+        org_type: OrgType,
         state_center_id: str,
         state_center_name: str,
         additional_document_contents: List[bytes] | None,
@@ -255,6 +259,7 @@ class RoleMappingService:
             
             # Prepare organization data
             organization_data = {
+                "org_type": org_type.value,
                 "state_center_id": state_center_id,
                 "department_id" : department_id,
                 "organization_name": state_center_name,

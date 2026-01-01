@@ -14,7 +14,7 @@ from ...models.role_mapping import ProcessingStatus, RoleMapping
 from ...models.user import User
 
 from ...prompts.v2.prompts import DESIGNATION_ROLE_MAPPING_PROMPT
-from ...schemas.role_mapping import AddDesignationToRoleMappingRequest, RoleMappingBackgroundResponse, RoleMappingResponse, RoleMappingUpdate
+from ...schemas.role_mapping import AddDesignationToRoleMappingRequest, OrgType, RoleMappingBackgroundResponse, RoleMappingResponse, RoleMappingUpdate
 from ...services.v2.role_mapping_service import role_mapping_service
 
 from ...core.database import get_db_session
@@ -39,6 +39,7 @@ client = genai.Client(
 
 async def process_role_mapping_task(
     placeholder_id: uuid.UUID,
+    org_type:OrgType,
     user_id: uuid.UUID,
     state_center_id: str,
     state_center_name: str,
@@ -68,6 +69,7 @@ async def process_role_mapping_task(
         try:
             generated_data_list = await role_mapping_service.generate_role_mapping(
                 user_id=user_id,
+                org_type=org_type,
                 state_center_id=state_center_id,
                 state_center_name=state_center_name,
                 additional_document_contents=additional_document_contents,
@@ -108,6 +110,7 @@ async def process_role_mapping_task(
         for data in generated_data_list[1:]:
             new_mapping = RoleMapping(
                 user_id=user_id,
+                org_type=org_type,
                 state_center_id=state_center_id,
                 department_id=department_id,
                 state_center_name=state_center_name,
@@ -145,6 +148,7 @@ async def process_role_mapping_task(
 @router.post("/role-mapping/generate", response_model=RoleMappingBackgroundResponse, status_code=status.HTTP_202_ACCEPTED)
 async def generate_role_mapping(
     background_tasks: BackgroundTasks,
+    org_type: OrgType = Form(..., description="Organization type: ministry or state"),
     state_center_id: str = Form(..., description="ID of the associated state/center"),
     department_id: Optional[str] = Form(None, description="ID of the associated department"),
     state_center_name: str = Form(..., description="Name of the associated state/center"),
@@ -199,6 +203,7 @@ async def generate_role_mapping(
         # Create Placeholder Row (Locks the process and acts as the first record)
         placeholder = RoleMapping(
             user_id=current_user.user_id,
+            org_type=org_type,
             state_center_id=state_center_id,
             department_id=department_id,
             state_center_name=state_center_name,
@@ -221,6 +226,7 @@ async def generate_role_mapping(
         background_tasks.add_task(
             process_role_mapping_task,
             placeholder_id=placeholder[0].id,
+            org_type=org_type,
             user_id=current_user.user_id,
             state_center_id=state_center_id,
             state_center_name=state_center_name,
