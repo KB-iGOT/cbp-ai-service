@@ -47,7 +47,7 @@ state_json_output = [{
       "source": "KCM or AI Suggested"
     }
   ],
-  "source": ["Work Allocation Order" or "ACBP" or "Primary document summaries" or "AI Suggested"]
+  "source": ["Primary document summaries", "AI Suggested"]
 }]
 
 class RoleMappingService:
@@ -196,8 +196,8 @@ class RoleMappingService:
             return parsed_response
             
         except Exception as e:
-            logger.error(f"Error generating role mapping from Gemini: {str(e)}")
-            raise Exception(f"Role mapping generation failed: {str(e)}")
+            logger.exception(f"Error generating role mapping from Gemini")
+            raise e
     
     async def get_documents_summary(self, user_id,state_center_id, department_id = None) -> str:
         # Start with base query
@@ -262,7 +262,7 @@ class RoleMappingService:
             return result
             
         except Exception as e:
-            logger.error(f"Error in role mapping generation: {str(e)}")
+            logger.exception(f"Error in role mapping generation:")
             raise
 
 # Create a singleton instance
