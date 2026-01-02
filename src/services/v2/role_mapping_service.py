@@ -6,7 +6,7 @@ import uuid
 from google import genai
 from google.genai import types
 
-from src.schemas.role_mapping import OrgType
+from ...schemas.role_mapping import OrgType
 
 from ...core.configs import settings
 from ...prompts.v2.prompts import ROLE_MAPPING_PROMPT_V2, ROLE_MAPPING_PROMPT_V5_STATE
