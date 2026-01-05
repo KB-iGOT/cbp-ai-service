@@ -79,6 +79,10 @@ class RoleMappingResponse(RoleMappingBase):
         }
 
 class RoleMappingBackgroundResponse(BaseModel):
+    is_existing: bool = Field(
+        ..., 
+        description="Indicates whether the role mapping already existed (true) or was newly generated (false)."
+    )
     message: str = Field(..., description="A success or error message detailing the result of the operation.")
     status: str = Field(..., description="The status of the operation (e.g., 'success', 'failed', 'pending').")
     role_mappings: List[RoleMappingResponse] = Field(default_factory=list, description="A list of the role mapping objects.")

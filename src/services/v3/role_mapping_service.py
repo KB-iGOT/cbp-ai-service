@@ -342,7 +342,7 @@ class RoleMappingService:
             extraction_result = await self._extract_designations(
                 organization_data
             )
-            
+            print(extraction_result)
             designations = extraction_result.get('designations', [])
             if not designations:
                 logger.warning("No designations extracted in PASS 1")

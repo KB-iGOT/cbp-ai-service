@@ -164,6 +164,7 @@ async def generate_role_mapping(
             
             if current_status == ProcessingStatus.IN_PROGRESS:
                 return RoleMappingBackgroundResponse(
+                    is_existing=False,
                     status=ProcessingStatus.IN_PROGRESS, 
                     message="Generation is already IN PROGRESS for this State/Center."
                 )
@@ -174,6 +175,7 @@ async def generate_role_mapping(
                 return JSONResponse(
                     status_code=status.HTTP_201_CREATED,
                     content=RoleMappingBackgroundResponse(
+                        is_existing=True,
                         message="Role mapping generated successfully",
                         status=ProcessingStatus.COMPLETED,
                         role_mappings=existing_role_mapping
@@ -220,6 +222,7 @@ async def generate_role_mapping(
         )
 
         return {
+            "is_existing": False,
             "message": "Role mapping generation started in background.",
             "status": ProcessingStatus.IN_PROGRESS
         }
