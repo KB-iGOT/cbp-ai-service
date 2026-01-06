@@ -14,7 +14,7 @@ from ...models.role_mapping import ProcessingStatus, RoleMapping
 from ...models.user import User
 
 from ...prompts.prompts import DESIGNATION_ROLE_MAPPING_PROMPT
-from ...schemas.role_mapping import AddDesignationToRoleMappingRequest, RoleMappingBackgroundResponse, RoleMappingResponse, RoleMappingUpdate
+from ...schemas.role_mapping import AddDesignationToRoleMappingRequest, RoleMappingBackgroundResponse, RoleMappingResponse, RoleMappingUpdate, RoleMappingWithoutCBP
 from ...services.role_mapping_service import role_mapping_service
 
 from ...core.database import get_db_session
@@ -322,7 +322,7 @@ async def generate_role_and_competencies(input_data):
         print(f"Error generating role and responsibilities from Gemini: {e}")
         raise HTTPException(status_code=500, detail=f"Gemini error: {str(e)}")
 
-@router.post("/role-mapping/add-designation", response_model=RoleMappingResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/role-mapping/add-designation", response_model=RoleMappingWithoutCBP, status_code=status.HTTP_201_CREATED)
 async def add_designation_to_role_mapping(
     request: AddDesignationToRoleMappingRequest, db: AsyncSession = Depends(get_db_session),
     current_user: User = Depends(get_current_active_user)
@@ -389,7 +389,7 @@ async def add_designation_to_role_mapping(
             detail="Failed to update role mapping"
         )
 
-@router.get("/role-mapping/{role_mapping_id}", response_model=RoleMappingResponse)
+@router.get("/role-mapping/{role_mapping_id}", response_model=RoleMappingWithoutCBP)
 async def get_role_mapping(
     role_mapping_id: uuid.UUID,
     db: AsyncSession = Depends(get_db_session), 
@@ -469,7 +469,7 @@ async def get_role_mappings_by_state_center_and_department(
             detail="Failed to fetch role mappings"
         )
 
-@router.put("/role-mapping/{role_mapping_id}", response_model=RoleMappingResponse)
+@router.put("/role-mapping/{role_mapping_id}", response_model=RoleMappingWithoutCBP)
 async def update_role_mapping(
     role_mapping_id: uuid.UUID,
     role_mapping_update: RoleMappingUpdate,
@@ -499,12 +499,13 @@ async def update_role_mapping(
         role_mapping = await crud_role_mapping.update(role_mapping_id, update_records)
         
         logger.info(f"Role mapping updated successfully with ID: {db_role_mapping.id}")
+        # print(role_mapping.cbp_plans)
         return role_mapping
         
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error updating role mapping: {str(e)}")
+        logger.exception(f"Error updating role mapping:")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to update role mapping"

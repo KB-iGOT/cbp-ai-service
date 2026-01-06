@@ -199,7 +199,7 @@ class RoleMappingService:
             logger.exception(f"Error generating role mapping from Gemini")
             raise e
     
-    async def get_documents_summary(self, user_id,state_center_id, department_id = None) -> str:
+    async def get_documents_summary(self, user_id, state_center_id, department_id = None) -> str:
         # Start with base query
         _, retrieved_docs = await crud_document.get_all_documents_async(user_id, state_center_id, department_id)
         if not retrieved_docs:

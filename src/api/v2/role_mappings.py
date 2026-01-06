@@ -14,7 +14,7 @@ from ...models.role_mapping import ProcessingStatus, RoleMapping
 from ...models.user import User
 
 from ...prompts.v2.prompts import DESIGNATION_ROLE_MAPPING_PROMPT
-from ...schemas.role_mapping import AddDesignationToRoleMappingRequest, OrgType, RoleMappingBackgroundResponse, RoleMappingResponse, RoleMappingUpdate
+from ...schemas.role_mapping import AddDesignationToRoleMappingRequest, OrgType, RoleMappingBackgroundResponse, RoleMappingResponse, RoleMappingUpdate, RoleMappingWithoutCBP
 from ...services.v2.role_mapping_service import role_mapping_service
 
 from ...core.database import get_db_session
@@ -243,7 +243,7 @@ async def generate_role_mapping(
 async def generate_role_and_competencies(input_data):
     # Build strict prompt
     try:
-        docs_summary = await role_mapping_service.get_documents_summary(input_data['state_center_id'], input_data['department_id'])
+        docs_summary = await role_mapping_service.get_documents_summary(input_data['user_id'], input_data['state_center_id'], input_data['department_id'])
         
         # if not docs_summary:
         #     logger.warning(f"No document data found for ID: {input_data['state_center_id']}")
@@ -311,7 +311,7 @@ async def generate_role_and_competencies(input_data):
         print(f"Error generating role and responsibilities from Gemini: {e}")
         raise HTTPException(status_code=500, detail=f"Gemini error: {str(e)}")
 
-@router.post("/role-mapping/add-designation", response_model=RoleMappingResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/role-mapping/add-designation", response_model=RoleMappingWithoutCBP, status_code=status.HTTP_201_CREATED)
 async def add_designation_to_role_mapping(
     request: AddDesignationToRoleMappingRequest, db: AsyncSession = Depends(get_db_session),
     current_user: User = Depends(get_current_active_user)
@@ -359,6 +359,7 @@ async def add_designation_to_role_mapping(
             )
         designation_names = [request.designation_name]
         tasks = [generate_and_prepare({
+            "user_id": current_user.user_id,
             "state_center_id": request.state_center_id,
             "department_id": request.department_id,
             "org_name" : request.state_center_name,

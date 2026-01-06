@@ -78,6 +78,26 @@ class RoleMappingResponse(RoleMappingBase):
             uuid.UUID: lambda v: str(v)
         }
 
+class RoleMappingWithoutCBP(RoleMappingBase):
+    """Schema for Role Mapping response"""
+    id: uuid.UUID = Field(..., description="Unique identifier")
+    user_id: uuid.UUID = Field(..., description="User ID")
+    designation_name: str = Field(..., min_length=1, max_length=255, description="Name of the designation")
+    status: str = Field(..., description="Status")
+    wing_division_section: str = Field(..., max_length=255, description="Wing/Division/Section name")
+    role_responsibilities: List[str] = Field(default=[], description="List of role responsibilities")
+    activities: List[str] = Field(default=[], description="List of activities")
+    competencies: List[Competency] = Field(default=[], description="List of competencies")
+    sort_order: Optional[int] = Field(None, description="Sort order for hierarchical arrangement")
+    created_at: datetime = Field(..., description="Creation timestamp")
+    updated_at: datetime = Field(..., description="Last update timestamp")
+    class Config:
+        from_attributes = True
+        json_encoders = {
+            datetime: lambda v: v.isoformat(),
+            uuid.UUID: lambda v: str(v)
+        }
+
 class RoleMappingBackgroundResponse(BaseModel):
     is_existing: bool = Field(
         ..., 
