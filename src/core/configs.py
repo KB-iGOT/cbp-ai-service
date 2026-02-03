@@ -81,7 +81,7 @@ class Settings(BaseSettings):
     
     # Optional: Token blacklist settings (for logout functionality)
     ENABLE_TOKEN_BLACKLIST: bool = Field(
-        default=False,
+        default=True,
         description="Enable token blacklisting for logout"
     )
 

@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, DateTime, Integer, Boolean, ForeignKey
+from sqlalchemy import Column, String, DateTime, Integer
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.sql import func
 import uuid
@@ -7,7 +7,11 @@ from ..core.database import Base
 
 
 class LoginAttempt(Base):
-    """Model for tracking login attempts for brute-force protection"""
+    """Model for tracking failed login attempts for brute-force protection.
+
+    Uses a single row per username with an attempt counter instead of
+    multiple rows per attempt.
+    """
     __tablename__ = "login_attempts"
 
     id = Column(
@@ -19,27 +23,30 @@ class LoginAttempt(Base):
     username = Column(
         String(255),
         nullable=False,
+        unique=True,
         index=True
     )
-    ip_address = Column(
+    attempt_count = Column(
+        Integer,
+        default=1,
+        nullable=False
+    )
+    last_attempt_ip = Column(
         String(45),  # Supports IPv6
         nullable=True
     )
-    attempt_time = Column(
+    first_attempt_at = Column(
         DateTime(timezone=True),
         server_default=func.now(),
+        nullable=False
+    )
+    last_attempt_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
         nullable=False,
         index=True
     )
-    is_successful = Column(
-        Boolean,
-        default=False,
-        nullable=False
-    )
-    failure_reason = Column(
-        String(100),
-        nullable=True
-    )
 
     def __repr__(self):
-        return f"<LoginAttempt(username='{self.username}', successful={self.is_successful}, time={self.attempt_time})>"
+        return f"<LoginAttempt(username='{self.username}', attempts={self.attempt_count}, last_attempt={self.last_attempt_at})>"
