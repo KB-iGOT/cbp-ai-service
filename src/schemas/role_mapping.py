@@ -117,3 +117,16 @@ class AddDesignationToRoleMappingRequest(BaseModel):
     department_name: Optional[str] = Field(None, description="Name of the associated department")
     designation_name: str = Field(..., min_length=1, max_length=255, description="New designation names")
     instruction: Optional[str] = Field(None, description="Additional instructions for role mapping generation")
+
+
+class DesignationOrderItem(BaseModel):
+    """Schema for a single designation order item"""
+    id: uuid.UUID = Field(..., description="Role mapping ID")
+    sort_order: int = Field(..., ge=1, description="New sort order position (1-based)")
+
+
+class ReorderDesignationsRequest(BaseModel):
+    """Schema for reordering designations via drag and drop"""
+    state_center_id: str = Field(..., description="ID of the associated state/center")
+    department_id: Optional[str] = Field(None, description="ID of the associated department")
+    designations: List[DesignationOrderItem] = Field(..., min_length=1, description="List of designations with their new sort orders")
