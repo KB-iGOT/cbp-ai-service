@@ -81,8 +81,18 @@ class Settings(BaseSettings):
     
     # Optional: Token blacklist settings (for logout functionality)
     ENABLE_TOKEN_BLACKLIST: bool = Field(
-        default=False,
+        default=True,
         description="Enable token blacklisting for logout"
+    )
+
+    # Login attempt settings (brute-force protection)
+    MAX_LOGIN_ATTEMPTS: int = Field(
+        default=5,
+        description="Maximum failed login attempts before account lockout"
+    )
+    LOGIN_LOCKOUT_MINUTES: int = Field(
+        default=15,
+        description="Account lockout duration in minutes after max failed attempts"
     )
 
 # Create a settings instance that can be imported by other modules

@@ -14,7 +14,7 @@ from ...models.role_mapping import ProcessingStatus, RoleMapping
 from ...models.user import User
 
 from ...prompts.prompts import DESIGNATION_ROLE_MAPPING_PROMPT
-from ...schemas.role_mapping import AddDesignationToRoleMappingRequest, RoleMappingBackgroundResponse, RoleMappingResponse, RoleMappingUpdate, RoleMappingWithoutCBP
+from ...schemas.role_mapping import AddDesignationToRoleMappingRequest, ReorderDesignationsRequest, RoleMappingBackgroundResponse, RoleMappingResponse, RoleMappingUpdate, RoleMappingWithoutCBP
 from ...services.role_mapping_service import role_mapping_service
 
 from ...core.database import get_db_session
@@ -387,6 +387,73 @@ async def add_designation_to_role_mapping(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to update role mapping"
+        )
+
+@router.put("/role-mapping/reorder", response_model=List[RoleMappingWithoutCBP])
+async def reorder_designations(
+    request: ReorderDesignationsRequest,
+    db: AsyncSession = Depends(get_db_session),
+    current_user: User = Depends(get_current_active_user)
+):
+    """
+    Reorder designations via drag and drop.
+
+    Frontend sends the new order of designations after drag-and-drop operation.
+    This endpoint updates the sort_order for all affected role mappings.
+
+    Args:
+        request: Contains state_center_id, optional department_id, and list of designation IDs with new sort orders
+
+    Returns:
+        List of updated role mappings in the new order
+    """
+    try:
+        logger.info(f"Reordering designations for state_center_id: {request.state_center_id}, department_id: {request.department_id}")
+
+        # Check if any role mapping is in progress
+        in_progress_record = await crud_role_mapping.get_in_progress_mapping(
+            db, request.state_center_id, current_user.user_id, request.department_id
+        )
+
+        if in_progress_record:
+            raise HTTPException(
+                status_code=status.HTTP_412_PRECONDITION_FAILED,
+                detail="Cannot reorder designations while AI generation is IN PROGRESS."
+            )
+        
+        # Prepare order updates
+        order_updates = [
+            {"id": item.id, "sort_order": item.sort_order}
+            for item in request.designations
+        ]
+
+        # Bulk update sort orders
+        updated_count = await crud_role_mapping.bulk_update_sort_order(
+            db, current_user.user_id, order_updates
+        )
+
+        if updated_count == 0:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="No role mappings found to update"
+            )
+
+        logger.info(f"Successfully reordered {updated_count} designations")
+
+        # Return updated role mappings in the new order
+        role_mappings = await crud_role_mapping.get_all_completed_mapping(
+            db, request.state_center_id, current_user.user_id, request.department_id
+        )
+
+        return role_mappings
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error reordering designations: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to reorder designations"
         )
 
 @router.get("/role-mapping/{role_mapping_id}", response_model=RoleMappingWithoutCBP)

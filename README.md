@@ -7,7 +7,6 @@ A FastAPI service for managing training centers and organizations for Competency
 This system is designed to support AI-driven Competency-Based Program (CBP) training plan creation by managing the foundational infrastructure of training centers and organizations. It provides APIs for registering and managing educational institutions and training organizations that will be used for CBP delivery.
 
 ## Project Structure
-
 ```
 src/
 ├── main.py          # FastAPI application with CBP-focused API endpoints
@@ -40,12 +39,10 @@ README.md           # This documentation
 
 ### Prerequisites
 
-```bash
-# Required
 - Python 3.12+
-- PostgreSQL 14+
-- pgvector extension
-```
+- PostgreSQL 14+ with pgvector extension
+- [uv](https://docs.astral.sh/uv/) (Python package manager)
+- Docker (optional, for containerized deployment)
 
 ### Installation
 
@@ -54,18 +51,20 @@ README.md           # This documentation
 git clone https://github.com/KB-iGOT/cbp-ai-service.git
 cd cbp-ai-service
 
-# Install dependencies
+# Install dependencies using uv
 uv sync
 
-# Activate Virtual environment
-source venv/bin/activate  # On Windows: venv\Scripts\activate
+# Activate virtual environment
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
 ```
 
 ### Environment Variables
+
 Create a `.env` file in the project root:
+
 ```bash
 LOG_LEVEL="INFO"
-ENVIRONMENT="local" # staging, production
+ENVIRONMENT="local"  # Options: local, staging, production
 
 # Database
 DATABASE_URL=postgresql://user:password@localhost/dbname
@@ -95,11 +94,44 @@ CSV_MAX_FILE_SIZE=10485760  # 10MB
 ### Run Application
 
 ```bash
-# Start server
+# Start development server with hot reload
 uvicorn src.main:app --reload --host 0.0.0.0 --port 8000
+```
 
-# Access API docs
-# http://localhost:8000/docs
+Access the API at: http://localhost:8000
+
+## Run Using Docker
+
+### Build Docker Image
+
+```bash
+docker build -t cbp-ai-service .
+```
+
+### Run Container
+
+```bash
+docker run -d \
+  --name cbp-ai-service \
+  -p 8000:8000 \
+  --env-file .env \
+  cbp-ai-service
+```
+
+### Docker Commands
+
+```bash
+# View logs
+docker logs -f cbp-ai-service
+
+# Stop container
+docker stop cbp-ai-service
+
+# Remove container
+docker rm cbp-ai-service
+
+# Restart container
+docker restart cbp-ai-service
 ```
 ## API Documentation
 

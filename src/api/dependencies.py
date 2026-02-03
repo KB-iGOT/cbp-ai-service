@@ -1,3 +1,4 @@
+from typing import Tuple
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -50,12 +51,57 @@ async def get_current_user(
         
         logger.debug(f"User authenticated successfully: {user.username}")
         return user
-        
+
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Error in get_current_user dependency: {str(e)}")
         raise credentials_exception
+
+
+async def get_current_user_with_token(
+    token: str = Depends(oauth2_scheme),
+    db: AsyncSession = Depends(get_db_session)
+) -> Tuple[User, str]:
+    """
+    Dependency to get current authenticated user and their token.
+    Used for logout to blacklist the token.
+
+    Args:
+        token: JWT token from OAuth2PasswordBearer
+        db: Database session
+
+    Returns:
+        Tuple[User, str]: Current authenticated user and their token
+
+    Raises:
+        HTTPException: If authentication fails
+    """
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Could not validate credentials",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+
+    try:
+        if not token:
+            logger.warning("No token provided")
+            raise credentials_exception
+
+        user = await get_user_from_token(db, token)
+        if not user:
+            logger.warning("Invalid or expired token")
+            raise credentials_exception
+
+        logger.debug(f"User authenticated successfully with token: {user.username}")
+        return user, token
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error in get_current_user_with_token dependency: {str(e)}")
+        raise credentials_exception
+
 
 async def get_current_active_user(
     current_user: User = Depends(get_current_user)

@@ -262,8 +262,8 @@ class CRUDRoleMapping:
         return result.rowcount
     
     async def delete_by_id(
-        self, 
-        db: AsyncSession, 
+        self,
+        db: AsyncSession,
         role_mapping_id: uuid.UUID
     ) -> int:
         conditions = [
@@ -272,13 +272,51 @@ class CRUDRoleMapping:
 
         # Build the delete statement
         stmt = delete(RoleMapping).where(and_(*conditions))
-        
+
         # Execute the statement
         result = await db.execute(stmt)
-        
+
         # Commit the transaction to finalize deletion
         await db.commit()
-        
+
         return result.rowcount
+
+    async def bulk_update_sort_order(
+        self,
+        db: AsyncSession,
+        user_id: uuid.UUID,
+        order_updates: List[dict]
+    ) -> int:
+        """
+        Bulk update sort_order for multiple role mappings.
+        Used for drag-and-drop reordering of designations.
+
+        Args:
+            db: The async database session.
+            user_id: The ID of the current user (for ownership verification).
+            order_updates: List of dicts with 'id' and 'sort_order' keys.
+
+        Returns:
+            The number of rows updated.
+        """
+        updated_count = 0
+
+        for item in order_updates:
+            stmt = (
+                update(RoleMapping)
+                .where(
+                    and_(
+                        RoleMapping.id == item['id'],
+                        RoleMapping.user_id == user_id
+                    )
+                )
+                .values(sort_order=item['sort_order'])
+            )
+            result = await db.execute(stmt)
+            updated_count += result.rowcount
+
+        await db.commit()
+        return updated_count
+
 # Initialize the CRUD utility for use across the application
 crud_role_mapping = CRUDRoleMapping()
