@@ -95,5 +95,27 @@ class Settings(BaseSettings):
         description="Account lockout duration in minutes after max failed attempts"
     )
 
+    # Bhashini Translation API settings
+    BHASHINI_USER_ID: str = Field(
+        default="",
+        description="Bhashini API User ID for translation services"
+    )
+    BHASHINI_API_KEY: str = Field(
+        default="",
+        description="Bhashini API Key for translation services"
+    )
+    BHASHINI_PIPELINE_ID: str = Field(
+        default="64392f96daac500b55c543cd",
+        description="Bhashini Pipeline ID for translation services"
+    )
+    BHASHINI_CONFIG_API_URL: str = Field(
+        default="https://meity-auth.ulcacontrib.org/ulca/apis/v0/model/getModelsPipeline",
+        description="Bhashini Config API URL for getting translation configuration"
+    )
+    BHASHINI_SUPPORTED_LANGUAGES: list = Field(
+        default=["en", "hi", "te", "kn", "mr", "ta", "gu", "ml", "or", "pa", "bn", "as"],
+        description="Supported language codes for translation"
+    )
+
 # Create a settings instance that can be imported by other modules
 settings = Settings()

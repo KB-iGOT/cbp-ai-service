@@ -236,8 +236,6 @@ async def create_user_session(
             user_agent=user_agent
         )
 
-        logger.info(f"Session created for user: {user.username}")
-
         return {
             "access_token": access_token,
             "refresh_token": refresh_token,

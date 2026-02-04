@@ -150,7 +150,6 @@ current_user: User = Depends(get_current_active_user)
             detail="Failed to fetch user"
         )
 
-
 @router.get("/users/{user_id}", response_model=UserResponse)
 async def get_user(
     user_id: uuid.UUID,

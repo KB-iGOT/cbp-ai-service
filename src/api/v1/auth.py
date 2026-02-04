@@ -140,7 +140,7 @@ async def login(
             expires_in=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,  # Convert to seconds
         )
 
-        logger.info(f"Login successful for user: {user.username}")
+        logger.info(f"Login successful for user")
         return response
 
     except HTTPException:
