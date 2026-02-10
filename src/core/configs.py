@@ -1,5 +1,5 @@
 from enum import Enum
-from pydantic import Field
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class EnvironmentOption(str, Enum):
@@ -112,10 +112,17 @@ class Settings(BaseSettings):
         default="https://meity-auth.ulcacontrib.org/ulca/apis/v0/model/getModelsPipeline",
         description="Bhashini Config API URL for getting translation configuration"
     )
-    BHASHINI_SUPPORTED_LANGUAGES: list = Field(
+    BHASHINI_SUPPORTED_LANGUAGES: list[str] = Field(
         default=["en", "hi", "te", "kn", "mr", "ta", "gu", "ml", "or", "pa", "bn", "as"],
         description="Supported language codes for translation"
     )
+
+    @field_validator("BHASHINI_SUPPORTED_LANGUAGES", mode="before")
+    @classmethod
+    def parse_langs(cls, v):
+        if isinstance(v, str):
+            return [x.strip() for x in v.split(",") if x.strip()]
+        return v
 
 # Create a settings instance that can be imported by other modules
 settings = Settings()
