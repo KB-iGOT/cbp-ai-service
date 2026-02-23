@@ -2,6 +2,7 @@ from pydantic import BaseModel, Field
 from typing import List, Optional
 from datetime import datetime
 import uuid
+from ..core.configs import settings
 
 class CompetencyBase(BaseModel):
     competencyAreaName: Optional[str] = None
@@ -36,6 +37,7 @@ class CourseSuggestionRespose(BaseModel):
     language: List[str] = []
     organisation: List[str] = []
     duration: Optional[str] = None
+    relevancy: Optional[int] = Field(settings.DEFAULT_RELEVANCY_SCORE, ge=0, le=100, description="Relevancy score from 0 to 100")
 
     class Config:
         from_attributes = True

@@ -127,6 +127,8 @@ class Settings(BaseSettings):
         elif isinstance(v, list):
             return v
         return v
+    
+    DEFAULT_RELEVANCY_SCORE: int = 90
 
 # Create a settings instance that can be imported by other modules
 settings = Settings()

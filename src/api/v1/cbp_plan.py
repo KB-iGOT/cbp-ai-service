@@ -3,6 +3,7 @@ import uuid
 from typing import Any, Dict, List
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
+from sympy import content
 
 from ...schemas.cbp_plan import CBPPlanSaveRequest, CBPPlanSaveResponse, CBPPlanUpdateRequest
 from ...models.user import User
@@ -21,7 +22,7 @@ from ...utils.common import convert_for_json
 
 router = APIRouter(tags=["CBP Plans"])
 
-# CBP Plans APIs
+#CBP Plans APIs
 async def search_courses(identifiers: List[str]) -> List[Dict[str, Any]]:
     if not identifiers:
         return []
@@ -54,7 +55,10 @@ async def search_courses(identifiers: List[str]) -> List[Dict[str, Any]]:
         )
         response.raise_for_status()
         data = response.json()
-        return data.get("result", {}).get("content", [])
+        content = data.get("result", {}).get("content", [])
+        for item in content:
+            item["relevancy"] = settings.DEFAULT_RELEVANCY_SCORE
+        return content
 
 @router.post("/cbp-plan/save", response_model=CBPPlanSaveResponse)
 async def save_cbp_plan(
