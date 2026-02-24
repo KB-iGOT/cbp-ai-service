@@ -612,9 +612,22 @@ Generate a structured output:
 
 **Part B: Detailed Lists (No Truncation)**
 
-1. **List of Designations**
+1. **List of Designations along with their Wings / Divisions / Sections**
+   - Present the output as a **structured table** with the following columns:
+     | S.No | Designation (Full Name) | Wing / Division / Section |
    - Provide all designations in full, without truncation.
+   - If the document mentions designations with wings/divisions/sections, capture them separately 
+      For example, if the document mentions "Under Secretary (CS-II)" and "Under Secretary (EHRMS)", capture them as separate designations with their respective wings/divisions/sections
+      they should appear as two distinct rows:
+      | 1 | Under Secretary | CS-II |
+      | 2 | Under Secretary | EHRMS |
+   - If there are dedicated sections/divisions/wings tables for specific designations, capture them separately. For example, if there is a divisions table for "Director" (Ex Divisions "CS-II", "EO", etc), capture them as separate designations with their respective wings/divisions/sections (Ex : "Director CS-II", "Director EO")
+       For example:
+       | 1 | Director | CS-II |
+       | 2 | Director | EO |
    - Ensure uniqueness (no duplicates).
+   - If a designation has no associated Wing/Division/Section, leave that column as "N/A".
+   - Sort the table logically by Designation name, then by Wing/Division/Section.
 
 2. **List of Wings / Divisions / Sections**
    - Capture names, structure, and detailed responsibilities.
