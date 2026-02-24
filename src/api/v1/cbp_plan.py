@@ -3,7 +3,6 @@ import uuid
 from typing import Any, Dict, List
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from sympy import content
 
 from ...schemas.cbp_plan import CBPPlanSaveRequest, CBPPlanSaveResponse, CBPPlanUpdateRequest
 from ...models.user import User
