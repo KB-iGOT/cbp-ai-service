@@ -92,7 +92,7 @@ async def get_gap_analysis(
 
 # ── User-scoped endpoints (accessible to any authenticated user) ──────────────
 
-@router.post("/my-metrics", response_model=UserDashboardMetricsResponse, status_code=status.HTTP_200_OK)
+@router.post("/public-user-metrics", response_model=UserDashboardMetricsResponse, status_code=status.HTTP_200_OK)
 async def get_my_dashboard_metrics(
     filters: UserDashboardFilters,
     db: AsyncSession = Depends(get_db_session),
@@ -114,7 +114,7 @@ async def get_my_dashboard_metrics(
         )
 
 
-@router.post("/my-gap-analysis", response_model=UserGapAnalysisResponse, status_code=status.HTTP_200_OK)
+@router.post("/public-user-gap-analysis", response_model=UserGapAnalysisResponse, status_code=status.HTTP_200_OK)
 async def get_my_gap_analysis(
     filters: UserDashboardFilters,
     db: AsyncSession = Depends(get_db_session),
