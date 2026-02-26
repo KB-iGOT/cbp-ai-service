@@ -154,3 +154,25 @@ GCP_STORAGE_PREFIX=documents
 GCP_STORAGE_CREDENTIALS=/path/to/credentials.json
 ```
 
+## Dashboard API
+
+All endpoints are under `/api/v1/dashboard`.
+
+### Super Admin Endpoints
+> Requires `Super Admin` role.
+
+| Method | Endpoint | Description |
+|---|---|---|
+| POST | `/cbp-summary-trends` | CBP plan creation trend (daily / weekly / monthly) |
+| POST | `/cbp-dashboard-metrics` | Platform-wide metrics — users, CBP plans, role mappings, ministries, saved courses |
+| POST | `/gap-analysis` | Competency gap analysis filtered by ministry, department, date range |
+
+
+### User-Scoped Endpoints
+> Accessible to any authenticated user. `user_id` is taken from the JWT token automatically.
+
+| Method | Endpoint | Description |
+|---|---|---|
+| POST | `/my-metrics` | Personal metrics — CBP plans, saved courses, role mappings |
+| POST | `/my-gap-analysis` | Personal competency gap analysis |
+
