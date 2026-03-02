@@ -55,7 +55,7 @@ async def get_cbp_dashboard_metrics(
 ):
     logger.info(f"Received request for CBP dashboard metrics: {filters.model_dump()}")
     try:
-        return await crud_dashboard.fetch_dashboard_metrics(db, filters)
+        return await crud_dashboard.fetch_cbp_dashboard_metrics(db, filters)
     except DashboardQueryError as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -100,7 +100,7 @@ async def get_my_dashboard_metrics(
 ):
     logger.info(f"Received request for user dashboard metrics: user_id={current_user.user_id}")
     try:
-        return await crud_dashboard.fetch_dashboard_metrics(db, filters, user_id=current_user.user_id)
+        return await crud_dashboard.fetch_user_dashboard_metrics(db, current_user.user_id, filters)
     except DashboardQueryError as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -122,7 +122,7 @@ async def get_my_gap_analysis(
 ):
     logger.info(f"Received request for user gap analysis: user_id={current_user.user_id}")
     try:
-        return await crud_dashboard.fetch_gap_analysis(db, filters, user_id=current_user.user_id)
+        return await crud_dashboard.fetch_user_gap_analysis(db, current_user.user_id, filters)
     except DashboardQueryError as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
