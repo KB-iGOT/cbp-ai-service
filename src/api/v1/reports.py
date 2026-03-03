@@ -53,9 +53,9 @@ class ReportService:
         unique_functional = set()
         unique_domain = set()
         for d in designation_data:
-            unique_behavioral.update(d["behavioralCompetencies"])
-            unique_functional.update(d["functionalCompetencies"])
-            unique_domain.update(d["domainCompetencies"])
+            unique_behavioral.update(comp.strip().lower() for comp in d["behavioralCompetencies"])
+            unique_functional.update(comp.strip().lower() for comp in d["functionalCompetencies"])
+            unique_domain.update(comp.strip().lower() for comp in d["domainCompetencies"])
         total_behavioral = len(unique_behavioral)
         total_functional = len(unique_functional)
         total_domain = len(unique_domain)
