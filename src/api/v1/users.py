@@ -1,5 +1,6 @@
 import uuid
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from pydantic import Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...core.security import get_password_hash
@@ -7,7 +8,7 @@ from ...models.user import User
 from ...crud.user import crud_user
 from ...crud.role import crud_role
 
-from ...schemas.user import UserCreate, UserResponse, UserUpdate
+from ...schemas.user import PaginatedUserResponse, UserCreate, UserResponse, UserUpdate
 
 from ...api.dependencies import get_current_active_user, require_role
 from ...core.database import get_db_session
@@ -35,7 +36,7 @@ async def create_user(
         if existing_user:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail=f"Username/Email '{user.username}' already exists"
+                detail=f"Username/Email already exists"
             )
         
         # Verify role exists
@@ -149,16 +150,15 @@ current_user: User = Depends(get_current_active_user)
             detail="Failed to fetch user"
         )
 
-
 @router.get("/users/{user_id}", response_model=UserResponse)
 async def get_user(
     user_id: uuid.UUID,
     db: AsyncSession = Depends(get_db_session),
-current_user: User = Depends(get_current_active_user)
+    current_user: User = Depends(get_current_active_user)
 ):
     """Get a specific user by ID"""
     try:
-        user = await crud_user.get_by_id_with_relations(db, current_user.user_id)
+        user = await crud_user.get_by_id_with_relations(db, user_id)
         
         if not user:
             raise HTTPException(
@@ -201,7 +201,7 @@ async def update_user(
             if existing_user:
                 raise HTTPException(
                     status_code=status.HTTP_409_CONFLICT,
-                    detail=f"Username/Email '{user_update.username}' already exists"
+                    detail=f"Username/Email already exists"
                 )
         
         # Verify role exists if being updated
@@ -260,4 +260,47 @@ async def delete_user(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to delete user"
+        )
+
+@router.get("/users", response_model=PaginatedUserResponse)
+async def list_users(
+    offset: int = Query(
+        default=0,
+        ge=0,
+        description="Number of items to skip (offset)"
+    ),
+    limit: int = Query(
+        default=10,
+        ge=1,
+        le=1000,
+        description="Maximum number of items to return (page size)"
+    ),
+    # username: str | None = None,
+    # email: str | None = None,
+    # role_id: uuid.UUID | None = None,
+    is_active: bool | None = None,
+    db: AsyncSession = Depends(get_db_session),
+    current_user: User = Depends(require_role("Super Admin"))
+):
+    try:
+        filters = {
+            # "username": username,
+            # "email": email,
+            # "role_id": role_id,
+            "is_active": is_active
+        }
+
+        total, users = await crud_user.list_users(db, limit, offset, filters)
+        users = [await _prepare_user_response(user) for user in users]
+        return PaginatedUserResponse(
+            total=total,
+            limit=limit,
+            offset=offset,
+            data=users
+        )
+    except Exception as e:
+        # Catch any unexpected error
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Failed to fetch users: {str(e)}"
         )

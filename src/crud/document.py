@@ -21,12 +21,14 @@ class CRUDDocument:
         db: AsyncSession,     
         state_center_id: str, 
         original_filename: str,
+        user_id: uuid.UUID,
         department_id: Optional[str]
     ) -> Optional[Document]:
         
         conditions = [
             Document.state_center_id == state_center_id,
-            Document.filename == original_filename
+            Document.filename == original_filename,
+            Document.uploader_id == user_id
         ]
         if department_id:
             conditions.append(Document.department_id == department_id)
@@ -36,6 +38,14 @@ class CRUDDocument:
         stmt = select(Document).where(and_(*conditions)).limit(1)        
         result = await db.execute(stmt)
         return result.scalars().one_or_none()
+
+    async def get_all_documents_async(
+        self, 
+        user_id: uuid.UUID,
+        state_center_id: int | None = None,
+        department_id: int | None = None):
+        async with sessionmanager.session() as db:
+            return await self.get_documents(db, summary_status='COMPLETED', uploader_id=user_id,state_center_id=state_center_id, department_id=department_id, limit=1000)
 
     async def get_documents(
         self,
@@ -64,6 +74,9 @@ class CRUDDocument:
 
         if department_id:
             filters.append(Document.department_id == department_id)
+        
+        if state_center_id and not department_id:
+            filters.append(Document.department_id.is_(None))
 
         if filename:
             filters.append(Document.filename == filename)

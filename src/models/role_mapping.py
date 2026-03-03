@@ -29,6 +29,12 @@ class RoleMapping(Base):
         nullable=False,
         index=True
     )
+    org_type = Column(
+        String(20),
+        nullable=True,
+        index=True,
+        comment="Organization type: ministry or state"
+    )
     state_center_id = Column(
         String(32),
         nullable=False,

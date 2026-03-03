@@ -47,6 +47,16 @@ class CRUDUserAddedCourse:
         )
         result = await session.execute(stmt)
         return result.scalars().first()
+    
+    async def get_by_identifier(self, session: AsyncSession, role_mapping_id: uuid.UUID, course_id: uuid.UUID, user_id: uuid.UUID) -> Optional[UserAddedCourse]:
+        """Retrieve a single UserAddedCourse by identifier, ensuring it belongs to the user."""
+        stmt = select(UserAddedCourse).where(
+            UserAddedCourse.identifier == course_id,
+            UserAddedCourse.user_id == user_id,
+            UserAddedCourse.role_mapping_id == role_mapping_id
+        )
+        result = await session.execute(stmt)
+        return result.scalars().first()
 
     async def create(self, db: AsyncSession, db_obj: UserAddedCourse) -> UserAddedCourse:
         """Create a new user record."""
@@ -111,6 +121,21 @@ class CRUDUserAddedCourse:
         stmt = (
             delete(UserAddedCourse)
             .where(UserAddedCourse.id == course_id, UserAddedCourse.user_id == user_id)
+        )
+        result = await session.execute(stmt)
+        await session.commit()
+        # rowcount indicates how many rows were affected (deleted)
+        return result.rowcount > 0
+    
+    async def delete_by_identifier(self, session: AsyncSession,role_mapping_id: uuid.UUID, course_id: uuid.UUID, user_id: uuid.UUID) -> bool:
+        """Delete a UserAddedCourse record by identifier, ensuring it belongs to the user."""
+        stmt = (
+            delete(UserAddedCourse)
+            .where(
+                UserAddedCourse.identifier == course_id, 
+                UserAddedCourse.user_id == user_id,
+                UserAddedCourse.role_mapping_id == role_mapping_id
+            )
         )
         result = await session.execute(stmt)
         await session.commit()

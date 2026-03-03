@@ -217,7 +217,7 @@ You will be provided with the following inputs:
 - **Ministry/Organization Name:** The name of the ministry being analyzed.
 - **Department Name:** The specific department, if applicable.
 - **Sector (Optional):** The broader governmental sector (e.g., Social Justice, Finance).
-Additional Instructions: Any other specific guidelines.
+- **Additional Instructions:** Any other specific guidelines.
 
 ## Rules: 
 
@@ -405,16 +405,16 @@ You will be provided with the following inputs:
 - **State Name:** The name of the state being analyzed for geographical context to understand any specific need of area for development as per department
 - **Department Name:** The specific department, if applicable.
 - **Sector (Optional):** The broader governmental sector (e.g., Social Justice, Finance).
-Additional Instructions: Any other specific guidelines to be used for improve Domain competencies generation
-Additional supporting document (If uploaded): Attached Document which needs to be used for Domain competencies generation
+- **Additional Instructions:** Any other specific guidelines to be used for improve Domain competencies generation
+- **Additional supporting document (If uploaded)**: Attached Document which needs to be used for Domain competencies generation
  
 ## Rules:
  
 ### Section 1: Data Extraction & Role Definition Rules
  
-1.1. **Designation Coverage**: You **MUST** extract all unique designations from the provided Work Allocation Order, attached additional supporting document and ACBP summary input data. Merge and deduplicate any overlaps.
+1.1. **Designation Coverage**: You **MUST** extract all unique designations from the provided attached additional supporting document, Work Allocation Order and ACBP summary input data If available. Merge and deduplicate any overlaps.
  
-1.2. **Roles & Responsibilities**: Synthesize the role_responsibilities from all provided sources. The Work Allocation Order summary and attached Additional supporting document should be treated as the primary source for specific duties.
+1.2. **Roles & Responsibilities**: Synthesize the role_responsibilities from all provided sources. The attached Additional supporting document and Work Allocation Order summary should be treated as the primary source for specific duties.
  
 1.3 **Mandatory State Coordination:** For **ALL** senior-level designations (Secretary, Additional Secretary, Joint Secretary, Director), you **MUST** explicitly include "Coordination with State Governments for scheme implementation, policy feedback, and capacity building" as a key role and responsibility.
  

@@ -85,7 +85,7 @@ class User(Base):
     
     # Relationships
     role = relationship("Role", lazy="selectin",back_populates="users")
-    creator = relationship("User", remote_side=[user_id])
+    creator = relationship("User", remote_side=[user_id], lazy="selectin")
 
     def __repr__(self):
         return f"<User(user_id={self.user_id}, username='{self.username}', email='{self.email}')>"

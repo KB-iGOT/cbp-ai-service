@@ -16,7 +16,7 @@ router = APIRouter(tags=["State Centers"])
 @router.get("/state-center/", response_model=List[StateCenterResponse])
 async def get_all_state_centers(
     query: Optional[str] = None,
-    limit: int = 200,
+    limit: int = 1000,
     offset: int = 0,
     sub_org_type: Optional[OrgTypeEnum] = OrgTypeEnum.ministry,
     current_user: User = Depends(get_current_active_user)
@@ -65,7 +65,10 @@ async def get_all_state_centers(
         }
         
         async with httpx.AsyncClient(timeout=30.0) as client:
-            response = await client.post(api_url, json=request_body)
+            response = await client.post(api_url, json=request_body, headers={
+                    "Content-Type": "application/json",
+                    "Authorization": f"Bearer {settings.KB_AUTH_TOKEN}"
+                })
             response.raise_for_status()
             
             data = response.json()

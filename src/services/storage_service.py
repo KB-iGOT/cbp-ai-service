@@ -9,7 +9,7 @@ from typing import BinaryIO, Tuple
 from abc import ABC, abstractmethod
 
 from google.cloud import storage
-from ..core.configs import settings
+from ..core.configs import settings, DocumentStorageOption
 from ..core.logger import logger
 
 
@@ -177,7 +177,7 @@ class GCPStorageService(StorageService):
 
 def get_storage_service() -> StorageService:
     """Factory function to get configured storage service"""
-    if settings.DOCUMENT_STORAGE_TYPE.lower() == "gcp":
+    if settings.DOCUMENT_STORAGE_TYPE == DocumentStorageOption.GCP:
         if not settings.GCP_STORAGE_BUCKET:
             raise ValueError("GCP_STORAGE_BUCKET must be set when using GCP storage")
         return GCPStorageService(

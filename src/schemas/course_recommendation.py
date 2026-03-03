@@ -27,3 +27,4 @@ class RecommendedCourseResponse(RecommendedCourseBase):
 class RecommendCourseCreate(BaseModel):
     """ Course Recommendation Generate"""
     role_mapping_id: uuid.UUID = Field(..., description="ID of the associated role mapping")
+

@@ -3,7 +3,6 @@ from typing import Any, Dict, List
 from datetime import datetime
 import uuid
 
-
 # Schemas for CBP Plan
 class CBPPlanSaveRequest(BaseModel):
     """Schema for saving CBP plan with selected courses"""

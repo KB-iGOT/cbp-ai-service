@@ -3,7 +3,7 @@ import json
 import os
 from typing import Dict, List, Optional
 import uuid
-from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, UploadFile, status
+from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, Query, UploadFile, status
 from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -14,7 +14,7 @@ from ...models.role_mapping import ProcessingStatus, RoleMapping
 from ...models.user import User
 
 from ...prompts.prompts import DESIGNATION_ROLE_MAPPING_PROMPT
-from ...schemas.role_mapping import AddDesignationToRoleMappingRequest, RoleMappingBackgroundResponse, RoleMappingResponse, RoleMappingUpdate
+from ...schemas.role_mapping import AddDesignationToRoleMappingRequest, ReorderDesignationsRequest, RoleMappingBackgroundResponse, RoleMappingResponse, RoleMappingUpdate, RoleMappingWithoutCBP
 from ...services.role_mapping_service import role_mapping_service
 
 from ...core.database import get_db_session
@@ -171,6 +171,7 @@ async def generate_role_mapping(
             
             if current_status == ProcessingStatus.IN_PROGRESS:
                 return RoleMappingBackgroundResponse(
+                    is_existing=False,
                     status=ProcessingStatus.IN_PROGRESS, 
                     message="Generation is already IN PROGRESS for this State/Center."
                 )
@@ -181,6 +182,7 @@ async def generate_role_mapping(
                 return JSONResponse(
                     status_code=status.HTTP_201_CREATED,
                     content=RoleMappingBackgroundResponse(
+                        is_existing=True,
                         message="Role mapping generated successfully",
                         status=ProcessingStatus.COMPLETED,
                         role_mappings=existing_role_mapping
@@ -233,6 +235,7 @@ async def generate_role_mapping(
         )
 
         return {
+            "is_existing":False,
             "message": "Role mapping generation started in background.",
             "status": ProcessingStatus.IN_PROGRESS
         }
@@ -319,7 +322,7 @@ async def generate_role_and_competencies(input_data):
         print(f"Error generating role and responsibilities from Gemini: {e}")
         raise HTTPException(status_code=500, detail=f"Gemini error: {str(e)}")
 
-@router.post("/role-mapping/add-designation", response_model=RoleMappingResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/role-mapping/add-designation", response_model=RoleMappingWithoutCBP, status_code=status.HTTP_201_CREATED)
 async def add_designation_to_role_mapping(
     request: AddDesignationToRoleMappingRequest, db: AsyncSession = Depends(get_db_session),
     current_user: User = Depends(get_current_active_user)
@@ -386,7 +389,74 @@ async def add_designation_to_role_mapping(
             detail="Failed to update role mapping"
         )
 
-@router.get("/role-mapping/{role_mapping_id}", response_model=RoleMappingResponse)
+@router.put("/role-mapping/reorder", response_model=List[RoleMappingWithoutCBP])
+async def reorder_designations(
+    request: ReorderDesignationsRequest,
+    db: AsyncSession = Depends(get_db_session),
+    current_user: User = Depends(get_current_active_user)
+):
+    """
+    Reorder designations via drag and drop.
+
+    Frontend sends the new order of designations after drag-and-drop operation.
+    This endpoint updates the sort_order for all affected role mappings.
+
+    Args:
+        request: Contains state_center_id, optional department_id, and list of designation IDs with new sort orders
+
+    Returns:
+        List of updated role mappings in the new order
+    """
+    try:
+        logger.info(f"Reordering designations for state_center_id: {request.state_center_id}, department_id: {request.department_id}")
+
+        # Check if any role mapping is in progress
+        in_progress_record = await crud_role_mapping.get_in_progress_mapping(
+            db, request.state_center_id, current_user.user_id, request.department_id
+        )
+
+        if in_progress_record:
+            raise HTTPException(
+                status_code=status.HTTP_412_PRECONDITION_FAILED,
+                detail="Cannot reorder designations while AI generation is IN PROGRESS."
+            )
+        
+        # Prepare order updates
+        order_updates = [
+            {"id": item.id, "sort_order": item.sort_order}
+            for item in request.designations
+        ]
+
+        # Bulk update sort orders
+        updated_count = await crud_role_mapping.bulk_update_sort_order(
+            db, current_user.user_id, order_updates
+        )
+
+        if updated_count == 0:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="No role mappings found to update"
+            )
+
+        logger.info(f"Successfully reordered {updated_count} designations")
+
+        # Return updated role mappings in the new order
+        role_mappings = await crud_role_mapping.get_all_completed_mapping(
+            db, request.state_center_id, current_user.user_id, request.department_id
+        )
+
+        return role_mappings
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error reordering designations: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to reorder designations"
+        )
+
+@router.get("/role-mapping/{role_mapping_id}", response_model=RoleMappingWithoutCBP)
 async def get_role_mapping(
     role_mapping_id: uuid.UUID,
     db: AsyncSession = Depends(get_db_session), 
@@ -419,6 +489,7 @@ async def get_role_mapping(
 @router.get("/role-mapping/state-center/{state_center_id}", response_model=List[RoleMappingResponse])
 async def get_role_mappings_by_state_center(
     state_center_id: str,
+    load_cbp_plans: bool = Query(False, description="Include CBP plans in the response"),
     db: AsyncSession = Depends(get_db_session),
     current_user: User = Depends(get_current_active_user)
 ):
@@ -426,7 +497,7 @@ async def get_role_mappings_by_state_center(
     try:
         logger.info(f"Fetching role mappings for state/center ID: {state_center_id}")
         
-        role_mappings = await crud_role_mapping.get_all_completed_mapping(db, state_center_id, current_user.user_id)
+        role_mappings = await crud_role_mapping.get_all_completed_mapping(db, state_center_id, current_user.user_id, load_cbp_plans=load_cbp_plans)
         
         logger.info(f"Retrieved {len(role_mappings)} role mappings for state/center {state_center_id}")
         return role_mappings
@@ -444,6 +515,7 @@ async def get_role_mappings_by_state_center(
 async def get_role_mappings_by_state_center_and_department(
     state_center_id: str,
     department_id: str,
+    load_cbp_plans: bool = Query(False, description="Include CBP plans in the response"),
     db: AsyncSession = Depends(get_db_session),
     current_user: User = Depends(get_current_active_user)
 ):
@@ -451,21 +523,20 @@ async def get_role_mappings_by_state_center_and_department(
     try:
         logger.info(f"Fetching role mappings for state/center ID: {state_center_id} and Department ID: {department_id}")
         
-        role_mappings = await crud_role_mapping.get_all_completed_mapping(db, state_center_id, current_user.user_id, department_id)
-        
+        role_mappings = await crud_role_mapping.get_all_completed_mapping(db, state_center_id, current_user.user_id, department_id, load_cbp_plans=load_cbp_plans)
         logger.info(f"Retrieved {len(role_mappings)} role mappings for department {department_id}")
         return role_mappings
         
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error fetching role mappings by state/center and department: {str(e)}")
+        logger.exception(f"Error fetching role mappings by state/center and department: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to fetch role mappings"
         )
 
-@router.put("/role-mapping/{role_mapping_id}", response_model=RoleMappingResponse)
+@router.put("/role-mapping/{role_mapping_id}", response_model=RoleMappingWithoutCBP)
 async def update_role_mapping(
     role_mapping_id: uuid.UUID,
     role_mapping_update: RoleMappingUpdate,
@@ -495,12 +566,13 @@ async def update_role_mapping(
         role_mapping = await crud_role_mapping.update(role_mapping_id, update_records)
         
         logger.info(f"Role mapping updated successfully with ID: {db_role_mapping.id}")
+        # print(role_mapping.cbp_plans)
         return role_mapping
         
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error updating role mapping: {str(e)}")
+        logger.exception(f"Error updating role mapping:")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to update role mapping"

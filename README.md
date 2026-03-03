@@ -7,7 +7,6 @@ A FastAPI service for managing training centers and organizations for Competency
 This system is designed to support AI-driven Competency-Based Program (CBP) training plan creation by managing the foundational infrastructure of training centers and organizations. It provides APIs for registering and managing educational institutions and training organizations that will be used for CBP delivery.
 
 ## Project Structure
-
 ```
 src/
 ├── main.py          # FastAPI application with CBP-focused API endpoints
@@ -40,12 +39,10 @@ README.md           # This documentation
 
 ### Prerequisites
 
-```bash
-# Required
 - Python 3.12+
-- PostgreSQL 14+
-- pgvector extension
-```
+- PostgreSQL 14+ with pgvector extension
+- [uv](https://docs.astral.sh/uv/) (Python package manager)
+- Docker (optional, for containerized deployment)
 
 ### Installation
 
@@ -54,22 +51,36 @@ README.md           # This documentation
 git clone https://github.com/KB-iGOT/cbp-ai-service.git
 cd cbp-ai-service
 
-# Install dependencies
+# Install dependencies using uv
 uv sync
 
-# Create `.env.` file and Set environment variables
+# Activate virtual environment
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
 ```
 
 ### Environment Variables
 
+Create a `.env` file in the project root:
+
 ```bash
+LOG_LEVEL="INFO"
+ENVIRONMENT="local"  # Options: local, staging, production
+
 # Database
 DATABASE_URL=postgresql://user:password@localhost/dbname
 
 # Google AI
+GOOGLE_PROJECT_LOCATION=""
 GOOGLE_PROJECT_ID=your-project-id
 GOOGLE_APPLICATION_CREDENTIALS=path/to/credentials.json
 EMBEDDING_MODEL_NAME=text-multilingual-embedding-002
+
+# Storage Configuration
+DOCUMENT_STORAGE_TYPE=local  # Options: local, gcp
+DOCUMENT_STORAGE_ROOT=./data/uploads  # For local storage
+GCP_STORAGE_BUCKET=your-bucket-name  # For GCP storage
+GCP_STORAGE_PREFIX=documents
+GCP_STORAGE_CREDENTIALS=/path/to/gcs-credentials.json  # Optional
 
 # Knowledge Base API
 KB_BASE_URL=https://your-kb-api.com/v1
@@ -83,15 +94,63 @@ CSV_MAX_FILE_SIZE=10485760  # 10MB
 ### Run Application
 
 ```bash
-# Start server
+# Start development server with hot reload
 uvicorn src.main:app --reload --host 0.0.0.0 --port 8000
+```
 
-# Access API docs
-# http://localhost:8000/docs
+Access the API at: http://localhost:8000
+
+## Run Using Docker
+
+### Build Docker Image
+
+```bash
+docker build -t cbp-ai-service .
+```
+
+### Run Container
+
+```bash
+docker run -d \
+  --name cbp-ai-service \
+  -p 8000:8000 \
+  --env-file .env \
+  cbp-ai-service
+```
+
+### Docker Commands
+
+```bash
+# View logs
+docker logs -f cbp-ai-service
+
+# Stop container
+docker stop cbp-ai-service
+
+# Remove container
+docker rm cbp-ai-service
+
+# Restart container
+docker restart cbp-ai-service
 ```
 ## API Documentation
 
 - **Swagger UI**: `http://localhost:8000/docs`
 - **ReDoc**: `http://localhost:8000/redoc`
 - **OpenAPI JSON**: `http://localhost:8000/openapi.json`
+
+
+### Storage Configuration
+#### Local Storage (Default)
+```
+DOCUMENT_STORAGE_TYPE=local
+DOCUMENT_STORAGE_ROOT=./data/uploads
+```
+#### Google Cloud Storage
+```
+DOCUMENT_STORAGE_TYPE=gcp
+GCP_STORAGE_BUCKET=your-bucket-name
+GCP_STORAGE_PREFIX=documents
+GCP_STORAGE_CREDENTIALS=/path/to/credentials.json
+```
 

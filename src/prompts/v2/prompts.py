@@ -5,22 +5,25 @@ Your task is to generate a comprehensive, structured, and hierarchically sorted 
 
 ## Inputs:
 You will be provided with the following inputs:
-- **Supporting documents summaries like Work Allocation Order/Annual Capacity Building Plan (ACBP)/schemes/ mission/programs/policies Summary:** The primary reference documents summary provides a comprehensive understanding of the ministry’s strategic objectives, capacity-building requirements, and the broader context that shapes its schemes, programmes, and priority areas. It also outlines the complete hierarchy of designations within the ministry, along with their specific roles, responsibilities, and work allocations, supported by a detailed depiction of the organisational structure.
+- **Primary reference document summaries:** like Work Allocation Order/Annual Capacity Building Plan (ACBP)/schemes/ mission/programs/policies Summary:** The primary reference documents summaries provides a comprehensive understanding of the ministry’s strategic objectives, capacity-building requirements, and the broader context that shapes its schemes, programmes, and priority areas. It also outlines the complete hierarchy of designations within the ministry, along with their specific roles, responsibilities, and work allocations, supported by a detailed depiction of the organisational structure.
 - **KCM (Karmayogi Competency Model) Dataset:** The **only** source to be used for mapping Behavioral and Functional competencies.
 - **Ministry/Organization Name:** The name of the ministry/organisation being analyzed.
 - **Department Name:** The specific department organisation, if applicable.
 - **Organisation Name: (Optional)** The specific organisation, if applicable.
-- **Sector (Optional):** The broader governmental sector (e.g., Social Justice, Finance).
-
-Additional Instructions: Any other specific guidelines to get more relevant outcome/results
+- **Additional Instructions:** Any other specific guidelines to get more relevant outcome/results
 
 ## Rules: 
 
 ### Section 1: Data Extraction & Role Definition Rules
 
-1.1. **Designation Coverage**: You **MUST** extract all unique designations from the The primary reference document summary input data. Merge and deduplicate any overlaps.
+1.1. **Exhaustive Designation Extraction**: 
+    - You **MUST** extract all unique designations from the provided primary reference document summaries input data. Merge and deduplicate any overlaps.
+    - **Explicit List Handling:** If the "Primary reference document summaries" contain a section labeled **"List of Designations"**, **"Part B: Detailed Lists"**, or similar, you must extract **EVERY SINGLE ENTRY** from that list.
+    - **Zero Truncation Policy:** Do not summarize, sample, or skip designations. If the list contains 50 designations, your output JSON must contain 50 objects.
+    - Do not miss any designations which are mentioned in the all primary reference document summaries.
+    - Before finalizing the response, you MUST perform a verification step: Re-scan all inputs and confirm: Every designation mentioned in all the primary reference document summaries appears in the extracted list.
 
-1.2. **Roles & Responsibilities**: Synthesize the role_responsibilities from all provided sources. The primary reference documents summary should be treated as the primary source for specific duties.
+1.2. **Roles & Responsibilities**: Synthesize the role_responsibilities from all provided sources. The primary reference document summaries should be treated as the primary source for specific duties.
 
 1.3 **Mandatory State Coordination:** For **ALL** senior-level/Decision makers/Strategic & Policy Makers designations (Secretary, Additional Secretary, Joint Secretary, Director), you **MUST** explicitly include "Coordination with State Governments for scheme implementation, policy feedback, and capacity building" as a key role and responsibility.
 
@@ -63,7 +66,7 @@ Sorting `sort_order` strictly increasing integer starting from 1 (e.g., 1, 2, 3,
 
 [START OF INPUT DATA]
 
-### The primary reference document Summary:
+### Primary reference document summaries:
 {primary_summary}
 
 ### KCM (Karmayogi Competency Model) Dataset:
@@ -74,9 +77,6 @@ Sorting `sort_order` strictly increasing integer starting from 1 (e.g., 1, 2, 3,
 
 ### Department Name:
 {department_name}
-
-### Sector (Optional):
-{sector}
 
 ### Additional Instructions:
 {instructions}
@@ -91,23 +91,24 @@ Your task is to generate a comprehensive, structured, and hierarchically sorted 
 
 ## Inputs:
 You will be provided with the following inputs:
-- **Primary reference document Summary:** The primary document summarise the State Department’s key priorities, capacity-building needs, and the context behind its schemes, missions, and policies. They outline the department’s hierarchy, major designations, and their specific work allocations, along with a clear view of the organisational structure across state, district, and field levels. This provides the understanding of roles, responsibilities, and how departmental functions are executed within the State’s administrative framework.
+- **Primary reference document summaries:** The primary document summarise the State Department’s key priorities, capacity-building needs, and the context behind its schemes, missions, and policies. They outline the department’s hierarchy, major designations, and their specific work allocations, along with a clear view of the organisational structure across state, district, and field levels. This provides the understanding of roles, responsibilities, and how departmental functions are executed within the State’s administrative framework.
 - **KCM (Karmayogi Competency Model) Dataset:** The **only** source to be used for mapping Behavioral and Functional competencies.
 - **State Name:** The name of the state being analyzed for geographical context to understand any specific need of area for development as per department/organisation
 - **Department/organisation Name:** The specific department/organisation, if applicable.
-- **Sector (Optional):** The broader governmental sector (e.g., Social Justice, Finance).
-
-Additional Instructions: Any other specific guidelines to be used for improve Domain competencies generation
-Additional supporting document (If uploaded): Attached Document which needs to be used for Domain competencies generation
+- **Additional Instructions:** Any other specific guidelines to be used for improve Domain competencies generation
 
 ## Rules:
 
 ### Section 1: Data Extraction & Role Definition Rules
 
-1.1. **Designation Coverage**: You **MUST** extract all unique designations from the provided primary reference document, attached additional supporting document input data. Merge and deduplicate any overlaps.
-Do not show ministry designations in state level orgnaisation
+1.1. **Exhaustive Designation Extraction**: 
+    - You **MUST** extract all unique designations from the provided primary reference document summaries input data. Merge and deduplicate any overlaps.
+    - **Explicit List Handling:** If the "Primary reference document summaries" contain a section labeled **"List of Designations"**, **"Part B: Detailed Lists"**, or similar, you must extract **EVERY SINGLE ENTRY** from that list.
+    - **Zero Truncation Policy:** Do not summarize, sample, or skip designations. If the list contains 50 designations, your output JSON must contain 50 objects.
+    - Do not miss any designations which are mentioned in the all primary reference document summaries.
+    - Before finalizing the response, you MUST perform a verification step: Re-scan all inputs and confirm: Every designation mentioned in all the primary reference document summaries appears in the extracted list.
 
-1.2. **Roles & Responsibilities**: Synthesize the role_responsibilities from all provided sources. The primary ref document summary and attached Additional supporting document should be treated as the primary source for specific duties.
+1.2. **Roles & Responsibilities**: Synthesize the role_responsibilities from all provided input data sources. The primary reference document summaries should be treated as the primary source for specific duties.
 
 1.3 **Mandatory State Coordination/implementation:** For **ALL** senior-level designations (Secretary, Additional Secretary, Joint Secretary, Director), you **MUST** explicitly include "Coordination within the State Government for scheme implementation, policy feedback, and capacity building" as a key role and responsibility.
 
@@ -154,23 +155,20 @@ Sorting `sort_order` strictly increasing integer starting from 1 (e.g., 1, 2, 3,
 
 [START OF INPUT DATA]
 
-### The primary reference document Summary:
+### Primary reference document summaries:
 {primary_summary}
 
 ### KCM (Karmayogi Competency Model) Dataset:
 {kcm_competencies}
 
 ### State Name:
-{organization_name}
+{organization_name} 
 
-### Department Name:
+### Department/Organisation Name:
 {department_name}
 
 ### Additional Instructions:
 {instructions}
-
-### Sector (Optional):
-{sector}
 
 [END OF INPUT DATA]
 """
@@ -179,11 +177,10 @@ DESIGNATION_ROLE_MAPPING_PROMPT ="""
 You are an expert in **Mission Karmayogi, competency role mapping for designations**.
 
 You will be provided with the following inputs:
-1. **Supporting documents summaries like Work Allocation Order/Annual Capacity Building Plan (ACBP)/schemes/mission/programs/policies Summary:** The primary reference documents summary provides a comprehensive understanding of the ministry’s strategic objectives, capacity-building requirements, and the broader context that shapes its schemes, programmes, and priority areas. It also outlines the complete hierarchy of designations within the ministry, along with their specific roles, responsibilities, and work allocations, supported by a detailed depiction of the organisational structure.
+1. **Primary document summaries like Work Allocation Order/Annual Capacity Building Plan (ACBP)/schemes/mission/programs/policies Summary:** The primary reference documents summary provides a comprehensive understanding of the ministry’s strategic objectives, capacity-building requirements, and the broader context that shapes its schemes, programmes, and priority areas. It also outlines the complete hierarchy of designations within the ministry, along with their specific roles, responsibilities, and work allocations, supported by a detailed depiction of the organisational structure.
 2. **KCM (Karmayogi Competency Model) Competency Dataset** – authoritative dataset for Behavioral & Functional competencies (themes & sub-themes).
 3. Ministry/Organization Name
 4. Department Name 
-5. Sector (optional)
 6. Target **Designation Name** for which FRAC mapping is to be generated.
 7. Additional Instructions
 
@@ -192,12 +189,12 @@ Your task is to generate a **designation-specific FRAC role mapping** for Govern
 ---
 
 ### 1. **Data Sources & Priority**
-- **Central/State Organizations:** Use Supporting documents summaries like Work Allocation Order/Annual Capacity Building Plan (ACBP)/schemes/mission/programs/policies Summary.
+- **Central/State Organizations:** Use Primary document summaries like Work Allocation Order/Annual Capacity Building Plan (ACBP)/schemes/mission/programs/policies Summary.
 - **Web Scraping Results:** You can perform web scraping (official directory/website content) to enrich and contextualize **roles, responsibilities, and domain competencies** for the target designation.
 - **Roles & Activities:** Reconcile from ACBP + Work Orders + Web Scraping results. Where missing, infer using AI (mark as *AI Suggested*).
 - **Competencies:**
     - **Behavioral & Functional Competencies:** Use strictly from **KCM dataset (theme + sub-theme)**.
-    - **Domain Competencies:** Derive from Supporting documents summaries, Web Scraping results, AI knowledge, sectoral/global references, and contextual roles.
+    - **Domain Competencies:** Derive from Primary document summaries, Web Scraping results, AI knowledge, sectoral/global references, and contextual roles.
 
 ---
 
@@ -220,7 +217,7 @@ Must include references to **schemes, governance, state-level practices, and glo
 ---
 
 ### 3. **Conflict Resolution**
-- If Supporting documents summaries, and Web Scraping overlap → **merge + deduplicate**.
+- If Primary document summaries, and Web Scraping overlap → **merge + deduplicate**.
 - If data is missing → infer using AI, clearly mark as **"AI Suggested"**.
 
 ---
@@ -233,7 +230,7 @@ Must include references to **schemes, governance, state-level practices, and glo
     - **role_responsibilities**
     - **activities**
     - **competencies** (with type, theme & sub_theme for all categories: Behavioral, Functional, Domain)
-    - **source** → ["Supporting documents summaries", "Web Scraping", "KCM", "AI Suggested"]
+    - **source** → ["Primary document summaries", "Web Scraping", "KCM", "AI Suggested"]
 
 ---
 
@@ -245,7 +242,7 @@ Must include references to **schemes, governance, state-level practices, and glo
 - Target Designation: {designation_name}
 - Additional Instructions: {instructions}
 
-**Supporting documents summaries:**
+**Primary document summaries:**
 {primary_summary}
 
 **KCM Competency Dataset:**
@@ -258,7 +255,6 @@ Please analyze the provided inputs and generate a **comprehensive FRAC role mapp
 Output must be in valid JSON format.
 """
 
-# Document Summary Prompt
 DOCUMENT_SUMMARY_PROMPT ="""
 You are a subject matter expert in Government HR, Capacity Building, and Organizational Structuring. I am providing you with mission/programs/schemes documents, Annual capacity building Reports, Annual Capacity Building Plan (ACBP), Work Allocation Order, or any related organisational/departmental/government document.
 
@@ -339,7 +335,6 @@ Add Part C (Mapping Table) only if data is available.
 Return the summary only (no extraneous commentary).
 """
 
-# Meta Summary Prompt
 META_SUMMARY_PROMPT = """Do not use cached or previous content in memory to save costs.
 
 You are a senior government policy analyst and capacity building expert. You are provided with a collection of detailed summaries from various government documents, schemes, programs, and capacity building plans.
@@ -390,3 +385,5 @@ Begin your synthesis now. Here is the collection of summaries:
 {payload}
 --- END INDIVIDUAL SUMMARIES ---
 """
+
+

@@ -1,10 +1,10 @@
-from typing import Optional, Union, Dict, Any
+from typing import List, Optional
 from datetime import datetime
 import uuid
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
-from sqlalchemy import update
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy import func, update
+from sqlalchemy.orm import selectinload
 
 from ..models.user import User
 from ..schemas.user import UserUpdate
@@ -29,6 +29,40 @@ class CRUDUser:
         result = await db.execute(select(User).filter(User.email == email))
         return result.scalars().first()
     
+    async def list_users(self, db: AsyncSession, limit: int, offset: int, filters: dict) -> List[User]:
+
+        base_query = (
+            select(User)
+            .options(
+                selectinload(User.role),
+                selectinload(User.creator)
+            )
+        )
+
+        # Filters
+        # if filters.get("username"):
+        #     base_query = base_query.where(User.username.ilike(f"%{filters['username']}%"))
+
+        # if filters.get("email"):
+        #     base_query = base_query.where(User.email.ilike(f"%{filters['email']}%"))
+
+        # if filters.get("role_id"):
+        #     base_query = base_query.where(User.role_id == filters["role_id"])
+
+        if filters.get("is_active") is not None:
+            base_query = base_query.where(User.is_active == filters["is_active"])
+
+        # Count total BEFORE applying limit/offset
+        count_query = select(func.count()).select_from(base_query.subquery())
+        total = (await db.execute(count_query)).scalar()
+
+        # Pagination
+        paginated_query = base_query.limit(limit).offset(offset)
+        result = await db.execute(paginated_query)
+
+        users = result.scalars().unique().all()
+        return total, users
+    
     async def get_by_id_with_relations(self, session: AsyncSession, user_id: int) -> Optional[User]:
         """
         Retrieve a single User by ID, explicitly loading 'addresses' and 'posts'
@@ -42,8 +76,8 @@ class CRUDUser:
             select(User)
             .where(User.user_id == user_id)
             .options(
-                joinedload(User.role),
-                joinedload(User.creator)
+                selectinload(User.role),
+                selectinload(User.creator)
             )
         )
         result = await session.execute(stmt)

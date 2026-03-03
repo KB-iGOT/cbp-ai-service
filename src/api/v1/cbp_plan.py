@@ -1,17 +1,8 @@
-import asyncio
-from datetime import datetime
-from functools import partial
-import io
-from fastapi.responses import StreamingResponse
 import httpx
 import uuid
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from jinja2 import Environment, FileSystemLoader
-from playwright.async_api import async_playwright
 from sqlalchemy.ext.asyncio import AsyncSession
-
-from ...schemas.role_mapping import RoleMappingResponse
 
 from ...schemas.cbp_plan import CBPPlanSaveRequest, CBPPlanSaveResponse, CBPPlanUpdateRequest
 from ...models.user import User
@@ -56,7 +47,10 @@ async def search_courses(identifiers: List[str]) -> List[Dict[str, Any]]:
         response = await client.post(
             f"{settings.KB_BASE_URL}/api/content/v1/search",
             json=payload,
-            headers={"Content-Type": "application/json"}
+            headers={
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {settings.KB_AUTH_TOKEN}"
+            }
         )
         response.raise_for_status()
         data = response.json()
@@ -320,186 +314,88 @@ async def update_cbp_plan(
             detail=f"Failed to update CBP plan: {str(e)}"
         )
 
-class DesignationData:
-    """Formatted designation data for template rendering"""
-    def __init__(self, cbp_record: RoleMappingResponse):
-        self.designation = cbp_record.designation_name
-        self.wing = cbp_record.wing_division_section
-        self.roles_responsibilities = cbp_record.role_responsibilities
-        self.activities = cbp_record.activities
-        
-        # Group competencies by type
-        self.behavioral_competencies = []
-        self.functional_competencies = []
-        self.domain_competencies = []
-
-        for comp in cbp_record.competencies:
-            comp_str = f"{comp['theme']} - {comp['sub_theme']}"
-            comp_type = comp['type'].lower()
-           
-            if "behavioral" in comp_type:
-                self.behavioral_competencies.append(comp_str)
-            elif "functional" in comp_type:
-                self.functional_competencies.append(comp_str)
-            elif "domain" in comp_type:
-                self.domain_competencies.append(comp_str)
-    
-    def to_dict(self) -> Dict[str, Any]:
-        return {
-            "designation": self.designation,
-            "wing": self.wing,
-            "rolesResponsibilities": self.roles_responsibilities,
-            "activities": self.activities,
-            "behavioralCompetencies": self.behavioral_competencies,
-            "functionalCompetencies": self.functional_competencies,
-            "domainCompetencies": self.domain_competencies
-        }
-
-
-def _render_template_sync(cbp_records: List[RoleMappingResponse], center_department_name: str) -> str:
-    """
-    Generate HTML by binding CBP data to Jinja2 template
-    """
-    # Prepare designation data
-    designation_list = [DesignationData(record) for record in cbp_records]
-    designation_data = [d.to_dict() for d in designation_list]
-
-    total_behavioral = sum(len(d["behavioralCompetencies"]) for d in designation_data)
-    total_functional = sum(len(d["functionalCompetencies"]) for d in designation_data)
-    total_domain = sum(len(d["domainCompetencies"]) for d in designation_data)
-    total_competencies = total_behavioral + total_functional + total_domain
-    
-    stats = {
-        "center_department_name": center_department_name,
-        "total_behavioral": total_behavioral,
-        "total_functional": total_functional,
-        "total_domain": total_domain,
-        "total_competencies": total_competencies,
-        "behavioral_percentage": round((total_behavioral / total_competencies * 100) if total_competencies > 0 else 0, 1),
-        "functional_percentage": round((total_functional / total_competencies * 100) if total_competencies > 0 else 0, 1),
-        "domain_percentage": round((total_domain / total_competencies * 100) if total_competencies > 0 else 0, 1),
-    }
-
-    # Render template
-    env = Environment(loader=FileSystemLoader("templates"))
-    template = env.get_template("cbp_template.html")
-    html_output = template.render(
-        designations=designation_data,
-        stats=stats,
-        current_year=datetime.now().year
-    )
-
-    return html_output
-
-async def generate_html_content(cbp_records: List[RoleMappingResponse], center_department_name: str) -> str:
-    """
-    Async wrapper that offloads rendering to a thread.
-    REMOVED: File writing to "report.html" to improve I/O speed.
-    """
-    loop = asyncio.get_running_loop()
-    # partial is used to pass arguments to the function in the executor
-    return await loop.run_in_executor(None, partial(_render_template_sync, cbp_records, center_department_name))
-   
-async def convert_html_to_pdf(html_content: str) -> bytes:
-    """
-    Convert HTML to PDF using Playwright (Chromium headless)
-
-    Args:
-        html_content: HTML string to convert
-    Returns:
-        PDF bytes
-    """
-    browser = None
-
-    try:
-        async with async_playwright() as p:
-            # Launch options can be tuned for performance
-            browser = await p.chromium.launch(headless=True, args=['--no-sandbox'])
-            
-            # Open a new page
-            page = await browser.new_page()
-            
-            # OPTIMIZATION: Use set_content instead of writing to a temp file
-            # This keeps everything in memory and avoids disk I/O
-            await page.set_content(html_content, wait_until="networkidle")
-
-            pdf_bytes = await page.pdf(
-                format="A4",
-                print_background=True,
-                margin={"top": "20px", "bottom": "20px", "left": "20px", "right": "20px"}
-            )
-
-            await browser.close()
-            return pdf_bytes
-    except Exception as e:
-        logger.error(f"Error in Playwright PDF generation: {str(e)}")
-        raise HTTPException(
-            status_code=500,
-            detail="Error generating PDF with Playwright"
-        )
-    finally:
-        # Ensure cleanup
-        if browser:
-            try:
-                logger.info("Closing Playwright browser...")
-                await browser.close()
-            except Exception as e:
-                logger.exception("Error closing browser")
-        
-
-
-@router.get("/cbp-plan/download")
-async def download_cbp_plan(
-    state_center_id: str,
-    department_id: Optional[str] = None,
+@router.delete("/cbp-plan/{cbp_plan_id}/course/{course_identifier}")
+async def delete_course_from_cbp_plan(
+    cbp_plan_id: uuid.UUID,
+    course_identifier: str,
     db: AsyncSession = Depends(get_db_session),
     current_user: User = Depends(get_current_active_user)
 ):
     """
-    Generate and download CBP report as PDF
+    Delete an individual course from selected_courses in a CBP plan.
 
-    Returns a downloadable PDF file
+    Args:
+        cbp_plan_id: UUID of the CBP plan
+        course_identifier: Identifier of the course to remove (can be UUID or do_xxx format)
+
+    Returns:
+        Updated CBP plan details
     """
-    logger.info(f"Fetching CBP plan details for pdf: {state_center_id}")
-    try:  
-        # Check if role mapping already exists
-        role_mapping = await crud_role_mapping.get_all_completed_mapping(db,state_center_id, current_user.user_id,  department_id)
+    try:
+        logger.info(f"Deleting course '{course_identifier}' from CBP plan: {cbp_plan_id}")
         
-        if not role_mapping:
-            logger.info(f"State/center with ID {state_center_id} not found")
+        # Get existing CBP plan
+        cbp_plan = await crud_cbp_plan.get_by_id(db, cbp_plan_id, current_user.user_id)
+        
+        if not cbp_plan:
+            logger.warning(f"CBP plan with ID {cbp_plan_id} not found")
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"State/center with ID {state_center_id} not found"
+                detail="CBP plan not found or access denied"
             )
         
-        center_department_name = None
-        center_department_name = role_mapping[0].state_center_name
-        if department_id:
-            center_department_name = role_mapping[0].department_name
+        # Get current selected courses
+        selected_courses = cbp_plan.selected_courses or []
         
-        # Generate HTML with data binding
-        html_content = await generate_html_content(role_mapping, center_department_name)
+        if not selected_courses:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="No courses found in this CBP plan"
+            )
         
-        # Convert to PDF
-        pdf_bytes = await convert_html_to_pdf(html_content)
+        # Filter out the course to delete
+        original_count = len(selected_courses)
         
-        # Create streaming response
-        pdf_stream = io.BytesIO(pdf_bytes)
+        # Handle both UUID and string identifiers
+        updated_courses = [
+            course for course in selected_courses
+            if str(course.get("identifier")) != str(course_identifier)
+        ]
         
-        # Generate filename
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = f"CBP_Report_{state_center_id}_{timestamp}.pdf"
-        logger.info(f"Generated PDF report for cbp plan : {filename}")
-        return StreamingResponse(
-            pdf_stream,
-            media_type="application/pdf",
-            headers={
-                "Content-Disposition": f"attachment; filename={filename}",
-                "Content-Type": "application/pdf"
-            }
-        )
+        new_count = len(updated_courses)
+        
+        # Check if course was found and removed
+        if original_count == new_count:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Course with identifier '{course_identifier}' not found in CBP plan"
+            )
+        
+        # # Check if at least one course remains
+        # if new_count == 0:
+        #     raise HTTPException(
+        #         status_code=status.HTTP_400_BAD_REQUEST,
+        #         detail="Cannot delete the last course. CBP plan must have at least one course."
+        #     )
+        
+        # Update CBP plan with filtered courses
+        update_records = {'selected_courses': updated_courses}
+        updated_cbp_plan = await crud_cbp_plan.update(db, cbp_plan_id, update_records)
+        
+        logger.info(f"Successfully deleted course '{course_identifier}' from CBP plan {cbp_plan_id}. Remaining courses: {new_count}")
+        
+        return {
+            "message": f"Successfully deleted course '{course_identifier}' from CBP plan",
+            "cbp_plan_id": str(cbp_plan_id),
+            "deleted_course_identifier": course_identifier,
+            "remaining_courses": new_count
+        }
+        
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error while downloading CBP plan: {str(e)}")
-        raise HTTPException(status_code=500, detail="Error generating PDF report for cbp plan")
+        logger.error(f"Error deleting course from CBP plan: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to delete course from CBP plan: {str(e)}"
+        )

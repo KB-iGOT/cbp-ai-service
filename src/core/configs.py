@@ -1,18 +1,30 @@
-from pydantic import Field
+from enum import Enum
+from typing import Union
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+class EnvironmentOption(str, Enum):
+    LOCAL = "local"
+    STAGING = "staging"
+    PRODUCTION = "production"
+
+class DocumentStorageOption(str, Enum):
+    LOCAL = "local"
+    GCP = "gcp"
 
 class Settings(BaseSettings):
     """
     Application settings loaded from environment variables or a .env file.
     """
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+
+    ENVIRONMENT: EnvironmentOption = EnvironmentOption.LOCAL
     LOG_LEVEL: str = "INFO"
 
     APP_NAME: str = "AI-Driven CBP Training Plan Creation System"
     APP_DESC: str = "API for managing state centers and training organizations for competency-based program development"
     APP_VERSION: str = "1.0.0"
     APP_ROOT_PATH: str = "/cbp-tpc-ai"
-
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     DATABASE_URL: str
 
@@ -21,8 +33,8 @@ class Settings(BaseSettings):
     EMBEDDING_MODEL_NAME: str = "text-multilingual-embedding-002"
     GOOGLE_PROJECT_ID: str
 
-    KB_BASE_URL:str
-    KB_AUTH_TOKEN:str
+    KB_BASE_URL: str
+    KB_AUTH_TOKEN: str
 
      # File upload settings
     PDF_MAX_FILE_SIZE: int = 50 * 1024 * 1024  # 50MB in bytes
@@ -30,10 +42,7 @@ class Settings(BaseSettings):
     ALLOWED_FILE_TYPES: list = [".pdf"]
 
     # Document storage settings
-    DOCUMENT_STORAGE_TYPE: str = Field(
-        default="local",
-        description="Storage type: 'local' or 'gcp'"
-    )
+    DOCUMENT_STORAGE_TYPE: DocumentStorageOption = DocumentStorageOption.LOCAL
     DOCUMENT_STORAGE_ROOT: str = Field(
         default="storage/documents",
         description="Root directory (relative or absolute) where uploaded documents are stored (for local storage)"
@@ -73,9 +82,51 @@ class Settings(BaseSettings):
     
     # Optional: Token blacklist settings (for logout functionality)
     ENABLE_TOKEN_BLACKLIST: bool = Field(
-        default=False,
+        default=True,
         description="Enable token blacklisting for logout"
     )
+
+    # Login attempt settings (brute-force protection)
+    MAX_LOGIN_ATTEMPTS: int = Field(
+        default=5,
+        description="Maximum failed login attempts before account lockout"
+    )
+    LOGIN_LOCKOUT_MINUTES: int = Field(
+        default=15,
+        description="Account lockout duration in minutes after max failed attempts"
+    )
+
+    # Bhashini Translation API settings
+    BHASHINI_USER_ID: str = Field(
+        default="",
+        description="Bhashini API User ID for translation services"
+    )
+    BHASHINI_API_KEY: str = Field(
+        default="",
+        description="Bhashini API Key for translation services"
+    )
+    BHASHINI_PIPELINE_ID: str = Field(
+        default="64392f96daac500b55c543cd",
+        description="Bhashini Pipeline ID for translation services"
+    )
+    BHASHINI_CONFIG_API_URL: str = Field(
+        default="https://meity-auth.ulcacontrib.org/ulca/apis/v0/model/getModelsPipeline",
+        description="Bhashini Config API URL for getting translation configuration"
+    )
+    BHASHINI_SUPPORTED_LANGUAGES: Union[str, list[str]] = Field(
+        default="en,hi,te,kn,mr,ta,gu,ml,or,pa,bn,as",
+        description="Supported language codes for translation (comma-separated or list)"
+    )
+
+    @field_validator("BHASHINI_SUPPORTED_LANGUAGES", mode="after")
+    @classmethod
+    def parse_langs(cls, v):
+        if isinstance(v, str):
+            # Handle comma-separated string from .env file
+            return [x.strip() for x in v.split(",") if x.strip()]
+        elif isinstance(v, list):
+            return v
+        return v
 
 # Create a settings instance that can be imported by other modules
 settings = Settings()

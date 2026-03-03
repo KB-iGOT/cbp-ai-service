@@ -3,6 +3,7 @@ from typing import List, Optional
 from sqlalchemy import and_, delete, desc, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
+from sqlalchemy.orm import selectinload, noload
 
 # Assuming RoleMapping is defined in src/models/cbp_plan.py
 from ..models.role_mapping import ProcessingStatus, RoleMapping 
@@ -97,7 +98,8 @@ class CRUDRoleMapping:
         db: AsyncSession, 
         state_center_id: str, 
         user_id: uuid.UUID,
-        department_id: Optional[str] = None
+        department_id: Optional[str] = None,
+        load_cbp_plans: bool = False
     ) -> Optional[List[RoleMapping]]:
         """
         Checks for an existing RoleMapping record based on state_center_id, user_id, 
@@ -128,9 +130,22 @@ class CRUDRoleMapping:
 
         # Build the statement using sqlalchemy.future.select and sqlalchemy.and_
         stmt = select(RoleMapping).where(and_(*conditions)).order_by(RoleMapping.sort_order)
+        if load_cbp_plans:
+            stmt = stmt.options(selectinload(RoleMapping.cbp_plans))
+        else:
+            # Prevent lazy loading by explicitly setting noload
+            stmt = stmt.options(noload(RoleMapping.cbp_plans))
         
         result = await db.execute(stmt)
-        return result.scalars().all()
+        role_mappings = result.scalars().all()
+
+        # Explicitly set cbp_plans to empty list when not loading to avoid lazy loading errors
+        if not load_cbp_plans:
+            for mapping in role_mappings:
+                # Use object.__setattr__ to bypass SQLAlchemy's descriptor
+                object.__setattr__(mapping, 'cbp_plans', [])
+        
+        return role_mappings
 
     async def update(
         self, 
@@ -247,8 +262,8 @@ class CRUDRoleMapping:
         return result.rowcount
     
     async def delete_by_id(
-        self, 
-        db: AsyncSession, 
+        self,
+        db: AsyncSession,
         role_mapping_id: uuid.UUID
     ) -> int:
         conditions = [
@@ -257,13 +272,51 @@ class CRUDRoleMapping:
 
         # Build the delete statement
         stmt = delete(RoleMapping).where(and_(*conditions))
-        
+
         # Execute the statement
         result = await db.execute(stmt)
-        
+
         # Commit the transaction to finalize deletion
         await db.commit()
-        
+
         return result.rowcount
+
+    async def bulk_update_sort_order(
+        self,
+        db: AsyncSession,
+        user_id: uuid.UUID,
+        order_updates: List[dict]
+    ) -> int:
+        """
+        Bulk update sort_order for multiple role mappings.
+        Used for drag-and-drop reordering of designations.
+
+        Args:
+            db: The async database session.
+            user_id: The ID of the current user (for ownership verification).
+            order_updates: List of dicts with 'id' and 'sort_order' keys.
+
+        Returns:
+            The number of rows updated.
+        """
+        updated_count = 0
+
+        for item in order_updates:
+            stmt = (
+                update(RoleMapping)
+                .where(
+                    and_(
+                        RoleMapping.id == item['id'],
+                        RoleMapping.user_id == user_id
+                    )
+                )
+                .values(sort_order=item['sort_order'])
+            )
+            result = await db.execute(stmt)
+            updated_count += result.rowcount
+
+        await db.commit()
+        return updated_count
+
 # Initialize the CRUD utility for use across the application
 crud_role_mapping = CRUDRoleMapping()
