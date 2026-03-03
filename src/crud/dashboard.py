@@ -421,6 +421,12 @@ class CRUDDashboard:
                 RoleMapping.status == 'COMPLETED'
             )
 
+            if filters.ministries and len(filters.ministries) > 0:
+                stmt = stmt.where(RoleMapping.state_center_id.in_(filters.ministries))
+
+            if filters.departments and len(filters.departments) > 0:
+                stmt = stmt.where(RoleMapping.department_id.in_(filters.departments))
+
             if filters.date_range:
                 if filters.date_range.from_date:
                     stmt = stmt.where(func.date(RoleMapping.created_at) >= filters.date_range.from_date)
@@ -435,6 +441,12 @@ class CRUDDashboard:
                 .join(RoleMapping, RoleMapping.id == RecommendedCourse.role_mapping_id)
                 .where(RoleMapping.user_id == user_id, RoleMapping.status == 'COMPLETED')
             )
+            if filters.ministries and len(filters.ministries) > 0:
+                rec_stmt = rec_stmt.where(RoleMapping.state_center_id.in_(filters.ministries))
+
+            if filters.departments and len(filters.departments) > 0:
+                rec_stmt = rec_stmt.where(RoleMapping.department_id.in_(filters.departments))
+
             if filters.date_range:
                 if filters.date_range.from_date:
                     rec_stmt = rec_stmt.where(func.date(RoleMapping.created_at) >= filters.date_range.from_date)
@@ -446,8 +458,15 @@ class CRUDDashboard:
 
             cbp_stmt = (
                 select(func.count(func.distinct(CBPPlan.id)))
+                .join(RoleMapping, RoleMapping.id == CBPPlan.role_mapping_id)
                 .where(CBPPlan.user_id == user_id)
             )
+            if filters.ministries and len(filters.ministries) > 0:
+                cbp_stmt = cbp_stmt.where(RoleMapping.state_center_id.in_(filters.ministries))
+
+            if filters.departments and len(filters.departments) > 0:
+                cbp_stmt = cbp_stmt.where(RoleMapping.department_id.in_(filters.departments))
+
             if filters.date_range:
                 if filters.date_range.from_date:
                     cbp_stmt = cbp_stmt.where(func.date(CBPPlan.created_at) >= filters.date_range.from_date)
@@ -474,6 +493,12 @@ class CRUDDashboard:
                 CBPPlan.recommended_course_id.is_not(None),
                 CBPPlan.user_id == user_id
             )
+            if filters.ministries and len(filters.ministries) > 0:
+                saved_rec_stmt = saved_rec_stmt.where(RoleMapping.state_center_id.in_(filters.ministries))
+
+            if filters.departments and len(filters.departments) > 0:
+                saved_rec_stmt = saved_rec_stmt.where(RoleMapping.department_id.in_(filters.departments))
+
             if filters.date_range:
                 if filters.date_range.from_date:
                     saved_rec_stmt = saved_rec_stmt.where(func.date(CBPPlan.created_at) >= filters.date_range.from_date)
@@ -511,6 +536,14 @@ class CRUDDashboard:
             where_clauses = ["rm.status = 'COMPLETED'", "rm.user_id = :user_id"]
             params = {"user_id": str(user_id)}
 
+            if filters.ministries and len(filters.ministries) > 0:
+                where_clauses.append("rm.state_center_id = ANY(:ministries)")
+                params["ministries"] = filters.ministries
+
+            if filters.departments and len(filters.departments) > 0:
+                where_clauses.append("rm.department_id = ANY(:departments)")
+                params["departments"] = filters.departments
+
             if filters.date_range:
                 if filters.date_range.from_date:
                     where_clauses.append("DATE(rm.created_at) >= :from_date")
@@ -527,6 +560,7 @@ class CRUDDashboard:
                     COUNT(*) FILTER (WHERE LOWER(TRIM(c->>'type')) = 'functional') AS functional_without_courses,
                     COUNT(*) FILTER (WHERE LOWER(TRIM(c->>'type')) = 'domain')     AS domain_without_courses
                 FROM role_mappings rm
+                JOIN recommended_courses rc2 ON rc2.role_mapping_id = rm.id
                 JOIN LATERAL jsonb_array_elements(COALESCE(rm.competencies, '[]'::jsonb)) AS c ON true
                 WHERE {where_sql}
                   AND NOT EXISTS (

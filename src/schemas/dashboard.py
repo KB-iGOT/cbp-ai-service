@@ -81,7 +81,10 @@ class GapAnalysisResponse(BaseModel):
 # ── User-scoped dashboard schemas (for regular/public users) ──────────────────
 
 class UserDashboardFilters(BaseModel):
-    """Filters for user-level dashboard — only date range, user_id comes from JWT token."""
+    """Filters for user-level dashboard — user_id comes from JWT token.
+    Optionally filter by ministry and/or department; if omitted, all are included."""
+    ministries: Optional[List[str]] = None
+    departments: Optional[List[str]] = None
     date_range: Optional[DateRange] = None
 
 
