@@ -1,4 +1,5 @@
 from sqlalchemy import Integer, String, select, func, text
+from sqlalchemy.dialects.postgresql import array as pg_array
 from sqlalchemy.exc import SQLAlchemyError
 from collections import defaultdict
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -6,11 +7,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..models.cbp_plan import CBPPlan
 from ..models.role_mapping import RoleMapping
 from ..models.course_recommendation import RecommendedCourse
-from ..models.course_suggestion import SuggestedCourse
-from ..models.user_added_course import UserAddedCourse
 from ..models.document import Document
 from ..models.user import User
-from ..models.cbp_plan import CBPPlan
 
 from ..schemas.dashboard import CBPSummaryTrendFilters, CBPDashboardFilters, GapAnalysisFilters
 
@@ -32,8 +30,8 @@ def get_period_expression(granularity: str):
             func.to_char(func.date_trunc("quarter", CBPPlan.created_at), "YYYY")
             + "-Q"
             + func.extract("quarter", CBPPlan.created_at)
-              .cast(Integer)      # <-- Fix: Use Integer type, not text("int")
-              .cast(String)       # <-- Fix: Use String type, not text("text")
+              .cast(Integer)
+              .cast(String)
         )
     else:
         raise InvalidTrendGranularity(
@@ -43,7 +41,7 @@ def get_period_expression(granularity: str):
 
 class CRUDDashboard:
     """
-    CRUD methods for the Document model.
+    CRUD methods for the Dashboard model.
     """
 
     async def fetch_cbp_summary_trends(
@@ -65,7 +63,6 @@ class CRUDDashboard:
                 .join(CBPPlan, CBPPlan.role_mapping_id == RoleMapping.id)
             )
 
-            # ---- Date filter (optional) ----
             if filters.date_range:
                 stmt = stmt.where(
                     func.date(CBPPlan.created_at) >= filters.date_range.from_date,
@@ -92,7 +89,6 @@ class CRUDDashboard:
             result = await db.execute(stmt)
             rows = result.fetchall()
 
-            # -------- Transform response --------
             response_map = defaultdict(list)
 
             for row in rows:
@@ -122,6 +118,8 @@ class CRUDDashboard:
             raise DashboardQueryError(
                 "Database error while fetching CBP summary trends"
             ) from e
+
+    # ── Super Admin methods ───────────────────────────────────────────────────
 
     async def fetch_cbp_dashboard_metrics(
         self,
@@ -156,10 +154,7 @@ class CRUDDashboard:
             )
 
             if filters.ministries and len(filters.ministries) > 0:
-                stmt = stmt.where(
-                    RoleMapping.org_type == 'ministry',
-                    RoleMapping.state_center_id.in_(filters.ministries)
-                )
+                stmt = stmt.where(RoleMapping.state_center_id.in_(filters.ministries))
 
             if filters.departments and len(filters.departments) > 0:
                 stmt = stmt.where(RoleMapping.department_id.in_(filters.departments))
@@ -195,10 +190,7 @@ class CRUDDashboard:
             cbp_stmt = cbp_stmt.join(RoleMapping, RoleMapping.id == CBPPlan.role_mapping_id)
 
             if filters.ministries and len(filters.ministries) > 0:
-                cbp_stmt = cbp_stmt.where(
-                    RoleMapping.org_type == 'ministry',
-                    RoleMapping.state_center_id.in_(filters.ministries)
-                )
+                cbp_stmt = cbp_stmt.where(RoleMapping.state_center_id.in_(filters.ministries))
 
             if filters.departments and len(filters.departments) > 0:
                 cbp_stmt = cbp_stmt.where(RoleMapping.department_id.in_(filters.departments))
@@ -216,10 +208,7 @@ class CRUDDashboard:
             rec_stmt = rec_stmt.join(RoleMapping, RoleMapping.id == RecommendedCourse.role_mapping_id)
 
             if filters.ministries and len(filters.ministries) > 0:
-                rec_stmt = rec_stmt.where(
-                    RoleMapping.org_type == 'ministry',
-                    RoleMapping.state_center_id.in_(filters.ministries)
-                )
+                rec_stmt = rec_stmt.where(RoleMapping.state_center_id.in_(filters.ministries))
 
             if filters.departments and len(filters.departments) > 0:
                 rec_stmt = rec_stmt.where(RoleMapping.department_id.in_(filters.departments))
@@ -236,13 +225,15 @@ class CRUDDashboard:
             role_mappings_with_recommendations = rec_result.scalar() or 0
 
             # --- Total Users Query ---
+            # Count directly from the users table.
+            # Ministry filter uses organization_ids (ARRAY) which stores ministry/state IDs.
+            # Department filter is not applied here — organization_ids has no department IDs.
             user_stmt = select(func.count(func.distinct(User.user_id)))
-            
-            if filters.ministries and len(filters.ministries) > 0:
-                user_stmt = user_stmt.where(User.state_center_id.in_(filters.ministries))
 
-            if filters.departments and len(filters.departments) > 0:
-                user_stmt = user_stmt.where(User.department_id.in_(filters.departments))
+            if filters.ministries and len(filters.ministries) > 0:
+                user_stmt = user_stmt.where(
+                    User.organization_ids.op('&&')(pg_array(filters.ministries))
+                )
 
             if filters.date_range:
                 if filters.date_range.from_date:
@@ -272,10 +263,7 @@ class CRUDDashboard:
             saved_rec_stmt = saved_rec_stmt.where(CBPPlan.recommended_course_id.is_not(None))
 
             if filters.ministries and len(filters.ministries) > 0:
-                saved_rec_stmt = saved_rec_stmt.where(
-                    RoleMapping.org_type == 'ministry',
-                    RoleMapping.state_center_id.in_(filters.ministries)
-                )
+                saved_rec_stmt = saved_rec_stmt.where(RoleMapping.state_center_id.in_(filters.ministries))
 
             if filters.departments and len(filters.departments) > 0:
                 saved_rec_stmt = saved_rec_stmt.where(RoleMapping.department_id.in_(filters.departments))
@@ -317,12 +305,10 @@ class CRUDDashboard:
         filters: GapAnalysisFilters
     ):
         try:
-            # Build filter clauses dynamically
             where_clauses = ["rm.status = 'COMPLETED'"]
             params = {}
 
             if filters.ministries and len(filters.ministries) > 0:
-                where_clauses.append("rm.org_type = 'ministry'")
                 where_clauses.append("rm.state_center_id = ANY(:ministries)")
                 params["ministries"] = filters.ministries
 
@@ -342,27 +328,38 @@ class CRUDDashboard:
 
             raw_sql = text(f"""
                 SELECT
-                    COUNT(*) FILTER (WHERE c->>'type' = 'Behavioral') AS behavioral_without_courses,
-                    COUNT(*) FILTER (WHERE c->>'type' = 'Functional') AS functional_without_courses,
-                    COUNT(*) FILTER (WHERE c->>'type' = 'Domain')     AS domain_without_courses
+                    COUNT(*) FILTER (
+                        WHERE REPLACE(LOWER(TRIM(c->>'type')), 'behavioural', 'behavioral') = 'behavioral'
+                    ) AS behavioral_without_courses,
+                    COUNT(*) FILTER (
+                        WHERE LOWER(TRIM(c->>'type')) = 'functional'
+                    ) AS functional_without_courses,
+                    COUNT(*) FILTER (
+                        WHERE LOWER(TRIM(c->>'type')) = 'domain'
+                    ) AS domain_without_courses
                 FROM role_mappings rm
-                JOIN LATERAL jsonb_array_elements(COALESCE(rm.competencies, '[]'::jsonb)) AS c ON true
+                JOIN recommended_courses rc2 ON rc2.role_mapping_id = rm.id
+                JOIN LATERAL jsonb_array_elements(
+                    COALESCE(rm.competencies, '[]'::jsonb)
+                ) AS c ON true
                 WHERE {where_sql}
-                  AND NOT EXISTS (
-                    SELECT 1 FROM recommended_courses rc
+                AND NOT EXISTS (
+                    SELECT 1
+                    FROM recommended_courses rc
                     CROSS JOIN LATERAL jsonb_array_elements(
                         CASE WHEN jsonb_typeof(rc.filtered_courses) = 'array'
-                             THEN rc.filtered_courses ELSE '[]'::jsonb END
+                            THEN rc.filtered_courses ELSE '[]'::jsonb END
                     ) AS fc
                     CROSS JOIN LATERAL jsonb_array_elements(
                         CASE WHEN jsonb_typeof(fc->'competencies') = 'array'
-                             THEN fc->'competencies' ELSE '[]'::jsonb END
+                            THEN fc->'competencies' ELSE '[]'::jsonb END
                     ) AS course_comp
                     WHERE rc.role_mapping_id = rm.id
-                      AND REPLACE(course_comp->>'competencyAreaName', 'Behavioural', 'Behavioral') = c->>'type'
-                      AND course_comp->>'competencyThemeName' = c->>'theme'
-                      AND course_comp->>'competencySubThemeName' = c->>'sub_theme'
-                  )
+                    AND REPLACE(LOWER(TRIM(course_comp->>'competencyAreaName')), 'behavioural', 'behavioral')
+                        = REPLACE(LOWER(TRIM(c->>'type')), 'behavioural', 'behavioral')
+                    AND LOWER(TRIM(course_comp->>'competencyThemeName')) = LOWER(TRIM(c->>'theme'))
+                    AND LOWER(TRIM(course_comp->>'competencySubThemeName')) = LOWER(TRIM(c->>'sub_theme'))
+                )
             """)
 
             result = await db.execute(raw_sql, params)
@@ -382,9 +379,10 @@ class CRUDDashboard:
         except SQLAlchemyError as e:
             print(f"Database error while fetching gap analysis: {str(e)}")
             await db.rollback()
-            raise DashboardQueryError("Database error while fetching gap analysis") from e
+            raise DashboardQueryError(
+                "Database error while fetching gap analysis"
+            ) from e
 
-# Initialize the CRUD utility for use across the application
     # ── User-scoped methods (for regular/public users) ────────────────────────
 
     async def fetch_user_dashboard_metrics(
@@ -395,10 +393,8 @@ class CRUDDashboard:
     ):
         """Returns CBP dashboard metrics scoped to a single user's data."""
         try:
-            from uuid import UUID as PyUUID
             uid = str(user_id)
 
-            # --- Role mapping counts (scoped to this user) ---
             stmt = select(
                 func.count(func.distinct(RoleMapping.id)).label("total_role_mappings"),
                 func.count(func.distinct(func.lower(RoleMapping.designation_name))).label("unique_role_mappings"),
@@ -425,6 +421,12 @@ class CRUDDashboard:
                 RoleMapping.status == 'COMPLETED'
             )
 
+            if filters.ministries and len(filters.ministries) > 0:
+                stmt = stmt.where(RoleMapping.state_center_id.in_(filters.ministries))
+
+            if filters.departments and len(filters.departments) > 0:
+                stmt = stmt.where(RoleMapping.department_id.in_(filters.departments))
+
             if filters.date_range:
                 if filters.date_range.from_date:
                     stmt = stmt.where(func.date(RoleMapping.created_at) >= filters.date_range.from_date)
@@ -434,12 +436,17 @@ class CRUDDashboard:
             result = await db.execute(stmt)
             row = result.fetchone()
 
-            # --- Role mappings that have recommendations ---
             rec_stmt = (
                 select(func.count(func.distinct(RecommendedCourse.role_mapping_id)))
                 .join(RoleMapping, RoleMapping.id == RecommendedCourse.role_mapping_id)
                 .where(RoleMapping.user_id == user_id, RoleMapping.status == 'COMPLETED')
             )
+            if filters.ministries and len(filters.ministries) > 0:
+                rec_stmt = rec_stmt.where(RoleMapping.state_center_id.in_(filters.ministries))
+
+            if filters.departments and len(filters.departments) > 0:
+                rec_stmt = rec_stmt.where(RoleMapping.department_id.in_(filters.departments))
+
             if filters.date_range:
                 if filters.date_range.from_date:
                     rec_stmt = rec_stmt.where(func.date(RoleMapping.created_at) >= filters.date_range.from_date)
@@ -449,11 +456,17 @@ class CRUDDashboard:
             rec_result = await db.execute(rec_stmt)
             role_mappings_with_recommendations = rec_result.scalar() or 0
 
-            # --- CBP plan count ---
             cbp_stmt = (
                 select(func.count(func.distinct(CBPPlan.id)))
+                .join(RoleMapping, RoleMapping.id == CBPPlan.role_mapping_id)
                 .where(CBPPlan.user_id == user_id)
             )
+            if filters.ministries and len(filters.ministries) > 0:
+                cbp_stmt = cbp_stmt.where(RoleMapping.state_center_id.in_(filters.ministries))
+
+            if filters.departments and len(filters.departments) > 0:
+                cbp_stmt = cbp_stmt.where(RoleMapping.department_id.in_(filters.departments))
+
             if filters.date_range:
                 if filters.date_range.from_date:
                     cbp_stmt = cbp_stmt.where(func.date(CBPPlan.created_at) >= filters.date_range.from_date)
@@ -463,7 +476,6 @@ class CRUDDashboard:
             cbp_result = await db.execute(cbp_stmt)
             total_cbp_plan_count = cbp_result.scalar() or 0
 
-            # --- Saved recommended courses count ---
             saved_rec_stmt = select(
                 func.sum(
                     select(func.count(func.distinct(text("s->>'identifier'"))))
@@ -481,6 +493,12 @@ class CRUDDashboard:
                 CBPPlan.recommended_course_id.is_not(None),
                 CBPPlan.user_id == user_id
             )
+            if filters.ministries and len(filters.ministries) > 0:
+                saved_rec_stmt = saved_rec_stmt.where(RoleMapping.state_center_id.in_(filters.ministries))
+
+            if filters.departments and len(filters.departments) > 0:
+                saved_rec_stmt = saved_rec_stmt.where(RoleMapping.department_id.in_(filters.departments))
+
             if filters.date_range:
                 if filters.date_range.from_date:
                     saved_rec_stmt = saved_rec_stmt.where(func.date(CBPPlan.created_at) >= filters.date_range.from_date)
@@ -518,6 +536,14 @@ class CRUDDashboard:
             where_clauses = ["rm.status = 'COMPLETED'", "rm.user_id = :user_id"]
             params = {"user_id": str(user_id)}
 
+            if filters.ministries and len(filters.ministries) > 0:
+                where_clauses.append("rm.state_center_id = ANY(:ministries)")
+                params["ministries"] = filters.ministries
+
+            if filters.departments and len(filters.departments) > 0:
+                where_clauses.append("rm.department_id = ANY(:departments)")
+                params["departments"] = filters.departments
+
             if filters.date_range:
                 if filters.date_range.from_date:
                     where_clauses.append("DATE(rm.created_at) >= :from_date")
@@ -530,10 +556,11 @@ class CRUDDashboard:
 
             raw_sql = text(f"""
                 SELECT
-                    COUNT(*) FILTER (WHERE c->>'type' = 'Behavioral') AS behavioral_without_courses,
-                    COUNT(*) FILTER (WHERE c->>'type' = 'Functional') AS functional_without_courses,
-                    COUNT(*) FILTER (WHERE c->>'type' = 'Domain')     AS domain_without_courses
+                    COUNT(*) FILTER (WHERE REPLACE(LOWER(TRIM(c->>'type')), 'behavioural', 'behavioral') = 'behavioral') AS behavioral_without_courses,
+                    COUNT(*) FILTER (WHERE LOWER(TRIM(c->>'type')) = 'functional') AS functional_without_courses,
+                    COUNT(*) FILTER (WHERE LOWER(TRIM(c->>'type')) = 'domain')     AS domain_without_courses
                 FROM role_mappings rm
+                JOIN recommended_courses rc2 ON rc2.role_mapping_id = rm.id
                 JOIN LATERAL jsonb_array_elements(COALESCE(rm.competencies, '[]'::jsonb)) AS c ON true
                 WHERE {where_sql}
                   AND NOT EXISTS (
@@ -547,9 +574,10 @@ class CRUDDashboard:
                              THEN fc->'competencies' ELSE '[]'::jsonb END
                     ) AS course_comp
                     WHERE rc.role_mapping_id = rm.id
-                      AND REPLACE(course_comp->>'competencyAreaName', 'Behavioural', 'Behavioral') = c->>'type'
-                      AND course_comp->>'competencyThemeName' = c->>'theme'
-                      AND course_comp->>'competencySubThemeName' = c->>'sub_theme'
+                      AND REPLACE(LOWER(TRIM(course_comp->>'competencyAreaName')), 'behavioural', 'behavioral')
+                          = REPLACE(LOWER(TRIM(c->>'type')), 'behavioural', 'behavioral')
+                      AND LOWER(TRIM(course_comp->>'competencyThemeName')) = LOWER(TRIM(c->>'theme'))
+                      AND LOWER(TRIM(course_comp->>'competencySubThemeName')) = LOWER(TRIM(c->>'sub_theme'))
                   )
             """)
 

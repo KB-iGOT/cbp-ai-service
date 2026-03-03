@@ -27,7 +27,7 @@ async def cbp_summary_trends(
     db: AsyncSession = Depends(get_db_session),
     current_user: User = Depends(require_role("Super Admin"))
 ):
-    logger.info(f"Recieved request for CBP summary: {request.model_dump()}")
+    logger.info(f"Received request for CBP summary: {request.model_dump()}")
     try:
         return await crud_dashboard.fetch_cbp_summary_trends(db, request.filters)
     except InvalidTrendGranularity as e:
@@ -92,7 +92,7 @@ async def get_gap_analysis(
 
 # ── User-scoped endpoints (accessible to any authenticated user) ──────────────
 
-@router.post("/public-user-metrics", response_model=UserDashboardMetricsResponse, status_code=status.HTTP_200_OK)
+@router.post("/my-dashboard-metrics", response_model=UserDashboardMetricsResponse, status_code=status.HTTP_200_OK)
 async def get_my_dashboard_metrics(
     filters: UserDashboardFilters,
     db: AsyncSession = Depends(get_db_session),
@@ -114,7 +114,7 @@ async def get_my_dashboard_metrics(
         )
 
 
-@router.post("/public-user-gap-analysis", response_model=UserGapAnalysisResponse, status_code=status.HTTP_200_OK)
+@router.post("/my-gap-analysis", response_model=UserGapAnalysisResponse, status_code=status.HTTP_200_OK)
 async def get_my_gap_analysis(
     filters: UserDashboardFilters,
     db: AsyncSession = Depends(get_db_session),

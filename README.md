@@ -173,6 +173,6 @@ All endpoints are under `/api/v1/dashboard`.
 
 | Method | Endpoint | Description |
 |---|---|---|
-| POST | `/public-user-metrics` | Personal metrics — CBP plans, saved courses, role mappings |
-| POST | `/public-user-gap-analysis` | Personal competency gap analysis |
+| POST | `/my-dashboard-metrics` | Personal metrics — CBP plans, saved courses, role mappings |
+| POST | `/my-gap-analysis` | Personal competency gap analysis |
 

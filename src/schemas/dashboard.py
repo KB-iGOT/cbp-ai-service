@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field, model_validator
-from typing import List, Optional
+from typing import List, Literal, Optional
 from datetime import date
 
 class DateRange(BaseModel):
@@ -27,7 +27,7 @@ class CBPSummaryTrendFilters(BaseModel):
     state_center_id: Optional[str] = None
     department_org_ids: List[str] = []
     date_range: Optional[DateRange] = None
-    trend_granularity: str = "Monthly"
+    trend_granularity: Literal["Monthly", "Quarterly"] = "Monthly"
 
 class CBPSummaryTrendRequest(BaseModel):
     filters: CBPSummaryTrendFilters
@@ -81,7 +81,10 @@ class GapAnalysisResponse(BaseModel):
 # ── User-scoped dashboard schemas (for regular/public users) ──────────────────
 
 class UserDashboardFilters(BaseModel):
-    """Filters for user-level dashboard — only date range, user_id comes from JWT token."""
+    """Filters for user-level dashboard — user_id comes from JWT token.
+    Optionally filter by ministry and/or department; if omitted, all are included."""
+    ministries: Optional[List[str]] = None
+    departments: Optional[List[str]] = None
     date_range: Optional[DateRange] = None
 
 
