@@ -48,10 +48,17 @@ class ReportService:
         self.template_env = Environment(loader=FileSystemLoader("templates"))
     
     def _calculate_competency_stats(self, designation_data: List[dict]) -> dict:
-        """Calculate competency statistics from designation data"""
-        total_behavioral = sum(len(d["behavioralCompetencies"]) for d in designation_data)
-        total_functional = sum(len(d["functionalCompetencies"]) for d in designation_data)
-        total_domain = sum(len(d["domainCompetencies"]) for d in designation_data)
+        """Calculate unique competency statistics across all designations"""
+        unique_behavioral = set()
+        unique_functional = set()
+        unique_domain = set()
+        for d in designation_data:
+            unique_behavioral.update(d["behavioralCompetencies"])
+            unique_functional.update(d["functionalCompetencies"])
+            unique_domain.update(d["domainCompetencies"])
+        total_behavioral = len(unique_behavioral)
+        total_functional = len(unique_functional)
+        total_domain = len(unique_domain)
         total_competencies = total_behavioral + total_functional + total_domain
         
         return {

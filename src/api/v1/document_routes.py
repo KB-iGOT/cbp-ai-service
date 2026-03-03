@@ -258,7 +258,6 @@ async def _run_document_summary(document_id: uuid.UUID):
             generate_content_config = types.GenerateContentConfig(
                 temperature=0.7,
                 top_p=0.95,
-                max_output_tokens=8192,
                 safety_settings=[
                     types.SafetySetting(category="HARM_CATEGORY_HATE_SPEECH", threshold="OFF"),
                     types.SafetySetting(category="HARM_CATEGORY_DANGEROUS_CONTENT", threshold="OFF"),
