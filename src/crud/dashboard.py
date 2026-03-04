@@ -302,11 +302,23 @@ class CRUDDashboard:
     async def fetch_gap_analysis(
         self,
         db: AsyncSession,
-        filters: GapAnalysisFilters
+        filters,
+        user_id=None
     ):
+        """
+        Fetch gap analysis data.
+
+        - If user_id is None  → Super Admin path: considers all role mappings.
+        - If user_id is given → User path: scoped to that user's role mappings only.
+        """
         try:
             where_clauses = ["rm.status = 'COMPLETED'"]
             params = {}
+
+            # Scope to a specific user when called from the user-facing endpoint.
+            if user_id is not None:
+                where_clauses.append("rm.user_id = :user_id")
+                params["user_id"] = str(user_id)
 
             if filters.ministries and len(filters.ministries) > 0:
                 where_clauses.append("rm.state_center_id = ANY(:ministries)")
@@ -542,80 +554,7 @@ class CRUDDashboard:
             await db.rollback()
             raise DashboardQueryError("Database error while fetching user dashboard metrics") from e
 
-    async def fetch_user_gap_analysis(
-        self,
-        db: AsyncSession,
-        user_id,
-        filters
-    ):
-        """Returns gap analysis scoped to a single user's role mappings."""
-        try:
-            where_clauses = ["rm.status = 'COMPLETED'", "rm.user_id = :user_id"]
-            params = {"user_id": str(user_id)}
-
-            if filters.ministries and len(filters.ministries) > 0:
-                where_clauses.append("rm.state_center_id = ANY(:ministries)")
-                params["ministries"] = filters.ministries
-
-            if filters.departments and len(filters.departments) > 0:
-                where_clauses.append("rm.department_id = ANY(:departments)")
-                params["departments"] = filters.departments
-
-            if filters.date_range:
-                if filters.date_range.from_date:
-                    where_clauses.append("DATE(rm.created_at) >= :from_date")
-                    params["from_date"] = filters.date_range.from_date
-                if filters.date_range.to_date:
-                    where_clauses.append("DATE(rm.created_at) <= :to_date")
-                    params["to_date"] = filters.date_range.to_date
-
-            where_sql = " AND ".join(where_clauses)
-
-            raw_sql = text(f"""
-                SELECT
-                    COUNT(*) FILTER (WHERE REPLACE(LOWER(TRIM(c->>'type')), 'behavioural', 'behavioral') = 'behavioral') AS behavioral_without_courses,
-                    COUNT(*) FILTER (WHERE LOWER(TRIM(c->>'type')) = 'functional') AS functional_without_courses,
-                    COUNT(*) FILTER (WHERE LOWER(TRIM(c->>'type')) = 'domain')     AS domain_without_courses
-                FROM role_mappings rm
-                JOIN recommended_courses rc2 ON rc2.role_mapping_id = rm.id
-                JOIN LATERAL jsonb_array_elements(COALESCE(rm.competencies, '[]'::jsonb)) AS c ON true
-                WHERE {where_sql}
-                  AND NOT EXISTS (
-                    SELECT 1 FROM recommended_courses rc
-                    CROSS JOIN LATERAL jsonb_array_elements(
-                        CASE WHEN jsonb_typeof(rc.filtered_courses) = 'array'
-                             THEN rc.filtered_courses ELSE '[]'::jsonb END
-                    ) AS fc
-                    CROSS JOIN LATERAL jsonb_array_elements(
-                        CASE WHEN jsonb_typeof(fc->'competencies') = 'array'
-                             THEN fc->'competencies' ELSE '[]'::jsonb END
-                    ) AS course_comp
-                    WHERE rc.role_mapping_id = rm.id
-                      AND REPLACE(LOWER(TRIM(course_comp->>'competencyAreaName')), 'behavioural', 'behavioral')
-                          = REPLACE(LOWER(TRIM(c->>'type')), 'behavioural', 'behavioral')
-                      AND LOWER(TRIM(course_comp->>'competencyThemeName')) = LOWER(TRIM(c->>'theme'))
-                      AND LOWER(TRIM(course_comp->>'competencySubThemeName')) = LOWER(TRIM(c->>'sub_theme'))
-                  )
-            """)
-
-            result = await db.execute(raw_sql, params)
-            row = result.fetchone()
-
-            behavioral = row.behavioral_without_courses if row and row.behavioral_without_courses else 0
-            functional = row.functional_without_courses if row and row.functional_without_courses else 0
-            domain = row.domain_without_courses if row and row.domain_without_courses else 0
-
-            return {
-                "competencies_without_courses": behavioral + functional + domain,
-                "behavioral_without_courses": behavioral,
-                "functional_without_courses": functional,
-                "domain_without_courses": domain,
-            }
-
-        except SQLAlchemyError as e:
-            print(f"Database error while fetching user gap analysis: {str(e)}")
-            await db.rollback()
-            raise DashboardQueryError("Database error while fetching user gap analysis") from e
+    # fetch_user_gap_analysis removed — merged into fetch_gap_analysis(user_id=...) above.
 
 
 # Initialize the CRUD utility for use across the application
