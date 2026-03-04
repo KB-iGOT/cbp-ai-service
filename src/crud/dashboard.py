@@ -398,6 +398,8 @@ class CRUDDashboard:
             stmt = select(
                 func.count(func.distinct(RoleMapping.id)).label("total_role_mappings"),
                 func.count(func.distinct(func.lower(RoleMapping.designation_name))).label("unique_role_mappings"),
+                func.count(func.distinct(RoleMapping.state_center_id)).label("ministry_count"),
+                func.count(func.distinct(RoleMapping.department_id)).label("department_count"),
                 func.sum(
                     select(func.count())
                     .select_from(func.jsonb_array_elements(func.coalesce(RoleMapping.competencies, text("'[]'::jsonb"))).alias("c"))
@@ -508,12 +510,27 @@ class CRUDDashboard:
             saved_rec_result = await db.execute(saved_rec_stmt)
             saved_recommended_courses_count = saved_rec_result.scalar() or 0
 
+            # --- Total Documents uploaded by this user ---
+            doc_stmt = select(func.count(func.distinct(Document.file_id))).where(
+                Document.uploader_id == user_id
+            )
+            if filters.date_range:
+                if filters.date_range.from_date:
+                    doc_stmt = doc_stmt.where(func.date(Document.created_at) >= filters.date_range.from_date)
+                if filters.date_range.to_date:
+                    doc_stmt = doc_stmt.where(func.date(Document.created_at) <= filters.date_range.to_date)
+            doc_result = await db.execute(doc_stmt)
+            total_documents = doc_result.scalar() or 0
+
             print(f"[User Dashboard Metrics] user_id={uid}, total_role_mappings={row.total_role_mappings if row else 0}")
             return {
                 "total_role_mappings": row.total_role_mappings if row else 0,
                 "unique_role_mappings": row.unique_role_mappings if row else 0,
                 "role_mappings_with_recommendations": role_mappings_with_recommendations,
                 "saved_recommended_courses_count": int(saved_recommended_courses_count),
+                "ministry_count": row.ministry_count if row else 0,
+                "department_count": row.department_count if row else 0,
+                "total_documents": total_documents,
                 "total_cbp_plan_count": total_cbp_plan_count,
                 "behavioral_competencies_count": row.behavioral_competency_count if row and row.behavioral_competency_count else 0,
                 "functional_competencies_count": row.functional_competency_count if row and row.functional_competency_count else 0,

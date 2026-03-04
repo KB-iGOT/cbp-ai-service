@@ -94,6 +94,9 @@ class UserDashboardMetricsResponse(BaseModel):
     unique_role_mappings: int
     role_mappings_with_recommendations: int
     saved_recommended_courses_count: int
+    ministry_count: int
+    department_count: int
+    total_documents: int
     total_cbp_plan_count: int
     behavioral_competencies_count: int
     functional_competencies_count: int
