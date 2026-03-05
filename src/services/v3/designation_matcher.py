@@ -69,7 +69,7 @@ class DesignationMatcher:
                 })
             else:
                 results.append({
-                    "igot_designation_name": name,
+                    "igot_designation_name": None,
                     "matched_designation": None,
                     "igot_id": None,
                     "is_matched": False
