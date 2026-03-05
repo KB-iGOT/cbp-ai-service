@@ -1,5 +1,5 @@
-from sqlalchemy import Integer, String, select, func, text, case
-from sqlalchemy.dialects.postgresql import array as pg_array
+from sqlalchemy import Integer, String, Text, select, func, text, case, cast
+from sqlalchemy.dialects.postgresql import array as pg_array, ARRAY
 from sqlalchemy.exc import SQLAlchemyError
 from collections import defaultdict
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -247,7 +247,7 @@ class CRUDDashboard:
 
             if filters.ministries and len(filters.ministries) > 0:
                 user_stmt = user_stmt.where(
-                    User.organization_ids.op('&&')(pg_array(filters.ministries))
+                    User.organization_ids.op('&&')(cast(filters.ministries, ARRAY(String)))
                 )
 
             if filters.date_range:
