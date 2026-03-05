@@ -182,15 +182,15 @@ class CRUDRecommendedCourse:
         """
 
         sql_query = text(f"""
-        (SELECT name, identifier,
+        (SELECT name, identifier, description, keywords, competencies_v6,
         MAX(1.0 - (embedding <=> '{embedding_values}'))
         AS distance FROM public.course_metadata_v2
-        GROUP BY name, identifier
-        ORDER BY distance DESC LIMIT 20)
+        GROUP BY name, identifier, description, keywords, competencies_v6
+        ORDER BY distance DESC LIMIT 40)
         UNION
-        SELECT name, identifier, 0 AS distance FROM public.course_metadata_v2 WHERE name LIKE '%Communication%'
+        SELECT name, identifier, description, keywords, competencies_v6, 0 AS distance FROM public.course_metadata_v2 WHERE name LIKE '%Communication%'
         UNION
-        SELECT name, identifier, 0 AS distance FROM public.course_metadata_v2 WHERE name LIKE '%GenAI%'
+        SELECT name, identifier, description, keywords, competencies_v6, 0 AS distance FROM public.course_metadata_v2 WHERE name LIKE '%GenAI%'
         """)
 
         async with sessionmanager.session() as db:

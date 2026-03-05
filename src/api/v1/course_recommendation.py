@@ -55,13 +55,73 @@ async def get_embedding(text: str) -> list:
         return []
 
 async def generate_vector_query(query):
-    logger.info(f"Generating vector query for this profile :: {query}")
-    user_part = types.Part.from_text(text=f"""
+    logger.info(f"Generating vector query for this profile :: {query[:200]}...")
+    user_part = types.Part.from_text(text=f"""  
     You are provided with the following information:
     {query}
 
     Return and generate a query based on the provided data that helps to fetch relevant courses from the vector database.""")
-    system_instruction = f"You are an expert vector query generator. Your task is to generate a query based on the provided data that helps to fetch relevant courses from the vector database."
+    system_instruction = f"""
+    You are an intelligent query generation engine for the Karmayogi Bharat (iGOT) platform, the digital learning ecosystem under Mission Karmayogi — National Programme for Civil Services Capacity Building.
+    
+    Your task is to generate a high-quality semantic vector search query based strictly on the given civil servant's profile.
+    The goal is to retrieve the most relevant Courses, Learning paths, and Training content from the vector database that align with the individual's role, responsibilities, activities, and competencies.
+
+    ### Input:
+    You will receive a structured user profile containing:
+    - Ministry/Organization Name
+    - Designation Name
+    - Wing/Division/Section
+    - Role & Responsibilities
+    - Activities
+    - Competencies
+  
+    ### Instructions:
+    1. Identify key job themes (e.g., training policy, coordination, FRACs, capacity building) based on profile context.
+    2. Extract inferred learning needs from wing/division/section, responsibilities, activities, & competencies.
+    3. Include behavioural, functional and domain competency terminology using both generic and contextual synonyms.
+    4. High level or group A & B , officials should get domain courses recommendation at least 60%
+    6. Add governance, policy, training framework and civil service capacity building keywords relevant to India’s Mission Karmayogi and iGOT platform principles.
+    7. Emphasize role-based, competency-based and outcomes-oriented search terms.
+    9. Do not output explanations – output only the final semantic search query text.
+
+    ### Tone:
+    Professional, governance-oriented, competency-focused.
+
+    ### Example Behavior:
+    If profile is:
+    "Ministry/Organization Name": "Ministry of Personnel, Public Grievances and Pensions",
+    "Designation Name": "Under Secretary",
+    "Department Name": "Department of Personnel & Training",
+    "Role & Responsibilities": [
+        "Handle general coordination within the Training Division.",
+        "Manage matters related to the National Training Policy and its implementation.",
+        "Oversee aspects of In-Service and Mid-Career Training Programmes.",
+        "Liaise with training institutions such as LBSNAA, IIPA, ISTM.",
+        "Support administration of the Training Division."
+    ],
+    "Activities": [
+        "Draft policy notes and circulars on training.",
+        "Process nominations for training programs.",
+        "Coordinate meetings and prepare minutes.",
+        "Handle parliamentary matters and RTI applications.",
+        "Monitor implementation of training schemes."
+    ],
+    "Competencies": [
+        {{"type":"Behavioural","theme":"Operational Excellence","sub_theme":"Planning & Prioritization"}},
+        {{"type":"Behavioural","theme":"Communication","sub_theme":"Verbal & Non-Verbal Fluency"}},
+        {{"type":"Functional","theme":"Government Program Formulation","sub_theme":"Implementation & Outreach"}},
+        {{"type":"Domain","theme":"Capacity Building","sub_theme":"National Training Policy (NTP)"}}
+    ]
+
+    The output query should include terms like:
+    "capacity building and training policy implementation for civil servants, coordination with central training institutions LBSNAA IIPA ISTM, national training policy and mid-career training programme frameworks, role-based learning paths on iGOT Karmayogi, policy drafting and administrative communication, planning and prioritization, effective stakeholder engagement, parliamentary matters and RTI handling in governance, operational excellence and outcome-oriented public service delivery courses"
+
+    Only return the search query text.
+    No headings.
+    No commentary.
+    No formatting.
+    """
 
     # New prompt for the LLM
     # user_part = types.Part.from_text(text=f"""
@@ -116,29 +176,42 @@ async def generate_vector_query(query):
     logger.info(f"Vector query generated successfully.")
     return response.text
 
-async def get_filtered_courses_by_llm(query, user_profile):
+async def get_filtered_courses_by_llm(courses, user_profile):
     
     logger.info("Filtering fetched courses by LLM")
     
     text1 = types.Part.from_text(text=f"""
-    Analyze the following list of courses and provide a relevancy percentage for each, indicating how relevant you believe it is to the given to the given role. The role is described by the following:
+    Analyze the following ROLE PROFILE and CANDIDATE COURSES FROM VECTOR SEARCH and provide a relevancy percentage for each, indicating how relevant you believe it is to the given to the given role. 
+
+    ### ROLE PROFILE TO ANALYZE:                                 
     {user_profile}
 
-    For each course, provide a 1-2 lines rationale explaining your assigned relevancy percentage. 
+    ### CANDIDATE COURSES FROM VECTOR SEARCH:
+    {courses}
+    
+    - Audit each course against the Role Profile.
+    - For each course, provide a 1-2 lines rationale explaining your assigned relevancy percentage. 
+    - Sort the output in descending order of Relevancy.
 
-    ## SORT
-    Sort the output in descending order of Relevancy.
-
-    ## INPUT
-    Here are the courses:
-    {query}
+    Return the data in the specified JSON format only.
     """)
+
+    # Your goal is to perform a high-precision audit of course recommendations. You must ensure that every recommended course directly enables a government official to perform their specific 'Activities' using the required 'Competencies'.
+    # Your expertise lies in mapping educational content to the "FRAC" framework (Framework of Roles, Activities, and Competencies).
+    
     si_text1 = f"""
-    You are an expert in analyzing professional development needs and recommending relevant training. 
+    You are an expert in analyzing professional development needs and recommending relevant course training for the National Programme for Civil Services Capacity Building (Mission Karmayogi). 
     Your task is to assess the relevancy of various courses to a specific role and learning objective within a government administration context.
     You are responsible for the competencies of civil servants.
+
+    ### MANDATORY WEIGHTING LOGIC:
+    1. For Group A & B officials, their capacity building must be weighted as follows:
+        - **Domain Courses (60% priority):** 
+
+    ### RATIONALE REQUIREMENTS:
+    The rationale must be 'Evidence-Based'. Explicitly mention which Roles & Responsibilities or Activities or Competency from the user profile the course satisfies.
     """
-    
+
     model = "gemini-2.5-flash"
     contents = [
         types.Content(
@@ -299,15 +372,31 @@ async def process_recommendation_task(recommendation_id: uuid.UUID, user_profile
         # 4. Vector DB Search (Sync DB call)
         result = await crud_recommended_course.fetch_vector_search_courses(embedding_values)
         courses = []
-        for name, identifier, distance in result:
+        
+        for name, identifier, description, keywords, competencies_v6, distance in result:
             courses.append({
                 "name": name,
                 "identifier": identifier,
-                "distance": distance
+                "description": description,
+                "keywords": keywords,
+                "distance": distance,
+                "competencies": competencies_v6 if competencies_v6 else None
             })
+        print(f"Vector search returned {len(result)} courses.")
+        def format_course_data(course):
+            return f"""
+            Course Name: {course['name']},
+            Course ID: {course['identifier']},
+            Description: {course['description']}, 
+            Keywords: {course['keywords']},
+            Competencies: {json.dumps(course['competencies'], indent=2) if course['competencies'] else 'N/A'},
+            ----------------------------------------
+            """
 
         # 5. Prepare LLM inputs
-        relevant_courses_prompt = [f"Course Name: {c['name']}, Course ID: {c['identifier']}" for c in courses]
+        relevant_courses_prompt = [
+            format_course_data(c) for c in courses
+        ]
         relevant_courses_prompt = "\n".join(relevant_courses_prompt)
         # 6. Run Concurrent LLM Tasks
         tasks = [get_filtered_courses_by_llm(relevant_courses_prompt, user_profile), get_general_courses_from_gemini(user_profile)]
@@ -400,19 +489,19 @@ async def generate_course_recommendations(
                 db.delete(existing_recommendation)
                 db.commit()
         
-        # user_profile = f"""
-        # Ministry/Organization Name: {role_mapping.state_center.name}
-        # Department Name: {role_mapping.department.name if role_mapping.department else 'N/A'}
-        # Designation Name: {role_mapping.designation_name}
-        # Roles & Responsibilities: {role_mapping.role_responsibilities}
-        # Activities: {role_mapping.activities}
-        # Competencies: {json.dumps(role_mapping.competencies, indent=2)}
-        # """
-
         user_profile = f"""
         Ministry/Organization Name: {role_mapping.state_center_name}
+        Department Name: {role_mapping.department_name if role_mapping.department_name else 'N/A'}
         Designation Name: {role_mapping.designation_name}
+        Roles & Responsibilities: {role_mapping.role_responsibilities}
+        Activities: {role_mapping.activities}
+        Competencies: {json.dumps(role_mapping.competencies, indent=2)}
         """
+
+        # user_profile = f"""
+        # Ministry/Organization Name: {role_mapping.state_center_name}
+        # Designation Name: {role_mapping.designation_name}
+        # """
 
         new_recommendation = await crud_recommended_course.create(
             db,
