@@ -3,6 +3,7 @@ import json
 import os
 from typing import Dict, List, Optional
 import uuid
+import httpx
 from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, Query, UploadFile, status
 from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -14,7 +15,7 @@ from ...models.role_mapping import ProcessingStatus, RoleMapping
 from ...models.user import User
 
 from ...prompts.prompts import DESIGNATION_ROLE_MAPPING_PROMPT
-from ...schemas.role_mapping import AddDesignationToRoleMappingRequest, ReorderDesignationsRequest, RoleMappingBackgroundResponse, RoleMappingResponse, RoleMappingUpdate, RoleMappingWithoutCBP
+from ...schemas.role_mapping import AddDesignationToRoleMappingRequest, DesignationmatchedResult, ReorderDesignationsRequest, RoleMappingBackgroundResponse, RoleMappingResponse, RoleMappingUpdate, RoleMappingWithoutCBP, matchedDesignationsRequest, MatchedDesignationDetail
 from ...services.role_mapping_service import role_mapping_service
 
 from ...core.database import get_db_session
@@ -321,6 +322,171 @@ async def generate_role_and_competencies(input_data):
     except Exception as e:
         print(f"Error generating role and responsibilities from Gemini: {e}")
         raise HTTPException(status_code=500, detail=f"Gemini error: {str(e)}")
+
+@router.post("/role-mapping/matched-designations", response_model=DesignationmatchedResult)
+async def matched_designations(
+    request: matchedDesignationsRequest,
+    db: AsyncSession = Depends(get_db_session),
+    current_user: User = Depends(get_current_active_user)
+):
+    """
+    Match role mapping designations against the iGOT portal.
+
+    On the first call the iGOT designation search API is queried; matched
+    igot_department_name and igot_department_id values are persisted to the DB.
+    On subsequent calls, rows that already have those values cached are served
+    directly from the DB — the iGOT API is only called for rows that are still
+    missing cached data.
+
+    Returns a breakdown of matched / unmatched designations with an overall status:
+    - **matched** – every designation was found in the portal
+    - **partially_matched** – some were found, some were not
+    - **unmatched** – none were found in the portal
+    """
+    try:
+        logger.info(
+            f"Validating designations for state_center_id: {request.state_center_id}, "
+            f"department_id: {request.department_id}"
+        )
+
+        # 1. Fetch all completed role mappings for the given scope
+        role_mappings = await crud_role_mapping.get_all_completed_mapping(
+            db, request.state_center_id, current_user.user_id, request.department_id
+        )
+
+        if not role_mappings:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="No completed role mappings found for the given state/center and department."
+            )
+
+        # 2. Split rows into cached (igot data already present) vs uncached
+        cached_rows = [rm for rm in role_mappings if rm.igot_department_name and rm.igot_department_id]
+        uncached_rows = [rm for rm in role_mappings if not rm.igot_department_name or not rm.igot_department_id]
+
+        # Build matched lookup from cached rows (unique by designation_name)
+        matched_lookup: dict = {}
+        matched_details: list = []
+        for rm in cached_rows:
+            if rm.designation_name not in matched_lookup:  # ← was missing this check
+                matched_lookup[rm.designation_name] = {
+                    "designation": rm.igot_department_name,
+                    "id": rm.igot_department_id
+                }
+            matched_details.append(MatchedDesignationDetail(  # ← use model directly
+                role_mapping_id=str(rm.id),
+                designation_name=rm.designation_name,
+                designation_id=rm.igot_department_id
+            ))
+
+        # 3. For uncached rows, collect unique designation names then call iGOT API
+        if uncached_rows:
+            seen_uncached: set = set()
+            uncached_designations: List[str] = []
+            for rm in uncached_rows:
+                if rm.designation_name and rm.designation_name not in seen_uncached:
+                    seen_uncached.add(rm.designation_name)
+                    uncached_designations.append(rm.designation_name)
+
+            logger.info(
+                f"{len(cached_rows)} row(s) served from cache; "
+                f"calling iGOT API for {len(uncached_designations)} uncached designation(s)"
+            )
+
+            designation_api_url = f"{settings.KB_BASE_URL}/api/designation/search"
+            payload = {
+                "filterCriteriaMap": {
+                    "status": "Active",
+                    "designation": uncached_designations
+                },
+                "requestedFields": ["designation", "id"],
+                "pageNumber": 0,
+                "pageSize": max(len(uncached_designations), 50)
+            }
+
+            async with httpx.AsyncClient(timeout=30.0) as http_client:
+                api_response = await http_client.post(
+                    designation_api_url,
+                    json=payload,
+                    headers={
+                        "Content-Type": "application/json",
+                        "Authorization": f"Bearer {settings.KB_AUTH_TOKEN}"
+                    }
+                )
+                api_response.raise_for_status()
+                api_data = api_response.json()
+
+            api_matched_data = (
+                api_data.get("result", {})
+                        .get("result", {})
+                        .get("data", [])
+            )
+            # Merge newly found entries into the lookup
+            for item in api_matched_data:
+                if item.get("designation") and item["designation"] not in matched_lookup:
+                    matched_lookup[item["designation"]] = item
+
+            # Persist igot values for uncached rows that are now matched
+            update_tasks = [
+                crud_role_mapping.update(
+                    rm.id,
+                    {
+                        "igot_department_name": matched_lookup[rm.designation_name]["designation"],
+                        "igot_department_id": str(matched_lookup[rm.designation_name].get("id", ""))
+                    }
+                )
+                for rm in uncached_rows
+                if rm.designation_name in matched_lookup
+            ]
+            if update_tasks:
+                await asyncio.gather(*update_tasks)
+                logger.info(f"Cached iGOT designation data for {len(update_tasks)} row(s)")
+
+            # Add matched_details for newly matched uncached rows
+            for rm in uncached_rows:
+                if rm.designation_name in matched_lookup:
+                    matched_details.append(MatchedDesignationDetail(
+                        role_mapping_id=str(rm.id),
+                        designation_name=rm.designation_name,
+                        designation_id=str(matched_lookup[rm.designation_name].get("id", ""))
+                    ))
+        else:
+            logger.info("All designations served from cache — skipping iGOT API call")
+
+        # 4. Build totals
+        seen_all: set = set()
+        unique_designations: List[str] = []
+        for rm in role_mappings:
+            if rm.designation_name and rm.designation_name not in seen_all:
+                seen_all.add(rm.designation_name)
+                unique_designations.append(rm.designation_name)
+
+        total = len(unique_designations)
+        matched_count = len(matched_details)
+
+        logger.info(f"Designation matching complete: {matched_count}/{total} matched")
+
+        return DesignationmatchedResult(
+            total_designations=total,
+            matched_count=matched_count,
+            matched_details=matched_details
+        )
+
+    except HTTPException:
+        raise
+    except httpx.HTTPStatusError as e:
+        logger.error(f"iGOT designation API returned an error: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"iGOT designation search API error: {e.response.status_code}"
+        )
+    except Exception as e:
+        logger.error(f"Error validating designations: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to matched designations"
+        )
+
 
 @router.post("/role-mapping/add-designation", response_model=RoleMappingWithoutCBP, status_code=status.HTTP_201_CREATED)
 async def add_designation_to_role_mapping(

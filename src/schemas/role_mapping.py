@@ -4,7 +4,11 @@ from typing import Any, Dict, List, Optional
 from datetime import datetime
 import uuid
 
-# Role Mapping Schema
+
+class MatchedDesignationDetail(BaseModel):
+    role_mapping_id: str
+    designation_name: str
+    designation_id: str
 
 class OrgType(str, Enum):
     ministry = "ministry"
@@ -66,6 +70,8 @@ class RoleMappingResponse(RoleMappingBase):
     activities: List[str] = Field(default=[], description="List of activities")
     competencies: List[Competency] = Field(default=[], description="List of competencies")
     sort_order: Optional[int] = Field(None, description="Sort order for hierarchical arrangement")
+    igot_department_name: Optional[str] = Field(None, description="Designation name as it exists in the iGOT portal")
+    igot_department_id: Optional[str] = Field(None, description="Designation ID from the iGOT portal")
     created_at: datetime = Field(..., description="Creation timestamp")
     updated_at: datetime = Field(..., description="Last update timestamp")
     
@@ -89,6 +95,8 @@ class RoleMappingWithoutCBP(RoleMappingBase):
     activities: List[str] = Field(default=[], description="List of activities")
     competencies: List[Competency] = Field(default=[], description="List of competencies")
     sort_order: Optional[int] = Field(None, description="Sort order for hierarchical arrangement")
+    igot_department_name: Optional[str] = Field(None, description="Designation name as it exists in the iGOT portal")
+    igot_department_id: Optional[str] = Field(None, description="Designation ID from the iGOT portal")
     created_at: datetime = Field(..., description="Creation timestamp")
     updated_at: datetime = Field(..., description="Last update timestamp")
     class Config:
@@ -130,3 +138,16 @@ class ReorderDesignationsRequest(BaseModel):
     state_center_id: str = Field(..., description="ID of the associated state/center")
     department_id: Optional[str] = Field(None, description="ID of the associated department")
     designations: List[DesignationOrderItem] = Field(..., min_length=1, description="List of designations with their new sort orders")
+
+
+class matchedDesignationsRequest(BaseModel):
+    """Schema for validating role mapping designations against the iGOT portal"""
+    state_center_id: str = Field(..., description="ID of the state/center whose role mappings to matched")
+    department_id: Optional[str] = Field(None, description="Optional department ID to narrow the scope")
+
+
+class DesignationmatchedResult(BaseModel):
+    """Response schema for designation matched result"""
+    total_designations: int = Field(..., description="Total unique designations from role mappings")
+    matched_count: int = Field(..., description="Number of designations found in the iGOT portal")
+    matched_details: List[MatchedDesignationDetail] = Field(default_factory=list, description="List of matched designation details")
