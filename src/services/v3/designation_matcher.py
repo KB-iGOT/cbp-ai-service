@@ -65,7 +65,6 @@ class DesignationMatcher:
                     "igot_designation_name": name,
                     "matched_designation": matched_map[name]["designation"],
                     "igot_id": str(matched_map[name].get("id", "")),
-                    "similarity_score": 1.0,
                     "is_matched": True
                 })
             else:
@@ -73,7 +72,6 @@ class DesignationMatcher:
                     "igot_designation_name": name,
                     "matched_designation": None,
                     "igot_id": None,
-                    "similarity_score": 0.0,
                     "is_matched": False
                 })
 

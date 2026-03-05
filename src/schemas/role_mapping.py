@@ -144,15 +144,11 @@ class matchedDesignationsRequest(BaseModel):
     """Schema for validating role mapping designations against the iGOT portal"""
     state_center_id: str = Field(..., description="ID of the state/center whose role mappings to matched")
     department_id: Optional[str] = Field(None, description="Optional department ID to narrow the scope")
-    force_rematch: bool = Field(False, description="Force re-matching even if already matched and cached in DB")
 
 
 class DesignationmatchedResult(BaseModel):
     """Response schema for designation matched result"""
     total_designations: int = Field(..., description="Total unique designations from role mappings")
     matched_count: int = Field(..., description="Number of designations found in the iGOT portal")
-    # unmatched_count: int = Field(..., description="Number of designations not found in the iGOT portal")
-    already_matched: bool = Field(False, description="True when all results were served from cache (no iGOT API call needed)")
-    force_rematch_applied: bool = Field(False, description="True when force_rematch was requested")
+    already_matched: bool = Field(False, description="True when all designations were already matched in the DB")
     matched_details: List[MatchedDesignationDetail] = Field(default_factory=list, description="List of matched designation details")
-    # unmatched_designations: List[str] = Field(default_factory=list, description="List of designation names that were not found in the iGOT portal")

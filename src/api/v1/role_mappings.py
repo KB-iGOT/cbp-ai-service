@@ -333,16 +333,15 @@ async def matched_designations(
     """
     Match role mapping designations against the iGOT Designation Master.
 
-    - On the first call (or when `force_rematch=false`), rows that already have
-      `igot_department_name` + `igot_department_id` cached in the DB are served
-      directly; only rows without existing matches trigger an iGOT API call.
+    - On the first call, rows that already have 'igot_department_name` + `igot_department_id`
+      fields cached in the DB are served directly; only rows without existing matches trigger an iGOT API call.
     - When `force_rematch=true`, all rows are re-matched against the iGOT API
       regardless of cached values, and the DB is updated with fresh results.
     """
     try:
         logger.info(
             f"Matching designations for state_center_id={request.state_center_id}, "
-            f"department_id={request.department_id}, force_rematch={request.force_rematch}"
+            f"department_id={request.department_id}"
         )
 
         # 1. Fetch all completed role mappings for the given scope
@@ -356,13 +355,9 @@ async def matched_designations(
                 detail="No completed role mappings found for the given state/center and department."
             )
 
-        # 2. Split already_matched_records vs new_matches rows (force_rematch treats all as new_matches)
-        if request.force_rematch:
-            already_matched_records: List = []
-            new_matches: List = list(role_mappings)
-        else:
-            already_matched_records = [rm for rm in role_mappings if rm.igot_department_name and rm.igot_department_id]
-            new_matches = [rm for rm in role_mappings if not rm.igot_department_name or not rm.igot_department_id]
+        # 2. Split already_matched_records vs new_matches rows
+        already_matched_records = [rm for rm in role_mappings if rm.igot_department_name and rm.igot_department_id]
+        new_matches = [rm for rm in role_mappings if not rm.igot_department_name or not rm.igot_department_id]
 
         # 3. Build lookup + matched_details from already_matched_records
         matched_lookup: dict = {}
@@ -451,11 +446,8 @@ async def matched_designations(
         return DesignationmatchedResult(
             total_designations=total,
             matched_count=len(matched_details),
-            # unmatched_count=len(unmatched_names),
             already_matched=all_already_matched,
-            force_rematch_applied=request.force_rematch,
-            matched_details=matched_details,
-            # unmatched_designations=unmatched_names
+            matched_details=matched_details
         )
 
     except HTTPException:
