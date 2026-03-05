@@ -247,7 +247,7 @@ class CRUDDashboard:
 
             if filters.ministries and len(filters.ministries) > 0:
                 user_stmt = user_stmt.where(
-                    User.organization_ids.op('&&')(cast(filters.ministries, ARRAY(String)))
+                    cast(User.organization_ids, ARRAY(Text)).op('&&')(cast(pg_array(filters.ministries), ARRAY(Text)))
                 )
 
             if filters.date_range:
