@@ -1,4 +1,4 @@
-from sqlalchemy import Integer, String, select, func, text
+from sqlalchemy import Integer, String, select, func, text, case
 from sqlalchemy.dialects.postgresql import array as pg_array
 from sqlalchemy.exc import SQLAlchemyError
 from collections import defaultdict
@@ -135,19 +135,34 @@ class CRUDDashboard:
                 func.count(func.distinct(RoleMapping.department_id)).label("department_count"),
                 func.sum(
                     select(func.count())
-                    .select_from(func.jsonb_array_elements(func.coalesce(RoleMapping.competencies, text("'[]'::jsonb"))).alias("c"))
+                    .select_from(func.jsonb_array_elements(
+                        case(
+                            (func.jsonb_typeof(RoleMapping.competencies) == 'array', RoleMapping.competencies),
+                            else_=text("'[]'::jsonb")
+                        )
+                    ).alias("c"))
                     .where(text("c->>'type' = 'Behavioral'"))
                     .scalar_subquery()
                 ).label("behavioral_competency_count"),
                 func.sum(
                     select(func.count())
-                    .select_from(func.jsonb_array_elements(func.coalesce(RoleMapping.competencies, text("'[]'::jsonb"))).alias("c"))
+                    .select_from(func.jsonb_array_elements(
+                        case(
+                            (func.jsonb_typeof(RoleMapping.competencies) == 'array', RoleMapping.competencies),
+                            else_=text("'[]'::jsonb")
+                        )
+                    ).alias("c"))
                     .where(text("c->>'type' = 'Functional'"))
                     .scalar_subquery()
                 ).label("functional_competency_count"),
                 func.sum(
                     select(func.count())
-                    .select_from(func.jsonb_array_elements(func.coalesce(RoleMapping.competencies, text("'[]'::jsonb"))).alias("c"))
+                    .select_from(func.jsonb_array_elements(
+                        case(
+                            (func.jsonb_typeof(RoleMapping.competencies) == 'array', RoleMapping.competencies),
+                            else_=text("'[]'::jsonb")
+                        )
+                    ).alias("c"))
                     .where(text("c->>'type' = 'Domain'"))
                     .scalar_subquery()
                 ).label("domain_competency_count")
@@ -414,19 +429,34 @@ class CRUDDashboard:
                 func.count(func.distinct(RoleMapping.department_id)).label("department_count"),
                 func.sum(
                     select(func.count())
-                    .select_from(func.jsonb_array_elements(func.coalesce(RoleMapping.competencies, text("'[]'::jsonb"))).alias("c"))
+                    .select_from(func.jsonb_array_elements(
+                        case(
+                            (func.jsonb_typeof(RoleMapping.competencies) == 'array', RoleMapping.competencies),
+                            else_=text("'[]'::jsonb")
+                        )
+                    ).alias("c"))
                     .where(text("c->>'type' = 'Behavioral'"))
                     .scalar_subquery()
                 ).label("behavioral_competency_count"),
                 func.sum(
                     select(func.count())
-                    .select_from(func.jsonb_array_elements(func.coalesce(RoleMapping.competencies, text("'[]'::jsonb"))).alias("c"))
+                    .select_from(func.jsonb_array_elements(
+                        case(
+                            (func.jsonb_typeof(RoleMapping.competencies) == 'array', RoleMapping.competencies),
+                            else_=text("'[]'::jsonb")
+                        )
+                    ).alias("c"))
                     .where(text("c->>'type' = 'Functional'"))
                     .scalar_subquery()
                 ).label("functional_competency_count"),
                 func.sum(
                     select(func.count())
-                    .select_from(func.jsonb_array_elements(func.coalesce(RoleMapping.competencies, text("'[]'::jsonb"))).alias("c"))
+                    .select_from(func.jsonb_array_elements(
+                        case(
+                            (func.jsonb_typeof(RoleMapping.competencies) == 'array', RoleMapping.competencies),
+                            else_=text("'[]'::jsonb")
+                        )
+                    ).alias("c"))
                     .where(text("c->>'type' = 'Domain'"))
                     .scalar_subquery()
                 ).label("domain_competency_count"),
