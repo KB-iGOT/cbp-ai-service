@@ -69,11 +69,11 @@ Before finalizing, confirm:
 [END OF INPUT DATA]
 """
 
-DESIGNATION_EXTRACTION_PROMPT_UPDATED = """
+DESIGNATION_EXTRACTION_PROMPT_V2 = """
 You are an expert in analyzing Government of India organizational structures and extracting designation hierarchies.
 
 ## Task:
-Extract ALL unique designations EXACTLY as mentioned in the provided input data and organize them hierarchically.
+Extract ALL unique designations from the provided input data and organize them hierarchically.
 
 ## Inputs:
 - **Primary reference document Summaries:**
@@ -90,125 +90,124 @@ Extract ALL unique designations EXACTLY as mentioned in the provided input data 
    - Other ministries/departments
    - External references or documentation
    - Common administrative positions not mentioned in input
-
 3. **If a designation is not in the input data, DO NOT include it - even if it seems logical or standard**
+4. If the provided input data contains absolutely NO designations, return an empty list for the designations array. DO NOT force or invent designations to fill the output.
 
 ## Extraction Rules:
 
-1. **Exact Designation Capture:**
-   - Copy designations EXACTLY as written in the source documents
-   - Preserve original spelling, capitalization, and formatting
-   - If a designation appears in multiple forms (e.g., "Joint Secretary" vs "Jt. Secretary"), list all variations
-   - Mark which variation is most frequently used in the source
-   - DO NOT standardize or normalize unless the same designation appears in clearly identical contexts
+1. **Comprehensive Coverage (HIGHEST PRIORITY):**
+   - Extract UNIQUE designations only from *List of Designations along with their Wings / Divisions / Sections* mentioned in the input data. If such a list is not explicitly provided, extract from the entire input data.
+   - Copy designations EXACTLY as written in the source documents - preserve original spelling, abbreviations, and suffixes
+   - **NEVER merge, combine, or consolidate two designations into one**, even if they appear similar
+   - Treat each of these as SEPARATE designations (examples):
+     - "Assistant Director (Admin)" ≠ "Assistant Director (Technical)"
+     - "Block Development Officer" ≠ "District Development Officer"
+     - "Senior Clerk" ≠ "Clerk"
+     - Designations with different parenthetical qualifiers are ALWAYS distinct
+     - Designations at different administrative levels are ALWAYS distinct
 
-2. **Comprehensive Coverage:**
-   - Extract EVERY designation mentioned across all input sources
-   - Scan each document section systematically
-   - Include both permanent and contractual positions if explicitly mentioned
-   - Include acting/additional charge positions if stated
+2. **Anti-Merging Safeguard:**
+   - If two designations share a common base title but differ in ANY way (suffix, prefix, wing, section, division), they MUST be listed as separate entries
+   - When in doubt about whether two designations are the same, list them SEPARATELY
+   - Do apply synonym resolution - "Jt. Secretary" and "Joint Secretary" should both appear if both are in the source within the same wing/division/section
 
 3. **Hierarchical Classification:**
-   - Organize designations from highest to lowest seniority BASED ONLY on:
-     * Explicit hierarchy statements in the input data
-     * Reporting relationships mentioned in the documents
-     * Organizational charts if provided
-   - DO NOT assume hierarchy based on external knowledge
-   - If hierarchy is unclear from input data, mark as "hierarchy uncertain"
-   - Group by administrative levels ONLY if this structure is evident in the input
+   - Organize designations from highest to lowest seniority
    - Assign a preliminary hierarchy score (sort_order: 1 = highest)
+   - **Hierarchical Sorting**: Starting from the highest designation (e.g., Secretary) and proceeding down to junior-most staff. Sorting `sort_order` strictly increasing integer starting from 1 (e.g., 1, 2, 3, 4, 5...), without skipping or jumping numbers. The sequence must follow numeric order, not string/lexical order.
+   - If the SAME base title appears at multiple levels (e.g., "Superintendent" at District vs Block), create SEPARATE entries for each level
 
-4. **Mandatory Verification Steps:**
-   BEFORE finalizing extraction, complete this checklist:
+4. **Context Capture:**
+   - For each designation, note the primary document section where it was mentioned
+
+5. **Wing/Division/Section Context**
+- For each designation, populate `wing_division_section` with the organizational unit, wing, division, section, OR administrative level where it was mentioned.
+- Use the EXACT organizational context from the source document. Do not invent organizational units.
+- If no specific unit is mentioned, use the administrative level (e.g., "State HQ", "District Level", "Block Level", "Field Level").
+- If multiple contexts apply, use the most specific one.
    
-   a) **Document Coverage Check:**
-      - [ ] Every section of primary reference document has been reviewed
-      - [ ] All mentions of designations have been captured
-      - [ ] Cross-referenced all input sources for completeness
-   
-   b) **Accuracy Verification:**
-      - [ ] Each designation copied exactly as it appears in source
-      - [ ] No designations added from external knowledge
-      - [ ] All variations of same designation are noted
-      - [ ] Source location documented for each designation
-   
-   c) **Duplication Check:**
-      - [ ] No designation appears multiple times in final list
-      - [ ] Variations clearly marked and linked
-      - [ ] Merged only when contextually identical
-   
-   d) **Hierarchy Validation:**
-      - [ ] Hierarchy based solely on input data evidence
-      - [ ] Uncertain hierarchies clearly flagged
-      - [ ] No assumptions made from standard government structures
 
-5. **Context Capture:**
-   - For each designation, note:
-     * Exact document section/page where mentioned
-     * Brief context about the role (1-2 sentences max, ONLY from input data)
-     * Reporting relationships if explicitly stated in documents
-     * Frequency of mention across documents
-   - Mark designations with insufficient context as "requires clarification"
+**REMEMBER: It is far better to include a seemingly redundant designation than to accidentally merge two distinct roles. When in doubt, keep them separate.**
 
-6. **Quality Assurance Instructions:**
-   - After extraction, re-read the input data completely
-   - Verify each extracted designation against source
-   - Flag any designation you're uncertain about
-   - If input data is ambiguous or incomplete, state this clearly
-   - DO NOT fill gaps with assumptions
+For example, suppose you receive the following input data:
+```
+Ministry/State Name: Government of Maharashtra
+Department/Organisation Name: Department of Rural Development
 
-## Output Format (JSON):
+Primary reference document summaries:
+<document_summary_1>
+   The Department is headed by the Principal Secretary at the State HQ. Under him, there are two Joint Secretaries: Joint Secretary (Administration) and Joint Secretary (Technical). The State HQ also has a Senior Clerk and a Clerk in the Administration wing.
+</document_summary_1>
+<document_summary_2>
+   At the district level, the District Rural Development Agency (DRDA) is headed by a Project Director. Under the Project Director, there is a District Development Officer. Moving to the block level, the operations are managed by the Block Development Officer (BDO). At the village level, the Village Level Worker handles field operations.
+</document_summary_2>
 
-{output_format}
-
-## Additional Output Requirements:
-
-Include a verification section:
-```json
-{
-  "verification": {
-    "total_designations_extracted": <number>,
-    "sources_reviewed": [<list of document sections>],
-    "variations_found": [<list of designation variations>],
-    "hierarchy_confidence": "<high/medium/low>",
-    "missing_information": [<list of gaps in input data>],
-    "assumptions_made": "NONE - All data from input only",
-    "external_references_used": "NONE"
-  }
-}
+```
+## Expected Output:
+Here is how you should generate an answer based on receive input data:
+```
+{{ 
+   "designations": [
+      {{ 
+         "sort_order": 1, 
+         "designation": "Principal Secretary",
+         "wing_division_section": "State HQ"
+      }},
+      {{
+         "sort_order": 2, 
+         "designation": "Joint Secretary (Administration)",
+         "wing_division_section": "Administration"
+      }},
+      {{
+         "sort_order": 3, 
+         "designation": "Joint Secretary (Technical)",
+         "wing_division_section": "Technical"
+      }},
+      {{
+         "sort_order": 4, 
+         "designation": "Project Director",
+         "wing_division_section": "District Rural Development Agency (DRDA)"
+      }},
+      {{
+         "sort_order": 5, 
+         "designation": "District Development Officer",
+         "wing_division_section": "District Rural Development Agency (DRDA)"
+      }},
+      {{
+         "sort_order": 6, 
+         "designation": "Block Development Officer (BDO)",
+         "wing_division_section": "Block Level"
+      }},
+      {{
+         "sort_order": 7, 
+         "designation": "Senior Clerk",
+         "wing_division_section": "State HQ / Administration"
+      }},
+      {{
+         "sort_order": 8, 
+         "designation": "Clerk",
+         "wing_division_section": "State HQ / Administration"
+      }},
+      {{
+         "sort_order": 9, 
+         "designation": "Village Level Worker",
+         "wing_division_section": "Village Level"
+      }}
+   ] 
+}}
 ```
 
-## Final Verification Requirements:
-Before submitting, confirm:
-- ✓ Every designation is directly traceable to input data
-- ✓ Zero designations added from external knowledge
-- ✓ Exact text matching between extraction and source
-- ✓ All document sections reviewed and documented
-- ✓ Hierarchy based only on explicit input data evidence
-- ✓ Variations and duplicates properly handled
-- ✓ Uncertain elements clearly flagged
-
-## What NOT to do:
-❌ Add common government positions not in the input
-❌ Assume standard hierarchies from general knowledge
-❌ Normalize designations without source evidence
-❌ Fill missing information from external sources
-❌ Invent reporting structures not stated in documents
-❌ Use abbreviations not present in original text
-
-[START OF INPUT DATA]
-### Primary reference document Summaries:
-{primary_summary}
-
-### Ministry/State Name:
-{organization_name}
-
-### Department/Organisation Name:
-{department_name}
-
-[END OF INPUT DATA]
-
-**REMINDER: Extract ONLY from the input data above. No external knowledge. No assumptions. Exact designations only.**
+## OUTPUT FORMAT
+Provide the output strictly as a valid JSON object matching the schema below. Do not include introductory text, explanations, or markdown outside of the JSON block.
+{{ 
+   "designations": [
+      {{ 
+         "sort_order": integer, 
+         "designation": "string",
+         "wing_division_section": "string"
+      }}
+   ] 
+}}
 """
 
 ROLE_MAPPING_PROMPT_CENTRE_V3 ="""

@@ -5,9 +5,14 @@ from src.crud.dashboard import DashboardQueryError, InvalidTrendGranularity
 
 from ...models.user import User
 
-from ...schemas.dashboard import CBPSummaryTrendRequest, CBPSummaryTrendResponse
+from ...schemas.dashboard import (
+    CBPSummaryTrendRequest, CBPSummaryTrendResponse,
+    CBPDashboardFilters, CBPDashboardMetricsResponse,
+    GapAnalysisFilters, GapAnalysisResponse,
+    UserDashboardFilters, UserDashboardMetricsResponse, UserGapAnalysisResponse
+)
 
-from ...api.dependencies import require_role
+from ...api.dependencies import require_role, get_current_active_user
 from ...core.database import get_db_session
 from ...crud.dashboard import crud_dashboard
 
@@ -22,7 +27,7 @@ async def cbp_summary_trends(
     db: AsyncSession = Depends(get_db_session),
     current_user: User = Depends(require_role("Super Admin"))
 ):
-    logger.info(f"Recieved request for CBP summary: {request.model_dump()}")
+    logger.info(f"Received request for CBP summary: {request.model_dump()}")
     try:
         return await crud_dashboard.fetch_cbp_summary_trends(db, request.filters)
     except InvalidTrendGranularity as e:
@@ -40,4 +45,92 @@ async def cbp_summary_trends(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Unexpected error occurred while generating CBP summary trends"
+        )
+
+@router.post("/cbp-dashboard-metrics", response_model=CBPDashboardMetricsResponse, status_code=status.HTTP_200_OK)
+async def get_cbp_dashboard_metrics(
+    filters: CBPDashboardFilters,
+    db: AsyncSession = Depends(get_db_session),
+    current_user: User = Depends(require_role("Super Admin"))
+):
+    logger.info(f"Received request for CBP dashboard metrics: {filters.model_dump()}")
+    try:
+        return await crud_dashboard.fetch_cbp_dashboard_metrics(db, filters)
+    except DashboardQueryError as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e)
+        )
+    except Exception as e:
+        logger.exception("Error while fetching CBP dashboard metrics:")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Unexpected error occurred while fetching CBP dashboard metrics"
+        )
+
+@router.post("/gap-analysis", response_model=GapAnalysisResponse, status_code=status.HTTP_200_OK)
+async def get_gap_analysis(
+    filters: GapAnalysisFilters,
+    db: AsyncSession = Depends(get_db_session),
+    current_user: User = Depends(require_role("Super Admin"))
+):
+    logger.info(f"Received request for gap analysis: {filters.model_dump()}")
+    try:
+        return await crud_dashboard.fetch_gap_analysis(db, filters)
+    except DashboardQueryError as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e)
+        )
+    except Exception as e:
+        logger.exception("Error while computing gap analysis:")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Unexpected error occurred while computing gap analysis"
+        )
+
+
+# ── User-scoped endpoints (accessible to any authenticated user) ──────────────
+
+@router.post("/my-dashboard-metrics", response_model=UserDashboardMetricsResponse, status_code=status.HTTP_200_OK)
+async def get_my_dashboard_metrics(
+    filters: UserDashboardFilters,
+    db: AsyncSession = Depends(get_db_session),
+    current_user: User = Depends(get_current_active_user)
+):
+    logger.info(f"Received request for user dashboard metrics: user_id={current_user.user_id}")
+    try:
+        return await crud_dashboard.fetch_user_dashboard_metrics(db, current_user.user_id, filters)
+    except DashboardQueryError as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e)
+        )
+    except Exception as e:
+        logger.exception("Error while fetching user dashboard metrics:")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Unexpected error occurred while fetching your dashboard metrics"
+        )
+
+
+@router.post("/my-gap-analysis", response_model=UserGapAnalysisResponse, status_code=status.HTTP_200_OK)
+async def get_my_gap_analysis(
+    filters: UserDashboardFilters,
+    db: AsyncSession = Depends(get_db_session),
+    current_user: User = Depends(get_current_active_user)
+):
+    logger.info(f"Received request for user gap analysis: user_id={current_user.user_id}")
+    try:
+        return await crud_dashboard.fetch_gap_analysis(db, filters, user_id=current_user.user_id)
+    except DashboardQueryError as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e)
+        )
+    except Exception as e:
+        logger.exception("Error while computing user gap analysis:")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Unexpected error occurred while computing your gap analysis"
         )

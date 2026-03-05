@@ -44,8 +44,8 @@ class CompetencyGrouper:
     def _format_competency_label(cls, comp: Dict[str, Any]) -> str:
         """Format competency label from theme and sub-theme"""
         # Handle both naming conventions
-        theme = comp.get('competencyThemeName') or comp.get('theme')
-        sub_theme = comp.get('competencySubThemeName') or comp.get('sub_theme')
+        theme = (comp.get('competencyThemeName') or comp.get('theme') or '').strip()
+        sub_theme = (comp.get('competencySubThemeName') or comp.get('sub_theme') or '').strip()
         return f"{theme} - {sub_theme}"
     
     @classmethod

@@ -3,6 +3,7 @@ from typing import  List, Optional
 from datetime import datetime
 import uuid
 from ..schemas.course_suggestion import CompetencyBase
+from ..core.configs import settings
 
 # New Course API schema
 class UserAddedCourseBase(BaseModel):
@@ -11,7 +12,7 @@ class UserAddedCourseBase(BaseModel):
     name: str = Field(..., min_length=1, max_length=500, description="Full name of the course")
     platform: str = Field(..., min_length=1, max_length=100, description="Platform where the course is hosted")
     public_link: str = Field(..., description="Public URL to the specific course")
-    relevancy: Optional[int] = Field(None, ge=0, le=100, description="Relevancy score from 0 to 100")
+    relevancy: Optional[int] = Field(settings.DEFAULT_RELEVANCY_SCORE, ge=0, le=100, description="Relevancy score from 0 to 100")
     rationale: Optional[str] = Field(None, description="Brief explanation of why this course is essential")
     language: Optional[str] = Field(None, max_length=10, description="Language of the course (e.g., en, hi)")
     competencies: Optional[List[CompetencyBase]] = Field(None, description="Array of competency objects")

@@ -11,6 +11,7 @@ from ...schemas.role_mapping import OrgType
 from ...core.configs import settings
 from ...prompts.v3.prompts import (
     DESIGNATION_EXTRACTION_PROMPT,
+    DESIGNATION_EXTRACTION_PROMPT_V2,
     ROLE_MAPPING_PROMPT_CENTRE_V3, 
     ROLE_MAPPING_PROMPT_STATE_V3
 )
@@ -62,12 +63,15 @@ class Designation(BaseModel):
         description="Hierarchical position, starting from 1 (highest) and incrementing sequentially"
     )
     designation: str = Field(
-        description="The official designation or job title"
+        description="Exact official designation or job title"
+    )
+    wing_division_section: str = Field(
+        description="Exact wing/division/section the designation belongs to, or org unit / administrative from source document"
     )
 
 class DesignationExtractionResponse(BaseModel):
     designations: List[Designation] = Field(
-        description="Complete list of all extracted designations sorted by hierarchy"
+        description="List of extracted unique designations sorted by hierarchy"
     )
 
 class RoleMappingService:
@@ -102,31 +106,31 @@ class RoleMappingService:
         """
         try:
             logger.info(f"PASS 1: Extracting designations for {organization_data.get('organization_name')}")
-            
-            extraction_output_format = {
-                "designations": [
-                    {
-                        "sort_order": "integer",
-                        "designation": "string"
-                    }
-                ]
-            }
-            
-            base_prompt = DESIGNATION_EXTRACTION_PROMPT.format(
-                primary_summary=organization_data.get('docs_summary'),
-                organization_name=organization_data.get('organization_name'),
-                department_name=organization_data.get('department_name'),
-                output_format=json.dumps(extraction_output_format, indent=2)
-            )
-            
+                    
             contents = [
                 types.Content(
                     role="user",
-                    parts=[types.Part.from_text(text=base_prompt)]
+                    parts=[types.Part.from_text(
+                        text="""
+                        Here is the input Data:
+                        Ministry/State Name: {ORGANIZATION_NAME}
+                        Department/Organisation Name: {DEPARTMENT_NAME}
+
+                        Primary reference document Summaries:
+                        {DOCUMENT_SUMMARIES}
+
+                        Extract ALL unique designations from the provided input data and organize them hierarchically based on the system prompt.
+                        """.format(
+                                ORGANIZATION_NAME=organization_data.get('organization_name'),
+                                DEPARTMENT_NAME=organization_data.get('department_name'),
+                                DOCUMENT_SUMMARIES=organization_data.get('docs_summary', 'N/A')
+                            )
+                    )]
                 )
             ]
             
             generate_content_config = types.GenerateContentConfig(
+                system_instruction=DESIGNATION_EXTRACTION_PROMPT_V2,
                 temperature=0.3,  # Lower temperature for extraction accuracy
                 response_mime_type="application/json",
                 response_schema=DesignationExtractionResponse.model_json_schema()
@@ -284,13 +288,17 @@ class RoleMappingService:
         return combined_results
     
     async def get_documents_summary(self, user_id, state_center_id, department_id=None) -> str:
-        """Get document summaries for the organization"""
+        """Get document summaries for the organization formatted as numbered document_summary tags"""
         _, retrieved_docs = await crud_document.get_all_documents_async(user_id, state_center_id, department_id)
         if not retrieved_docs:
-            return []
+            return ""
         
-        docs_content = "\n\n".join(doc.summary_text for doc in retrieved_docs)
-        return docs_content
+        parts = []
+        for idx, doc in enumerate(retrieved_docs, start=1):
+            summary = (doc.summary_text or "").strip()
+            parts.append(f"<document_summary_{idx}>\n   {summary}\n</document_summary_{idx}>")
+        
+        return "\n\n".join(parts)
     
     async def generate_role_mapping(
         self,
@@ -347,7 +355,7 @@ class RoleMappingService:
             if not designations:
                 logger.warning("No designations extracted in PASS 1")
                 return []
- 
+            
             logger.info(f"PASS 1 SUCCESS: {len(designations)} designations extracted")
 
             # ============ PASS 2: FRAC GENERATION IN BATCHES ============
