@@ -415,28 +415,36 @@ async def matched_designations(
         matcher = DesignationMatcher()
         match_results = await matcher.match_designations(designation_names)
 
-        # 7. Create mapping dict for quick lookup
+        # 7. Prepare bulk updates
         match_dict = {m["igot_designation_name"]: m for m in match_results}
+        bulk_updates = []
 
-        # 8. Update unmatched records
-        update_tasks = []
         for rm in records_to_match:
             match_data = match_dict.get(rm.designation_name)
             if not match_data:
                 continue
 
-            update_data = {}
+            update_item = {
+                "role_mapping_id": rm.id,
+                "igot_designation_name": rm.designation_name,
+                "designation_match_score": match_data["similarity_score"],
+                "is_designation_matched": match_data["is_matched"]
+            }
+
             if match_data["is_matched"]:
-                update_data["igot_department_name"] = match_data["matched_designation"]
-                update_data["igot_department_id"] = str(match_data["igot_id"])
+                update_item["designation_name"] = match_data["matched_designation"]
+                update_item["igot_department_id"] = str(match_data["igot_id"])
+            else:
+                update_item["igot_department_id"] = None
+
+            bulk_updates.append(update_item)
+
+        # 8. Execute bulk update
+        updated_count = 0
+        if bulk_updates:
+            updated_count = await crud_role_mapping.bulk_update_designation_matching(db, bulk_updates)
+            logger.info(f"Bulk updated {updated_count} records")
             
-            if update_data:
-                update_tasks.append(crud_role_mapping.update(rm.id, update_data))
-
-        if update_tasks:
-            await asyncio.gather(*update_tasks)
-            logger.info(f"Updated {len(update_tasks)} records with iGOT designation data")
-
         # 9. Fetch updated records
         updated_role_mappings = await crud_role_mapping.get_all_completed_mapping(
             db, request.state_center_id, current_user.user_id, request.department_id
