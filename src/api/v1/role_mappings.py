@@ -332,19 +332,15 @@ async def matched_designations(
 ):
     """
     Match role mapping designations against the iGOT Designation Master.
-
-    - On the first call, rows that already have 'igot_department_name` + `igot_department_id`
-      fields cached in the DB are served directly; only rows without existing matches trigger an iGOT API call.
-    - When `force_rematch=true`, all rows are re-matched against the iGOT API
-      regardless of cached values, and the DB is updated with fresh results.
+    
+    - Returns cached matches if all designations already matched
+    - Only calls iGOT API for unmatched designations
+    - Updates DB with fresh match results
     """
     try:
-        logger.info(
-            f"Matching designations for state_center_id={request.state_center_id}, "
-            f"department_id={request.department_id}"
-        )
+        logger.info(f"Matching designations for state_center_id={request.state_center_id}, department_id={request.department_id}")
 
-        # 1. Fetch all completed role mappings for the given scope
+        # 1. Fetch all completed role mappings
         role_mappings = await crud_role_mapping.get_all_completed_mapping(
             db, request.state_center_id, current_user.user_id, request.department_id
         )
@@ -352,108 +348,124 @@ async def matched_designations(
         if not role_mappings:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="No completed role mappings found for the given state/center and department."
+                detail="No completed role mappings found for matching"
             )
 
-        # 2. Split already_matched_records vs new_matches rows
-        already_matched_records = [rm for rm in role_mappings if rm.igot_department_name and rm.igot_department_id]
-        new_matches = [rm for rm in role_mappings if not rm.igot_department_name or not rm.igot_department_id]
+        # 2. Check if already matched
+        already_matched_records = [
+            rm for rm in role_mappings 
+            if rm.igot_department_name and rm.igot_department_id
+        ]
 
-        # 3. Build lookup + matched_details from already_matched_records
-        matched_lookup: dict = {}
-        matched_details: List[MatchedDesignationDetail] = []
-        for rm in already_matched_records:
-            if rm.designation_name not in matched_lookup:
-                matched_lookup[rm.designation_name] = {
-                    "designation": rm.igot_department_name,
-                    "id": rm.igot_department_id
-                }
-            matched_details.append(MatchedDesignationDetail(
+        # 3. If all records already matched, return existing data
+        if len(already_matched_records) == len(role_mappings):
+            logger.info(f"All {len(role_mappings)} designations already matched. Returning cached data.")
+            
+            matched_details = [
+                MatchedDesignationDetail(
+                    role_mapping_id=str(rm.id),
+                    designation_name=rm.designation_name,
+                    designation_id=rm.igot_department_id
+                )
+                for rm in role_mappings
+            ]
+
+            return DesignationmatchedResult(
+                total_designations=len(set(rm.designation_name for rm in role_mappings)),
+                matched_count=len(matched_details),
+                already_matched=True,
+                matched_details=matched_details
+            )
+
+        # 4. Only match unmatched records
+        records_to_match = [
+            rm for rm in role_mappings 
+            if not rm.igot_department_name or not rm.igot_department_id
+        ]
+
+        logger.info(f"Matching {len(records_to_match)} unmatched records (skipping {len(already_matched_records)} already matched)")
+
+        # 5. Extract unique designation names to match
+        designation_names = list(set([
+            rm.designation_name for rm in records_to_match
+            if rm.designation_name and rm.designation_name != "Generating..."
+        ]))
+
+        if not designation_names:
+            # All already matched, return existing data
+            matched_details = [
+                MatchedDesignationDetail(
+                    role_mapping_id=str(rm.id),
+                    designation_name=rm.designation_name,
+                    designation_id=rm.igot_department_id
+                )
+                for rm in role_mappings
+            ]
+
+            return DesignationmatchedResult(
+                total_designations=len(set(rm.designation_name for rm in role_mappings)),
+                matched_count=len(matched_details),
+                already_matched=True,
+                matched_details=matched_details
+            )
+
+        logger.info(f"Matching {len(designation_names)} unique designations from {len(records_to_match)} records")
+
+        # 6. Initialize matcher and perform matching
+        matcher = DesignationMatcher()
+        match_results = await matcher.match_designations(designation_names)
+
+        # 7. Create mapping dict for quick lookup
+        match_dict = {m["igot_designation_name"]: m for m in match_results}
+
+        # 8. Update unmatched records
+        update_tasks = []
+        for rm in records_to_match:
+            match_data = match_dict.get(rm.designation_name)
+            if not match_data:
+                continue
+
+            update_data = {}
+            if match_data["is_matched"]:
+                update_data["igot_department_name"] = match_data["matched_designation"]
+                update_data["igot_department_id"] = str(match_data["igot_id"])
+            
+            if update_data:
+                update_tasks.append(crud_role_mapping.update(rm.id, update_data))
+
+        if update_tasks:
+            await asyncio.gather(*update_tasks)
+            logger.info(f"Updated {len(update_tasks)} records with iGOT designation data")
+
+        # 9. Fetch updated records
+        updated_role_mappings = await crud_role_mapping.get_all_completed_mapping(
+            db, request.state_center_id, current_user.user_id, request.department_id
+        )
+
+        # 10. Build final matched_details
+        matched_details = [
+            MatchedDesignationDetail(
                 role_mapping_id=str(rm.id),
                 designation_name=rm.designation_name,
                 designation_id=rm.igot_department_id
-            ))
-
-        all_already_matched = not new_matches
-
-        # 4. For new_matches rows, call iGOT API via DesignationMatcher
-        if new_matches:
-            seen_new_matches: set = set()
-            new_match_designations: List[str] = []
-            for rm in new_matches:
-                if rm.designation_name and rm.designation_name not in seen_new_matches:
-                    seen_new_matches.add(rm.designation_name)
-                    new_match_designations.append(rm.designation_name)
-
-            logger.info(
-                f"{len(already_matched_records)} row(s) already matched; "
-                f"calling iGOT API for {len(new_match_designations)} new designation(s)"
             )
+            for rm in updated_role_mappings
+            if rm.igot_department_id
+        ]
 
-            matcher = DesignationMatcher()
-            api_results = await matcher.match_designations(new_match_designations)
-
-            # Merge newly matched entries into the lookup
-            for item in api_results:
-                name = item["igot_designation_name"]
-                if item["is_matched"] and name not in matched_lookup:
-                    matched_lookup[name] = {
-                        "designation": item["matched_designation"],
-                        "id": item["igot_id"]
-                    }
-
-            # Persist iGOT data back to DB for new_matches rows that are now matched
-            update_tasks = [
-                crud_role_mapping.update(
-                    rm.id,
-                    {
-                        "igot_department_name": matched_lookup[rm.designation_name]["designation"],
-                        "igot_department_id": str(matched_lookup[rm.designation_name]["id"])
-                    }
-                )
-                for rm in new_matches
-                if rm.designation_name in matched_lookup
-            ]
-            if update_tasks:
-                await asyncio.gather(*update_tasks)
-                logger.info(f"Persisted iGOT designation data for {len(update_tasks)} row(s)")
-
-            # Append matched_details for newly matched rows
-            for rm in new_matches:
-                if rm.designation_name in matched_lookup:
-                    matched_details.append(MatchedDesignationDetail(
-                        role_mapping_id=str(rm.id),
-                        designation_name=rm.designation_name,
-                        designation_id=str(matched_lookup[rm.designation_name]["id"])
-                    ))
-        else:
-            logger.info("All designations already matched — skipping iGOT API call")
-
-        # 5. Build totals
-        seen_all: set = set()
-        unique_designations: List[str] = []
-        for rm in role_mappings:
-            if rm.designation_name and rm.designation_name not in seen_all:
-                seen_all.add(rm.designation_name)
-                unique_designations.append(rm.designation_name)
-
-        total = len(unique_designations)
-        matched_names_set = set(matched_lookup.keys())
-        unmatched_names = [n for n in unique_designations if n not in matched_names_set]
-
-        logger.info(f"Designation matching complete: {len(matched_details)}/{total} matched, {len(unmatched_names)} unmatched")
+        logger.info(f"Designation matching complete: {len(matched_details)}/{len(updated_role_mappings)} matched")
 
         return DesignationmatchedResult(
-            total_designations=total,
+            total_designations=len(set(rm.designation_name for rm in updated_role_mappings)),
             matched_count=len(matched_details),
-            already_matched=all_already_matched,
+            already_matched=False,
             matched_details=matched_details
         )
 
     except HTTPException:
         raise
     except httpx.HTTPStatusError as e:
-        logger.error(f"iGOT designation API returned an error: {e}")
+        logger.error(f"iGOT designation API error: {e}")
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail=f"iGOT designation search API error: {e.response.status_code}"
