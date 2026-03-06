@@ -328,8 +328,7 @@ class CRUDRoleMapping:
         
         Args:
             updates: List of dicts with 'role_mapping_id', 'igot_designation_name',
-                    'igot_department_id', 'designation_match_score', 'is_designation_matched',
-                    and optionally 'designation_name'
+                    'igot_designation_id', and optionally 'designation_name'
         """
         if not updates:
             return 0

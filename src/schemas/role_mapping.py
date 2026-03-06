@@ -70,8 +70,8 @@ class RoleMappingResponse(RoleMappingBase):
     activities: List[str] = Field(default=[], description="List of activities")
     competencies: List[Competency] = Field(default=[], description="List of competencies")
     sort_order: Optional[int] = Field(None, description="Sort order for hierarchical arrangement")
-    igot_department_name: Optional[str] = Field(None, description="Designation name as it exists in the iGOT portal")
-    igot_department_id: Optional[str] = Field(None, description="Designation ID from the iGOT portal")
+    igot_designation_name: Optional[str] = Field(None, description="Designation name as it exists in the iGOT portal")
+    igot_designation_id: Optional[str] = Field(None, description="Designation ID from the iGOT portal")
     created_at: datetime = Field(..., description="Creation timestamp")
     updated_at: datetime = Field(..., description="Last update timestamp")
     
@@ -95,8 +95,8 @@ class RoleMappingWithoutCBP(RoleMappingBase):
     activities: List[str] = Field(default=[], description="List of activities")
     competencies: List[Competency] = Field(default=[], description="List of competencies")
     sort_order: Optional[int] = Field(None, description="Sort order for hierarchical arrangement")
-    igot_department_name: Optional[str] = Field(None, description="Designation name as it exists in the iGOT portal")
-    igot_department_id: Optional[str] = Field(None, description="Designation ID from the iGOT portal")
+    igot_designation_name: Optional[str] = Field(None, description="Designation name as it exists in the iGOT portal")
+    igot_designation_id: Optional[str] = Field(None, description="Designation ID from the iGOT portal")
     created_at: datetime = Field(..., description="Creation timestamp")
     updated_at: datetime = Field(..., description="Last update timestamp")
     class Config:

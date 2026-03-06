@@ -108,12 +108,12 @@ class RoleMapping(Base):
     )
 
     # iGOT portal matched designation fields
-    igot_department_name = Column(
+    igot_designation_name = Column(
         String(255),
         nullable=True,
         comment="Designation name as it exists in the iGOT portal (populated after validation)"
     )
-    igot_department_id = Column(
+    igot_designation_id = Column(
         String(255),
         nullable=True,
         comment="Designation ID from the iGOT portal (populated after validation)"

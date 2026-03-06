@@ -354,7 +354,7 @@ async def matched_designations(
         # 2. Check if already matched
         already_matched_records = [
             rm for rm in role_mappings 
-            if rm.igot_department_name and rm.igot_department_id
+            if rm.igot_designation_name and rm.igot_designation_id
         ]
 
         # 3. If all records already matched, return existing data
@@ -365,7 +365,7 @@ async def matched_designations(
                 MatchedDesignationDetail(
                     role_mapping_id=str(rm.id),
                     designation_name=rm.designation_name,
-                    designation_id=rm.igot_department_id
+                    designation_id=rm.igot_designation_id
                 )
                 for rm in role_mappings
             ]
@@ -380,7 +380,7 @@ async def matched_designations(
         # 4. Only match unmatched records
         records_to_match = [
             rm for rm in role_mappings 
-            if not rm.igot_department_name or not rm.igot_department_id
+            if not rm.igot_designation_name or not rm.igot_designation_id
         ]
 
         logger.info(f"Matching {len(records_to_match)} unmatched records (skipping {len(already_matched_records)} already matched)")
@@ -397,7 +397,7 @@ async def matched_designations(
                 MatchedDesignationDetail(
                     role_mapping_id=str(rm.id),
                     designation_name=rm.designation_name,
-                    designation_id=rm.igot_department_id
+                    designation_id=rm.igot_designation_id
                 )
                 for rm in role_mappings
             ]
@@ -426,16 +426,13 @@ async def matched_designations(
 
             update_item = {
                 "role_mapping_id": rm.id,
-                "igot_designation_name": rm.designation_name,
-                "designation_match_score": match_data["similarity_score"],
-                "is_designation_matched": match_data["is_matched"]
+                "igot_designation_name": rm.designation_name
             }
 
-            if match_data["is_matched"]:
-                update_item["designation_name"] = match_data["matched_designation"]
-                update_item["igot_department_id"] = str(match_data["igot_id"])
+            if match_data["igot_id"]:
+                update_item["igot_designation_id"] = str(match_data["igot_id"])
             else:
-                update_item["igot_department_id"] = None
+                update_item["igot_designation_id"] = None
 
             bulk_updates.append(update_item)
 
@@ -455,10 +452,10 @@ async def matched_designations(
             MatchedDesignationDetail(
                 role_mapping_id=str(rm.id),
                 designation_name=rm.designation_name,
-                designation_id=rm.igot_department_id
+                designation_id=rm.igot_designation_id
             )
             for rm in updated_role_mappings
-            if rm.igot_department_id
+            if rm.igot_designation_id
         ]
 
         logger.info(f"Designation matching complete: {len(matched_details)}/{len(updated_role_mappings)} matched")
