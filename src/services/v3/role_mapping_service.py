@@ -11,9 +11,8 @@ from ...schemas.role_mapping import OrgType
 from ...core.configs import settings
 from ...prompts.v3.prompts import (
     DESIGNATION_EXTRACTION_PROMPT,
-    DESIGNATION_EXTRACTION_PROMPT_V2,
-    ROLE_MAPPING_PROMPT_CENTRE_V3, 
-    ROLE_MAPPING_PROMPT_STATE_V3
+    ROLE_MAPPING_PROMPT_CENTRE, 
+    ROLE_MAPPING_PROMPT_STATE
 )
 from ...crud.document import crud_document
 from ...core.logger import logger
@@ -130,8 +129,9 @@ class RoleMappingService:
             ]
             
             generate_content_config = types.GenerateContentConfig(
-                system_instruction=DESIGNATION_EXTRACTION_PROMPT_V2,
-                temperature=0.3,  # Lower temperature for extraction accuracy
+                system_instruction=DESIGNATION_EXTRACTION_PROMPT,
+                temperature=0.1,   # Very low — factual extraction, no creativity
+                top_p=0.85, # Restrict to high-probability tokens
                 response_mime_type="application/json",
                 response_schema=DesignationExtractionResponse.model_json_schema()
             )
@@ -155,14 +155,15 @@ class RoleMappingService:
             }
             
         except Exception as e:
-            logger.exception(f"Error in designation extraction")
-            raise Exception(f"Designation extraction failed")
+            logger.exception("Error in designation extraction")  
+            raise Exception("Designation extraction failed") from e  # Chain exception
     
     async def _generate_frac_for_batch(
         self,
         designations_batch: List[Dict[str, Any]],
         organization_data: Dict[str, Any],
-        batch_number: int
+        batch_number: int,
+        max_retries: int = 2
     ) -> List[Dict[str, Any]]:
         """
         PASS 2: Generate FRAC mapping for a batch of designations
@@ -176,72 +177,85 @@ class RoleMappingService:
         Returns:
             List of FRAC mappings for the batch (empty list on failure)
         """
-        try:
-            logger.info(f"PASS 2 - Batch {batch_number}: Processing {len(designations_batch)} designations")
-            
-            logger.info(f"Role Mapping is using prompt :: {'STATE_PROMPT' if organization_data["org_type"] == OrgType.state.value else "CENTER_PROMPT"}")
-            PROMPT = ROLE_MAPPING_PROMPT_STATE_V3 if organization_data["org_type"] == OrgType.state.value else ROLE_MAPPING_PROMPT_CENTRE_V3
-            output_json_format = state_json_output if organization_data["org_type"] == OrgType.state.value else center_json_output
-            
-            # Create designation context for the batch
-            designation_context = json.dumps({
-                "validated_designations": designations_batch,
-                "batch_info": {
-                    "batch_number": batch_number,
-                    "total_in_batch": len(designations_batch)
-                }
-            }, indent=2)
-            
-            base_prompt = PROMPT.format(
-                pass1_output=designation_context,
-                organization_name=organization_data.get('organization_name'),
-                department_name=organization_data.get('department_name'),
-                instructions=organization_data.get('instruction'),
-                primary_summary=organization_data.get('docs_summary'),
-                kcm_competencies=json.dumps(COMPETENCY_MAPPING, indent=2),
-                output_json_format=json.dumps(output_json_format, indent=2)
-            )
-            
-            contents = [
-                types.Content(
-                    role="user",
-                    parts=[types.Part.from_text(text=base_prompt)]
+        for attempt in range(1, max_retries + 1):
+            try:
+                logger.info(f"PASS 2 - Batch {batch_number} (attempt {attempt}/{max_retries}): Processing {len(designations_batch)} designations")
+                logger.info(f"Role Mapping is using prompt :: {'STATE_PROMPT' if organization_data["org_type"] == OrgType.state.value else "CENTER_PROMPT"}")
+                PROMPT = ROLE_MAPPING_PROMPT_STATE if organization_data["org_type"] == OrgType.state.value else ROLE_MAPPING_PROMPT_CENTRE
+                output_json_format = state_json_output if organization_data["org_type"] == OrgType.state.value else center_json_output
+                
+                # Create designation context for the batch
+                designation_context = json.dumps({
+                    "validated_designations": designations_batch,
+                    "batch_info": {
+                        "batch_number": batch_number,
+                        "total_in_batch": len(designations_batch)
+                    }
+                }, indent=2)
+                
+                base_prompt = PROMPT.format(
+                    pass1_output=designation_context,
+                    organization_name=organization_data.get('organization_name'),
+                    department_name=organization_data.get('department_name'),
+                    instructions=organization_data.get('instruction'),
+                    primary_summary=organization_data.get('docs_summary'),
+                    kcm_competencies=json.dumps(COMPETENCY_MAPPING, indent=2),
+                    output_json_format=json.dumps(output_json_format, indent=2)
                 )
-            ]
-            
-            generate_content_config = types.GenerateContentConfig(
-                temperature=0.5,
-            )
-            
-            response = await self.client.aio.models.generate_content(
-                model="gemini-2.5-pro",
-                contents=contents,
-                config=generate_content_config,
-            )
-            
-            logger.info(f"FRAC Batch {batch_number} Gemini usage: {response.usage_metadata}")
-            
-            text_response = response.text
-            if not text_response:
-                logger.warning(f"Batch {batch_number}: Empty response, returning empty array")
+                
+                contents = [
+                    types.Content(
+                        role="user",
+                        parts=[types.Part.from_text(text=base_prompt)]
+                    )
+                ]
+                
+                generate_content_config = types.GenerateContentConfig(
+                    temperature=0.3,  # Low-moderate — structured reasoning with some inference
+                    top_p=0.90,  # Slightly broader for competency mapping diversity
+                )
+                
+                response = await self.client.aio.models.generate_content(
+                    model="gemini-2.5-pro",
+                    contents=contents,
+                    config=generate_content_config,
+                )
+                
+                logger.info(f"FRAC Batch {batch_number} Gemini usage: {response.usage_metadata}")
+                
+                text_response = response.text
+                if not text_response:
+                    logger.warning(f"Batch {batch_number}: Empty response on attempt {attempt}")
+                    if attempt < max_retries:
+                        await asyncio.sleep(2 ** attempt)  # Exponential backoff
+                        continue
+                    return []
+                
+                text_response = text_response.replace("```json", '').replace("```", '')
+                parsed_response = json.loads(text_response)
+                
+                logger.info(f"Batch {batch_number}: Successfully generated {len(parsed_response)} FRAC mappings")
+                return parsed_response
+            except json.JSONDecodeError as e:
+                logger.warning(f"Batch {batch_number}: JSON parse error on attempt {attempt}: {str(e)}")
+                if attempt < max_retries:
+                    await asyncio.sleep(2 ** attempt)
+                    continue
+                return [] 
+            except Exception as e:
+                logger.error(f"Batch {batch_number}: Error on attempt {attempt}: {str(e)}", exc_info=True)
+                if attempt < max_retries:
+                    await asyncio.sleep(2 ** attempt)
+                    continue
                 return []
-            
-            text_response = text_response.replace("```json", '').replace("```", '')
-            parsed_response = json.loads(text_response)
-            
-            logger.info(f"Batch {batch_number}: Successfully generated {len(parsed_response)} FRAC mappings")
-            return parsed_response
-            
-        except Exception as e:
-            logger.error(f"Error in FRAC generation for batch {batch_number}: {str(e)}", exc_info=True)
-            logger.warning(f"Batch {batch_number}: Returning empty array due to failure")
-            return []  # Return empty array on failure, don't skip
+        return []
     
     async def _process_batches_parallel(
         self,
         all_designations: List[Dict[str, Any]],
         organization_data: Dict[str, Any],
-        batch_size: int = 50
+        batch_size: int = 50,
+        # max_concurrent: int = 3
     ) -> List[Dict[str, Any]]:
         """
         Process designation batches in parallel
@@ -261,6 +275,15 @@ class RoleMappingService:
         ]
         
         logger.info(f"Processing {len(all_designations)} designations in {len(batches)} batches of {batch_size}")
+        
+        # Too Many Parallel Batches Can Hit Rate Limits
+        # semaphore = asyncio.Semaphore(max_concurrent)
+        # async def limited_batch(batch, idx):
+        #     async with semaphore:
+        #         return await self._generate_frac_for_batch(
+        #             batch, organization_data, batch_number=idx + 1
+        #         )
+        # tasks = [limited_batch(batch, idx) for idx, batch in enumerate(batches)]
         
         # Create tasks for parallel processing
         tasks = [
@@ -373,7 +396,7 @@ class RoleMappingService:
 
             return frac_mappings
         except Exception as e:
-            logger.exception(f"Error in two-pass role mapping generation:")
+            logger.exception("Error in two-pass role mapping generation")
             raise
 
 # Create a singleton instance
