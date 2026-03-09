@@ -3,6 +3,7 @@ import json
 import os
 from typing import Dict, List, Optional
 import uuid
+import httpx
 from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, Query, UploadFile, status
 from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -14,8 +15,9 @@ from ...models.role_mapping import ProcessingStatus, RoleMapping
 from ...models.user import User
 
 from ...prompts.prompts import DESIGNATION_ROLE_MAPPING_PROMPT
-from ...schemas.role_mapping import AddDesignationToRoleMappingRequest, ReorderDesignationsRequest, RoleMappingBackgroundResponse, RoleMappingResponse, RoleMappingUpdate, RoleMappingWithoutCBP
+from ...schemas.role_mapping import AddDesignationToRoleMappingRequest, DesignationmatchedResult, ReorderDesignationsRequest, RoleMappingBackgroundResponse, RoleMappingResponse, RoleMappingUpdate, RoleMappingWithoutCBP, matchedDesignationsRequest, MatchedDesignationDetail
 from ...services.role_mapping_service import role_mapping_service
+from ...services.v3.designation_matcher import DesignationMatcher
 
 from ...core.database import get_db_session
 from ...core.logger import logger
@@ -321,6 +323,165 @@ async def generate_role_and_competencies(input_data):
     except Exception as e:
         print(f"Error generating role and responsibilities from Gemini: {e}")
         raise HTTPException(status_code=500, detail=f"Gemini error: {str(e)}")
+
+@router.post("/role-mapping/matched-designations", response_model=DesignationmatchedResult)
+async def matched_designations(
+    request: matchedDesignationsRequest,
+    db: AsyncSession = Depends(get_db_session),
+    current_user: User = Depends(get_current_active_user)
+):
+    """
+    Match role mapping designations against the iGOT Designation Master.
+    
+    - Returns cached matches if all designations already matched
+    - Only calls iGOT API for unmatched designations
+    - Updates DB with fresh match results
+    """
+    try:
+        logger.info(f"Matching designations for state_center_id={request.state_center_id}, department_id={request.department_id}")
+
+        # 1. Fetch all completed role mappings
+        role_mappings = await crud_role_mapping.get_all_completed_mapping(
+            db, request.state_center_id, current_user.user_id, request.department_id
+        )
+
+        if not role_mappings:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="No completed role mappings found for matching"
+            )
+
+        # 2. Check if already matched
+        already_matched_records = [
+            rm for rm in role_mappings 
+            if rm.igot_designation_name and rm.igot_designation_id
+        ]
+
+        # 3. If all records already matched, return existing data
+        if len(already_matched_records) == len(role_mappings):
+            logger.info(f"All {len(role_mappings)} designations already matched. Returning cached data.")
+            
+            matched_details = [
+                MatchedDesignationDetail(
+                    role_mapping_id=str(rm.id),
+                    designation_name=rm.designation_name,
+                    designation_id=rm.igot_designation_id
+                )
+                for rm in role_mappings
+            ]
+
+            return DesignationmatchedResult(
+                total_designations=len(set(rm.designation_name for rm in role_mappings)),
+                matched_count=len(matched_details),
+                already_matched=True,
+                matched_details=matched_details
+            )
+
+        # 4. Only match unmatched records
+        records_to_match = [
+            rm for rm in role_mappings 
+            if not rm.igot_designation_name or not rm.igot_designation_id
+        ]
+
+        logger.info(f"Matching {len(records_to_match)} unmatched records (skipping {len(already_matched_records)} already matched)")
+
+        # 5. Extract unique designation names to match
+        designation_names = list(set([
+            rm.designation_name for rm in records_to_match
+            if rm.designation_name and rm.designation_name != "Generating..."
+        ]))
+
+        if not designation_names:
+            # All already matched, return existing data
+            matched_details = [
+                MatchedDesignationDetail(
+                    role_mapping_id=str(rm.id),
+                    designation_name=rm.designation_name,
+                    designation_id=rm.igot_designation_id
+                )
+                for rm in role_mappings
+            ]
+
+            return DesignationmatchedResult(
+                total_designations=len(set(rm.designation_name for rm in role_mappings)),
+                matched_count=len(matched_details),
+                already_matched=True,
+                matched_details=matched_details
+            )
+
+        logger.info(f"Matching {len(designation_names)} unique designations from {len(records_to_match)} records")
+
+        # 6. Initialize matcher and perform matching
+        matcher = DesignationMatcher()
+        match_results = await matcher.match_designations(designation_names)
+
+        # 7. Prepare bulk updates
+        match_dict = {m["igot_designation_name"]: m for m in match_results}
+        bulk_updates = []
+
+        for rm in records_to_match:
+            match_data = match_dict.get(rm.designation_name)
+            if not match_data:
+                continue
+
+            update_item = {
+                "role_mapping_id": rm.id,
+                "igot_designation_name": rm.designation_name
+            }
+
+            if match_data["igot_id"]:
+                update_item["igot_designation_id"] = str(match_data["igot_id"])
+            else:
+                update_item["igot_designation_id"] = None
+
+            bulk_updates.append(update_item)
+
+        # 8. Execute bulk update
+        updated_count = 0
+        if bulk_updates:
+            updated_count = await crud_role_mapping.bulk_update_designation_matching(db, bulk_updates)
+            logger.info(f"Bulk updated {updated_count} records")
+            
+        # 9. Fetch updated records
+        updated_role_mappings = await crud_role_mapping.get_all_completed_mapping(
+            db, request.state_center_id, current_user.user_id, request.department_id
+        )
+
+        # 10. Build final matched_details
+        matched_details = [
+            MatchedDesignationDetail(
+                role_mapping_id=str(rm.id),
+                designation_name=rm.designation_name,
+                designation_id=rm.igot_designation_id
+            )
+            for rm in updated_role_mappings
+            if rm.igot_designation_id
+        ]
+
+        logger.info(f"Designation matching complete: {len(matched_details)}/{len(updated_role_mappings)} matched")
+
+        return DesignationmatchedResult(
+            total_designations=len(set(rm.designation_name for rm in updated_role_mappings)),
+            matched_count=len(matched_details),
+            already_matched=False,
+            matched_details=matched_details
+        )
+
+    except HTTPException:
+        raise
+    except httpx.HTTPStatusError as e:
+        logger.error(f"iGOT designation API error: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"iGOT designation search API error: {e.response.status_code}"
+        )
+    except Exception as e:
+        logger.error(f"Error matching designations: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to match designations"
+        )
+
 
 @router.post("/role-mapping/add-designation", response_model=RoleMappingWithoutCBP, status_code=status.HTTP_201_CREATED)
 async def add_designation_to_role_mapping(

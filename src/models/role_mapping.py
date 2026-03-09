@@ -106,6 +106,18 @@ class RoleMapping(Base):
         index=True,
         comment="Sort order for hierarchical arrangement of designations (1=highest, higher numbers=lower hierarchy)"
     )
+
+    # iGOT portal matched designation fields
+    igot_designation_name = Column(
+        String(255),
+        nullable=True,
+        comment="Designation name as it exists in the iGOT portal (populated after validation)"
+    )
+    igot_designation_id = Column(
+        String(255),
+        nullable=True,
+        comment="Designation ID from the iGOT portal (populated after validation)"
+    )
     created_at = Column(
         DateTime(timezone=True), 
         server_default=func.now(),

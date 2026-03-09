@@ -317,6 +317,32 @@ class CRUDRoleMapping:
 
         await db.commit()
         return updated_count
+    
+    async def bulk_update_designation_matching(
+    self,
+    db: AsyncSession,
+    updates: List[dict]
+    ) -> int:
+        """
+        Bulk update designation matching data.
+        
+        Args:
+            updates: List of dicts with 'role_mapping_id', 'igot_designation_name',
+                    'igot_designation_id', and optionally 'designation_name'
+        """
+        if not updates:
+            return 0
+
+        updated_count = 0
+        for update_item in updates:
+            role_mapping_id = update_item.pop('role_mapping_id')
+            stmt = update(RoleMapping).where(RoleMapping.id == role_mapping_id).values(**update_item)
+            result = await db.execute(stmt)
+            updated_count += result.rowcount
+
+        await db.commit()
+        return updated_count
+
 
 # Initialize the CRUD utility for use across the application
 crud_role_mapping = CRUDRoleMapping()
