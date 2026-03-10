@@ -7,8 +7,8 @@ import uuid
 
 class MatchedDesignationDetail(BaseModel):
     role_mapping_id: str
-    designation_name: str
-    designation_id: str
+    igot_designation_name: str
+    igot_designation_id: str
 
 class OrgType(str, Enum):
     ministry = "ministry"
