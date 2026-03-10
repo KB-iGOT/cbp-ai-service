@@ -463,7 +463,6 @@ async def match_designations_with_igot(
             detail="Failed to match designations"
         )
 
-
 @router.post("/role-mapping/add-designation", response_model=RoleMappingWithoutCBP, status_code=status.HTTP_201_CREATED)
 async def add_designation_to_role_mapping(
     request: AddDesignationToRoleMappingRequest, db: AsyncSession = Depends(get_db_session),
@@ -694,6 +693,18 @@ async def update_role_mapping(
     """
     try:
         logger.info(f"Updating role mapping with ID: {role_mapping_id}")
+
+        update_records = role_mapping_update.model_dump(exclude_unset=True)
+        designation_name = update_records.get("designation_name", '').strip()
+
+        if designation_name:
+            igot_designation_id = update_records.get("igot_designation_id", '').strip()
+            if not igot_designation_id:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail="igot_designation_id is required when updating designation_name"
+                )
+            update_records["igot_designation_name"] = designation_name
         
         # Get existing role mapping
         db_role_mapping = await crud_role_mapping.get_by_id_and_user(db, role_mapping_id,  current_user.user_id)
@@ -704,7 +715,7 @@ async def update_role_mapping(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Role mapping not found"
             )
-        update_records = role_mapping_update.model_dump(exclude_unset=True)
+        
         role_mapping = await crud_role_mapping.update(role_mapping_id, update_records)
         
         logger.info(f"Role mapping updated successfully with ID: {db_role_mapping.id}")
