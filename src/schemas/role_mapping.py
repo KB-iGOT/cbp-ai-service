@@ -37,7 +37,8 @@ class RoleMappingUpdate(BaseModel):
     """Schema for updating a Role Mapping"""
     sector_name: Optional[str] = Field(None, max_length=255, description="Name of the sector")
     instruction: Optional[str] = Field(None, description="Additional instructions")
-    designation_name: Optional[str] = Field(None, max_length=255, description="Name of the designation")
+    designation_name: Optional[str] = Field(None, max_length=255, description="Name of the designation from iGOT portal")
+    igot_designation_id: Optional[str] = Field(None, max_length=255, description="ID of the designation from iGOT portal")
     wing_division_section: Optional[str] = Field(None, max_length=255, description="Wing/Division/Section name")
     role_responsibilities: Optional[List[str]] = Field(None, description="List of role responsibilities")
     activities: Optional[List[str]] = Field(None, description="List of activities")
