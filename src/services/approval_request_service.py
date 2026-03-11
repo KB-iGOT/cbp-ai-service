@@ -402,33 +402,4 @@ class ApprovalRequestService:
             )
 
         return item.cbp_plans or []
-
-    @staticmethod
-    def validate_request_name(request_name: str) -> Tuple[bool, Optional[str]]:
-        """
-        Validate request name format.
         
-        Rules:
-        - Max 100 characters
-        - Only alphanumeric + spaces + _ and - allowed
-        - Regex: ^[a-zA-Z0-9 _\-]{1,100}$
-        
-        Args:
-            request_name: Request name to validate
-            
-        Returns:
-            Tuple of (is_valid, error_message)
-        """
-        if not request_name:
-            return False, "Request name is required"
-        
-        if len(request_name) > 100:
-            return False, "Request name must not exceed 100 characters"
-        
-        # Regex pattern: alphanumeric + spaces + underscore + hyphen
-        pattern = r'^[a-zA-Z0-9 _\-]{1,100}$'
-        
-        if not re.match(pattern, request_name):
-            return False, "Request name can only contain letters, numbers, spaces, underscores, and hyphens"
-        
-        return True, None
