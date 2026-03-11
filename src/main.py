@@ -7,13 +7,16 @@ from .api import router
 from .core.configs import EnvironmentOption, settings
 from .core.logger import logger
 
+# Import all models to ensure they're registered with Base.metadata
+from .models import approval_request  # noqa: F401
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("✅ Starting up...")
     
     sessionmanager.init(settings.DATABASE_URL)
     
-    print("--- Creating Tables ---")
+    logger.info("--- Creating Tables ---")
     async with sessionmanager.connect() as conn:
         await conn.run_sync(Base.metadata.create_all)
     logger.info("✅ Database tables ready")
