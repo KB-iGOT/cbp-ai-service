@@ -1,7 +1,6 @@
 import uuid
 import re
 from typing import List, Optional, Dict, Tuple
-from sqlalchemy import and_
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from fastapi import HTTPException, status
