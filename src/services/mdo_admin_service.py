@@ -3,19 +3,22 @@ Service for fetching MDO (Ministry/Department/Organization) admin and leader inf
 from the iGOT Karmayogi portal.
 """
 import httpx
-from typing import List, Dict, Optional
+from typing import List, Dict, Any, Optional
 from fastapi import HTTPException, status
 
+from ..core.configs import settings
 from ..core.logger import logger
 
 
 class MDOAdminService:
     """Service for interacting with iGOT portal to fetch MDO admin/leader data"""
     
-    IGOT_API_URL = "https://portal.igotkarmayogi.gov.in/api/private/user/v1/search"
-    IGOT_AUTH_TOKEN = "bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiI5a04xTW1TcGVuVTAyam8zVHg1U2p0amhTOFVXeGVSUiJ9.LWAgFust4e0wntxqY8_MQjf5WQ9RSD6Hg45jX_NoCXY"
+    def __init__(self, auth_token: str = None):
+        self.auth_token = auth_token or settings.KB_AUTH_TOKEN
+        self.base_url = settings.KB_BASE_URL
+        self.timeout = 30.0
     
-    async def get_mdo_admins(self, department_id: str) -> List[Dict]:
+    async def get_mdo_admins(self, department_id: str) -> List[Dict[str, Any]]:
         """
         Fetch MDO admins and leaders from iGOT portal for a specific department.
         
@@ -23,15 +26,27 @@ class MDOAdminService:
             department_id: The department (rootOrgId) to filter MDO admins by
             
         Returns:
-            List of MDO admin/leader user objects with firstName, lastName, id, rootOrgId, organisations
-            
+            List of dictionaries containing MDO admin details:
+                - id (str): User ID
+                - firstName (str): First name
+                - lastName (str): Last name
+                - rootOrgId (str): Root organization ID
+                - organisations (list): List of organization objects
+                
         Raises:
             HTTPException: If the API call fails
         """
         try:
+            url = f"{self.base_url}/api/private/user/v1/search"
+            
+            # Format token properly - ensure it has 'Bearer ' prefix if needed or handles 'bearer ' prefix
+            auth_header = self.auth_token
+            if not auth_header.lower().startswith("bearer "):
+                auth_header = f"Bearer {auth_header}"
+                
             headers = {
                 "Content-Type": "application/json",
-                "Authorization": self.IGOT_AUTH_TOKEN
+                "Authorization": auth_header
             }
             
             payload = {
@@ -44,11 +59,11 @@ class MDOAdminService:
                 }
             }
             
-            logger.info(f"Fetching MDO admins for department: {department_id}")
+            logger.info(f"Fetching MDO admins for department: {department_id} from {url}")
             
-            async with httpx.AsyncClient(timeout=30.0) as client:
+            async with httpx.AsyncClient(timeout=self.timeout) as client:
                 response = await client.post(
-                    self.IGOT_API_URL,
+                    url,
                     json=payload,
                     headers=headers
                 )
@@ -59,9 +74,20 @@ class MDOAdminService:
                 # Extract users from response
                 users = data.get("result", {}).get("response", {}).get("content", [])
                 
-                logger.info(f"Found {len(users)} MDO admins/leaders")
+                # Process the raw users into a structured dictionary array
+                processed_users: List[Dict[str, Any]] = []
+                for user in users:
+                    processed_users.append({
+                        "id": user.get("id", ""),
+                        "firstName": user.get("firstName", ""),
+                        "lastName": user.get("lastName", ""),
+                        "rootOrgId": user.get("rootOrgId", ""),
+                        "organisations": user.get("organisations", [])
+                    })
                 
-                return users
+                logger.info(f"Found {len(processed_users)} MDO admins/leaders")
+                
+                return processed_users
                 
         except httpx.HTTPStatusError as e:
             logger.error(f"HTTP error fetching MDO admins: {e.response.status_code} - {e.response.text}")
