@@ -13,6 +13,8 @@ from ..schemas.approval_request import (
     ApprovalRequestSummary,
     ApprovalRequestDetail
 )
+from ..services.mdo_admin_service import mdo_admin_service
+from ..models.course_recommendation import RecommendationStatus
 from ..schemas.role_mapping import RoleMappingWithoutCBP
 
 
@@ -62,7 +64,6 @@ class ApprovalRequestService:
             )
         
         # Validate that all role mappings have completed course recommendations
-        from ..models.course_recommendation import RecommendationStatus
         missing_course_recommendations = []
         for rm in role_mappings:
             has_completed_recommendation = False
@@ -89,7 +90,6 @@ class ApprovalRequestService:
         department_name = first_rm.department_name or ""
         
         # Fetch MDO admin details from iGOT portal
-        from ..services.mdo_admin_service import mdo_admin_service
         try:
             admins_data = await mdo_admin_service.get_mdo_admins(department_id)
             
