@@ -18,6 +18,7 @@ from .meta_summary_routes import router as meta_summary_routes_new
 from .health import router as health_routes
 from .dashboard import router as dashboard_routes
 from .reports import router as reports_routes
+from .approval_requests import router as approval_requests_router
 from .designation import router as designation_router
 
 router = APIRouter(prefix="/v1")
@@ -37,6 +38,7 @@ router.include_router(document_routes_new)
 router.include_router(meta_summary_routes_new)
 router.include_router(dashboard_routes)
 router.include_router(reports_routes)
+router.include_router(approval_requests_router)
 router.include_router(designation_router)
 
 router.include_router(health_routes)
