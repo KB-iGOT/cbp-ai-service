@@ -32,7 +32,6 @@ class MDOAdminService:
                 - lastName (str): Last name
                 - rootOrgId (str): Root organization ID
                 - organisations (list): List of organization objects
-                - roles (list): List of role strings
                 
         Raises:
             HTTPException: If the API call fails
@@ -78,18 +77,25 @@ class MDOAdminService:
                 # Process the raw users into a structured dictionary array
                 processed_users: List[Dict[str, Any]] = []
                 for user in users:
+                    # Extract roles from organisations
+                    roles = []
+                    organisations = user.get("organisations", [])
+                    for org in organisations:
+                        org_roles = org.get("roles", [])
+                        roles.extend(org_roles)
+                    
+                    # Remove duplicates while preserving order
+                    roles = list(dict.fromkeys(roles))
+                    
                     processed_users.append({
                         "id": user.get("id", ""),
                         "firstName": user.get("firstName", ""),
                         "lastName": user.get("lastName", ""),
                         "rootOrgId": user.get("rootOrgId", ""),
                         "organisations": user.get("organisations", []),
-                        "roles": user.get("roles", [])
+                        "roles": roles
                     })
-                
-                logger.info(f"Found {len(processed_users)} MDO admins/leaders")
-                logger.info(f"roles of all the users: {[user['roles'] for user in processed_users]}")
-                
+                    
                 return processed_users
                 
         except httpx.HTTPStatusError as e:
