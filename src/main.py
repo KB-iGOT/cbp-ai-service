@@ -7,9 +7,6 @@ from .api import router
 from .core.configs import EnvironmentOption, settings
 from .core.logger import logger
 
-# Import all models to ensure they're registered with Base.metadata
-from .models import approval_request  # noqa: F401
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("✅ Starting up...")
