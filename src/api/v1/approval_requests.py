@@ -1,6 +1,7 @@
 import uuid
 import math
 import logging
+from datetime import date, datetime, time
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -175,6 +176,8 @@ async def list_approval_requests(
     page_size: int = Query(default=10, ge=1, le=100),
     search: Optional[str] = Query(default=None, max_length=200),
     status_filter: Optional[ApprovalStatus] = Query(default=None, alias="status"),
+    from_date: Optional[date] = Query(default=None, description="Filter from this date (inclusive, YYYY-MM-DD)"),
+    to_date: Optional[date] = Query(default=None, description="Filter up to this date (inclusive, YYYY-MM-DD)"),
     db: AsyncSession = Depends(get_db_session),
     current_user: User = Depends(get_current_active_user)
 ):
@@ -182,18 +185,32 @@ async def list_approval_requests(
     List all approval requests submitted by the current user.
     
     - Supports pagination (default 10 per page)
-    - Search by request_name (partial) or request_id (exact)
-    - Filter by status dropdown
+    - Search by request_name (partial match)
+    - Filter by status (case-insensitive: draft, pending, published, rejected)
+    - Filter by date range (from_date and to_date, inclusive)
     - Default sort: latest first
     """
     try:
+        # Validate date range
+        if from_date and to_date and from_date > to_date:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="from_date cannot be after to_date"
+            )
+
+        # Convert dates to datetime range (start of from_date, end of to_date)
+        from_datetime = datetime.combine(from_date, time.min) if from_date else None
+        to_datetime = datetime.combine(to_date, time.max) if to_date else None
+
         items, total = await crud_approval_request.list_requests(
             db=db,
             user_id=current_user.user_id,
             page=page,
             page_size=page_size,
             search=search,
-            status_filter=status_filter
+            status_filter=status_filter,
+            from_date=from_datetime,
+            to_date=to_datetime
         )
 
         total_pages = math.ceil(total / page_size) if total > 0 else 0
@@ -214,7 +231,8 @@ async def list_approval_requests(
                 for item in items
             ]
         )
-
+    except HTTPException:
+        raise
     except Exception as e:
         logger.exception("Error listing approval requests")
         raise HTTPException(

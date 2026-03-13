@@ -79,11 +79,13 @@ class CRUDApprovalRequest:
         user_id: uuid.UUID,
         page: int = 1,
         page_size: int = 10,
-        search: Optional[ApprovalStatus] = None,
-        status_filter: Optional[str] = None
+        search: Optional[str] = None,
+        status_filter: Optional[str] = None,
+        from_date: Optional[datetime] = None,
+        to_date: Optional[datetime] = None
     ) -> Tuple[List[ApprovalRequest], int]:
         """
-        List approval requests for a user with pagination, search, and status filter.
+        List approval requests for a user with pagination, search, status and date filters.
         Returns (items, total_count).
         """
         conditions = [ApprovalRequest.user_id == user_id]
@@ -92,9 +94,7 @@ class CRUDApprovalRequest:
         if search:
             search_term = search.strip()
             conditions.append(
-                or_(
-                    ApprovalRequest.request_name.ilike(f"%{search_term}%")
-                )
+                ApprovalRequest.request_name.ilike(f"%{search_term}%")
             )
 
         # Status filter
@@ -104,6 +104,12 @@ class CRUDApprovalRequest:
                 conditions.append(ApprovalRequest.status == status_enum)
             except ValueError:
                 pass  # Invalid status filter, ignore
+
+        # Date range filter on created_at
+        if from_date:
+            conditions.append(ApprovalRequest.created_at >= from_date)
+        if to_date:
+            conditions.append(ApprovalRequest.created_at <= to_date)
 
         where_clause = and_(*conditions)
 
