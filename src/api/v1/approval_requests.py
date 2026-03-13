@@ -163,6 +163,9 @@ async def get_mdo_admins(
                 department_name=department_name
             ))
         
+        # Sort admins by first_name, last_name
+        admins.sort(key=lambda x: (x.first_name.lower(), x.last_name.lower()))
+        
         return MDOAdminListResponse(
             admins=admins,
             count=len(admins)
