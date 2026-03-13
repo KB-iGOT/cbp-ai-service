@@ -4,6 +4,10 @@ from sqlalchemy import and_, update, desc
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload
+from sqlalchemy import update as sa_update
+from sqlalchemy import or_, cast, String
+
+from datetime import datetime, time as dtime
 
 from ..models.approval_request import RequestedRoleMapping, RequestedRoleMappingItem, RequestStatus
 from ..models.role_mapping import RoleMapping
@@ -139,7 +143,7 @@ class CRUDApprovalRequest:
         Returns:
             List of RequestedRoleMapping objects
         """
-        from sqlalchemy import or_, cast, String
+        
         
         conditions = [RequestedRoleMapping.user_id == user_id]
         
@@ -169,11 +173,9 @@ class CRUDApprovalRequest:
         
         # Date range filtering
         if from_date:
-            from datetime import datetime, time as dtime
             conditions.append(RequestedRoleMapping.created_at >= datetime.combine(from_date, dtime.min))
         
         if to_date:
-            from datetime import datetime, time as dtime
             conditions.append(RequestedRoleMapping.created_at <= datetime.combine(to_date, dtime.max))
         
         # Calculate offset for pagination
@@ -268,8 +270,7 @@ class CRUDApprovalRequest:
         Returns:
             The RequestedRoleMappingItem or None if not found
         """
-        from sqlalchemy import or_
-        
+                
         stmt = select(RequestedRoleMappingItem).where(
             and_(
                 or_(
@@ -301,9 +302,7 @@ class CRUDApprovalRequest:
         Returns:
             The updated RequestedRoleMappingItem or None if not found
         """
-        from sqlalchemy import update as sa_update
-        
-        from sqlalchemy import or_
+
         
         stmt = (
             sa_update(RequestedRoleMappingItem)

@@ -140,27 +140,20 @@ async def get_mdo_admins(
         
         admins_data = await mdo_admin_service.get_mdo_admins(department_id)
         
+
         # Transform to simplified format
         admins = []
         for admin in admins_data:
-            # Extract role type from organisations
-            role_type = "MDO_ADMIN"  # Default
-            department_name = "Unknown Department"
+            # Get roles directly from API response
+            roles = admin.get('roles', [])
             
+            role_type = "MDO_LEADER" if "MDO_LEADER" in roles else "MDO_ADMIN" if "MDO_ADMIN" in roles else ""
+            
+            # Get department name from organisations
+            department_name = "Unknown Department"
             organisations = admin.get('organisations', [])
             if organisations:
-                # Get the first organization's roles
-                org = organisations[0]
-                roles = org.get('roles', [])
-                
-                # Determine role type (prefer MDO_LEADER over MDO_ADMIN)
-                if 'MDO_LEADER' in roles:
-                    role_type = "MDO_LEADER"
-                elif 'MDO_ADMIN' in roles:
-                    role_type = "MDO_ADMIN"
-                
-                # Get department name
-                department_name = org.get('orgName', 'Unknown Department')
+                department_name = organisations[0].get('orgName', 'Unknown Department')
             
             admins.append(MDOAdmin(
                 id=admin.get('id', ''),

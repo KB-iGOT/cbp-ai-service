@@ -32,6 +32,7 @@ class MDOAdminService:
                 - lastName (str): Last name
                 - rootOrgId (str): Root organization ID
                 - organisations (list): List of organization objects
+                - roles (list): List of role strings
                 
         Raises:
             HTTPException: If the API call fails
@@ -55,7 +56,7 @@ class MDOAdminService:
                         "organisations.roles": ["MDO_LEADER", "MDO_ADMIN"],
                         "rootOrgId": department_id
                     },
-                    "fields": ["firstName", "lastName", "id", "rootOrgId", "organisations"]
+                    "fields": ["firstName", "lastName", "id", "rootOrgId", "organisations", "roles"]
                 }
             }
             
@@ -82,10 +83,12 @@ class MDOAdminService:
                         "firstName": user.get("firstName", ""),
                         "lastName": user.get("lastName", ""),
                         "rootOrgId": user.get("rootOrgId", ""),
-                        "organisations": user.get("organisations", [])
+                        "organisations": user.get("organisations", []),
+                        "roles": user.get("roles", [])
                     })
                 
                 logger.info(f"Found {len(processed_users)} MDO admins/leaders")
+                logger.info(f"roles of all the users: {[user['roles'] for user in processed_users]}")
                 
                 return processed_users
                 
