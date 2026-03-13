@@ -1,296 +1,354 @@
-from typing import Optional
 import uuid
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+import math
+import logging
+from typing import Optional
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
-from ...models.user import User
-from ...schemas.approval_request import (
-    ApprovalRequestCreate,
-    ApprovalRequestCreateResponse,
-    ApprovalRequestListResponse,
-    ApprovalRequestDetail,
-    ApprovalRequestSearch
-)
-from ...schemas.mdo_admin import MDOAdminListResponse, MDOAdmin
-from ...services.approval_request_service import ApprovalRequestService
-from ...services.mdo_admin_service import mdo_admin_service
 from ...core.database import get_db_session
-from ...core.logger import logger
 from ...api.dependencies import get_current_active_user
+from ...models.user import User
+from ...models.role_mapping import RoleMapping, ProcessingStatus
+from ...models.approval_request import ApprovalRequestItem
+from ...schemas.comman import ApprovalStatus
+from ...crud.role_mapping import crud_role_mapping
+from ...crud.approval_request import crud_approval_request
+from ...schemas.approval_request import (
+    SendForApprovalRequest,
+    SendForApprovalResponse,
+    RevokeApprovalRequest,
+    RevokeApprovalResponse,
+    ApprovalRequestResponse,
+    ApprovalRequestListResponse,
+    ApprovalRequestListItem,
+    ApprovalRequestItemResponse
+)
 
+from sqlalchemy.future import select
+from sqlalchemy import and_
 
-router = APIRouter(prefix="/approval-requests", tags=["Approval Requests"])
+logger = logging.getLogger(__name__)
 
+router = APIRouter(tags=["Approval Requests"])
 
-@router.post("/create", response_model=ApprovalRequestCreateResponse, status_code=status.HTTP_201_CREATED)
-async def create_approval_request(
-    request_data: ApprovalRequestCreate,
+@router.post(
+    "/approval-requests/send",
+    response_model=SendForApprovalResponse,
+    status_code=status.HTTP_201_CREATED
+)
+async def send_for_approval(
+    request: SendForApprovalRequest,
     db: AsyncSession = Depends(get_db_session),
     current_user: User = Depends(get_current_active_user)
 ):
     """
-    Create a new approval request with selected role mappings.
+    Submit selected role mappings for MDO Admin/Leader approval.
     
     Validates:
-    - Request name is 1-100 characters
-    - At least one role mapping ID is provided
-    - All role mapping IDs exist and belong to the user
-    - All role mappings are matched (have igot_designation_id)
-    """
-    try:
-        logger.info(f"Creating approval request for user {current_user.user_id}: {request_data.request_name}")
-        
-        service = ApprovalRequestService(db)
-        request_id = await service.create_approval_request(
-            user_id=current_user.user_id,
-            request_data=request_data
-        )
-        
-        logger.info(f"Approval request created successfully: {request_id}")
-        
-        return ApprovalRequestCreateResponse(
-            request_id=request_id,
-            message="Approval request created successfully"
-        )
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error creating approval request: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to create approval request: {str(e)}"
-        )
-
-
-@router.post("/search", response_model=ApprovalRequestListResponse, status_code=status.HTTP_200_OK)
-async def search_approval_requests(
-    search_data: ApprovalRequestSearch,
-    db: AsyncSession = Depends(get_db_session),
-    current_user: User = Depends(get_current_active_user)
-):
-    """
-    Search and filter approval requests for the authenticated user.
-
-    Optional filters:
-    - state_center_id: Filter by state/center
-    - department_id: Filter by department
-    - status: Filter by request status (draft, pending, in_review, approved_published, rejected)
-    - search: Search by request name (partial) or request ID
-    - from_date: Filter requests created on or after this date (YYYY-MM-DD)
-    - to_date: Filter requests created on or before this date (YYYY-MM-DD)
-    - page: Page number (default: 1)
-    - page_size: Items per page (default: 10, max: 100)
-
-    Results are sorted by created_at in descending order (newest first).
-    """
-    try:
-        logger.info(f"Searching approval requests for user {current_user.user_id}")
-
-        service = ApprovalRequestService(db)
-        filters = {}
-
-        if search_data.state_center_id:
-            filters['state_center_id'] = search_data.state_center_id
-        if search_data.department_id:
-            filters['department_id'] = search_data.department_id
-        if search_data.status:
-            filters['status'] = search_data.status
-        if search_data.search:
-            filters['search'] = search_data.search
-        if search_data.from_date:
-            filters['from_date'] = search_data.from_date
-        if search_data.to_date:
-            filters['to_date'] = search_data.to_date
-
-        filters['page'] = search_data.page
-        filters['page_size'] = search_data.page_size
-
-        requests = await service.get_approval_requests(
-            user_id=current_user.user_id,
-            filters=filters
-        )
-
-        return ApprovalRequestListResponse(requests=requests)
-
-    except Exception as e:
-        logger.error(f"Error searching approval requests: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to search approval requests: {str(e)}"
-        )
-
-
-@router.get("/mdo-admins", response_model=MDOAdminListResponse, status_code=status.HTTP_200_OK)
-async def get_mdo_admins(
-    department_id: str = Query(..., description="Department ID to fetch MDO admins for"),
-    current_user: User = Depends(get_current_active_user)
-):
-    """
-    Retrieve MDO (Ministry/Department/Organization) admins and leaders from iGOT portal.
+    - All role_mapping_ids belong to the current user
+    - All role mappings have status = COMPLETED
+    - All role mappings have saved CBP plans
+    - None are already in a pending/in_review request
     
-    This endpoint fetches users with MDO_ADMIN or MDO_LEADER roles for a specific department.
-    The data is fetched from the iGOT Karmayogi portal API.
-    
-    Returns:
-    - List of MDO admins with their ID, first name, last name, role type, and department name
-    """
-    try:
-        logger.info(f"Fetching MDO admins for department: {department_id}")
-        
-        admins_data = await mdo_admin_service.get_mdo_admins(department_id)
-        
-
-        # Transform to simplified format
-        admins = []
-        for admin in admins_data:
-            # Get roles directly from API response
-            roles = admin.get('roles', [])
-            
-            role_type = "MDO_LEADER" if "MDO_LEADER" in roles else "MDO_ADMIN" if "MDO_ADMIN" in roles else ""
-            
-            # Get department name from organisations
-            department_name = "Unknown Department"
-            organisations = admin.get('organisations', [])
-            if organisations:
-                department_name = organisations[0].get('orgName', 'Unknown Department')
-            
-            admins.append(MDOAdmin(
-                id=admin.get('id', ''),
-                first_name=admin.get('firstName', ''),
-                last_name=admin.get('lastName') or '',
-                role_type=role_type,
-                department_name=department_name
-            ))
-        
-        # Sort admins by first_name, last_name
-        admins.sort(key=lambda x: (x.first_name.lower(), x.last_name.lower()))
-        
-        return MDOAdminListResponse(
-            admins=admins,
-            count=len(admins)
-        )
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error fetching MDO admins: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to fetch MDO admins: {str(e)}"
-        )
-
-
-@router.get("/{request_id}", response_model=ApprovalRequestDetail, status_code=status.HTTP_200_OK)
-async def get_approval_request_details(
-    request_id: uuid.UUID,
-    db: AsyncSession = Depends(get_db_session),
-    current_user: User = Depends(get_current_active_user)
-):
-    """
-    Retrieve detailed information about a specific approval request.
-    
-    Includes:
-    - Request metadata (name, status, timestamps, etc.)
-    - All role mapping snapshots with full details
-    """
-    try:
-        logger.info(f"Retrieving approval request details: {request_id}")
-        
-        service = ApprovalRequestService(db)
-        request_detail = await service.get_approval_request_details(
-            request_id=request_id,
-            user_id=current_user.user_id
-        )
-        
-        return request_detail
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error retrieving approval request details: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to retrieve approval request details: {str(e)}"
-        )
-
-
-@router.delete("/{request_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def revoke_approval_request(
-    request_id: uuid.UUID,
-    db: AsyncSession = Depends(get_db_session),
-    current_user: User = Depends(get_current_active_user)
-):
-    """
-    Revoke and permanently delete an approval request.
-    
-    Only allowed for requests with status PENDING or IN_REVIEW.
-    The creator can revoke their own requests to stop the approval workflow.
-    
-    After revocation:
-    - The approval request and all its role mapping snapshots are permanently deleted
-    
-    Returns 400 Bad Request if:
-    - Request is already APPROVED_PUBLISHED or REJECTED
-    - Request is in DRAFT status
-    """
-    try:
-        logger.info(f"Revoking (deleting) approval request: {request_id} by user {current_user.user_id}")
-        
-        service = ApprovalRequestService(db)
-        await service.revoke_approval_request(
-            request_id=request_id,
-            user_id=current_user.user_id
-        )
-        
-        logger.info(f"Approval request revoked and deleted successfully: {request_id}")
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error revoking approval request: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to revoke approval request: {str(e)}"
-        )
-
-
-@router.get("/{request_id}/cbp_plans", status_code=status.HTTP_200_OK)
-async def get_cbp_plans(
-    request_id: uuid.UUID,
-    role_mapping_item_id: uuid.UUID = Query(..., description="ID of the RequestedRoleMappingItem to fetch CBP plans for"),
-    db: AsyncSession = Depends(get_db_session),
-    current_user: User = Depends(get_current_active_user)
-):
-    """
-    Retrieve CBP plans for a specific role mapping item within an approval request.
-
-    - `role_mapping_item_id`: ID of the RequestedRoleMappingItem (query param)
-
-    Returns the list of CBP plan snapshots stored on that item.
+    Creates a snapshot of role mapping + CBP plan data in approval_request_items.
     """
     try:
         logger.info(
-            f"Fetching CBP plans for item {role_mapping_item_id} "
-            f"in request {request_id} by user {current_user.user_id}"
+            f"Send for approval: user={current_user.user_id}, "
+            f"role_mappings={len(request.role_mapping_ids)}, mdo={request.mdo_id}"
         )
 
-        service = ApprovalRequestService(db)
-        cbp_plans = await service.get_cbp_plans(
-            request_id=request_id,
+        # ── Step 1: Validate role mappings exist & belong to user ──
+        stmt = (
+            select(RoleMapping)
+            .options(selectinload(RoleMapping.cbp_plans))
+            .where(
+                and_(
+                    RoleMapping.id.in_(request.role_mapping_ids),
+                    RoleMapping.user_id == current_user.user_id,
+                    RoleMapping.state_center_id == request.state_center_id,
+                    RoleMapping.status == ProcessingStatus.COMPLETED
+                )
+            )
+        )
+        if request.department_id:
+            stmt = stmt.where(RoleMapping.department_id == request.department_id)
+
+        result = await db.execute(stmt)
+        role_mappings = list(result.scalars().unique().all())
+
+        if not role_mappings or len(role_mappings) == 0:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"No completed role mappings found for the provided IDs."
+            )
+
+        # Check all requested IDs were found
+        found_ids = {rm.id for rm in role_mappings}
+        missing_ids = set(request.role_mapping_ids) - found_ids
+        if missing_ids:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Role mappings not found for these IDs: {[str(mid) for mid in missing_ids]}"
+            )
+
+
+        no_cbp = [rm for rm in role_mappings if not rm.cbp_plans or len(rm.cbp_plans) == 0]
+        if no_cbp:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Course recommendations not generated/saved for: {[str(rm.id) for rm in no_cbp]}. "
+                       f"Please generate & save course recommendation to select."
+            )
+
+        # ── Step 6: Create snapshot items ──
+        items = []
+        for rm in role_mappings:
+            item = ApprovalRequestItem(
+                source_role_mapping_id=rm.id,
+                designation_name=rm.designation_name,
+                wing_division_section=getattr(rm, "wing_division_section", None),
+                role_responsibilities=getattr(rm, "role_responsibilities", None),
+                activities=getattr(rm, "activities", None),
+                competencies=getattr(rm, "competencies", None),
+                igot_designation_name=rm.igot_designation_name,
+                igot_designation_id=rm.igot_designation_id,
+                cbp_plan_data=[
+                    {
+                        "id": str(plan.id),
+                        "user_id": str(plan.user_id),
+                        "role_mapping_id": str(plan.role_mapping_id),
+                        "recommended_course_id": str(plan.recommended_course_id) if plan.recommended_course_id else None,
+                        "selected_courses": plan.selected_courses or [],
+                        "created_at": plan.created_at.isoformat() if plan.created_at else None,
+                        "updated_at": plan.updated_at.isoformat() if plan.updated_at else None,
+                    }
+                    for plan in (rm.cbp_plans or [])
+                ],
+                sort_order=rm.sort_order,
+            )
+            items.append(item)
+
+        # ── Step 7: Persist ──
+        state_center_name = role_mappings[0].state_center_name if role_mappings else None
+        department_name = role_mappings[0].department_name if role_mappings else None
+        org_type = role_mappings[0].org_type if role_mappings else None
+        approval = await crud_approval_request.create_approval_request(
+            db=db,
+            request_name=request.request_name,
             user_id=current_user.user_id,
-            role_mapping_item_id=role_mapping_item_id
+            state_center_id=request.state_center_id,
+            department_id=request.department_id,
+            state_center_name=state_center_name,
+            department_name=department_name,
+            org_type=org_type,
+            mdo_id=request.mdo_id,
+            items=items,
         )
 
-        logger.info(f"Returning {len(cbp_plans)} CBP plans for item: {role_mapping_item_id}")
+        logger.info(f"Approval request created with {len(items)} designations")
 
-        return {"role_mapping_item_id": str(role_mapping_item_id), "cbp_plans": cbp_plans}
+        return SendForApprovalResponse(
+            id=approval.id,
+            status=ApprovalStatus(approval.status) if isinstance(approval.status, str) else approval.status,
+            designation_count=approval.designation_count,
+            created_at=approval.created_at,
+            message="Request successfully submitted for approval."
+        )
 
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error fetching CBP plans: {str(e)}")
+        logger.exception("Error sending for approval")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to fetch CBP plans: {str(e)}"
+            detail="Failed to submit approval request"
+        )
+
+@router.get(
+    "/approval-requests",
+    response_model=ApprovalRequestListResponse
+)
+async def list_approval_requests(
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=10, ge=1, le=100),
+    search: Optional[str] = Query(default=None, max_length=200),
+    status_filter: Optional[ApprovalStatus] = Query(default=None, alias="status"),
+    db: AsyncSession = Depends(get_db_session),
+    current_user: User = Depends(get_current_active_user)
+):
+    """
+    List all approval requests submitted by the current user.
+    
+    - Supports pagination (default 10 per page)
+    - Search by request_name (partial) or request_id (exact)
+    - Filter by status dropdown
+    - Default sort: latest first
+    """
+    try:
+        items, total = await crud_approval_request.list_requests(
+            db=db,
+            user_id=current_user.user_id,
+            page=page,
+            page_size=page_size,
+            search=search,
+            status_filter=status_filter
+        )
+
+        total_pages = math.ceil(total / page_size) if total > 0 else 0
+
+        return ApprovalRequestListResponse(
+            total=total,
+            page=page,
+            page_size=page_size,
+            total_pages=total_pages,
+            items=[
+                ApprovalRequestListItem(
+                    id=item.id,
+                    request_name=item.request_name,
+                    designation_count=item.designation_count,
+                    status=item.status,
+                    created_at=item.created_at,
+                )
+                for item in items
+            ]
+        )
+
+    except Exception as e:
+        logger.exception("Error listing approval requests")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to fetch approval requests"
+        )
+
+@router.get(
+    "/approval-requests/{request_id}",
+    response_model=ApprovalRequestResponse
+)
+async def get_approval_request(
+    request_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db_session),
+    current_user: User = Depends(get_current_active_user)
+):
+    """
+    View full details of a submitted approval request including all designation
+    snapshots and course recommendations.
+    """
+    try:
+        approval = await crud_approval_request.get_by_request_id(
+            db, request_id, current_user.user_id
+        )
+
+        if not approval:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Approval request '{request_id}' not found"
+            )
+
+        return ApprovalRequestResponse(
+            id=approval.id,
+            request_name=approval.request_name,
+            user_id=approval.user_id,
+            state_center_name=approval.state_center_name,
+            department_name=approval.department_name,
+            org_type=approval.org_type,
+            state_center_id=approval.state_center_id,
+            department_id=approval.department_id,
+            mdo_id=approval.mdo_id,
+            designation_count=approval.designation_count,
+            status=approval.status,
+            created_at=approval.created_at,
+            reviewed_at=approval.reviewed_at,
+            revoked_at=approval.revoked_at,
+            reviewer_comments=approval.reviewer_comments,
+            items=[
+                ApprovalRequestItemResponse(
+                    id=item.id,
+                    source_role_mapping_id=item.source_role_mapping_id,
+                    designation_name=item.designation_name,
+                    wing_division_section=item.wing_division_section,
+                    role_responsibilities=item.role_responsibilities,
+                    activities=item.activities,
+                    competencies=item.competencies,
+                    igot_designation_name=item.igot_designation_name,
+                    igot_designation_id=item.igot_designation_id,
+                    cbp_plan_data=item.cbp_plan_data,
+                    sort_order=item.sort_order
+                )
+                for item in sorted(approval.items, key=lambda x: x.sort_order or 0)
+            ]
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("Error fetching approval request detail")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to fetch approval request"
+        )
+
+@router.post(
+    "/approval-requests/revoke",
+    response_model=RevokeApprovalResponse
+)
+async def revoke_approval_request(
+    request: RevokeApprovalRequest,
+    db: AsyncSession = Depends(get_db_session),
+    current_user: User = Depends(get_current_active_user)
+):
+    """
+    Revoke a pending approval request. 
+    
+    - Only allowed when status = 'pending'
+    - Changes status to 'draft'
+    - Cannot revoke approved/rejected requests
+    """
+    try:
+        # First check if it exists
+        existing = await crud_approval_request.get_by_request_id(
+            db, request.request_id, current_user.user_id
+        )
+
+        if not existing:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Approval request not found"
+            )
+
+        if existing.status != ApprovalStatus.PENDING:
+            status_val = ApprovalStatus(existing.status)
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Cannot revoke request with status '{status_val.value}'. Only 'pending' requests can be revoked."
+            )
+
+        # Perform revoke
+        revoked = await crud_approval_request.revoke_request(
+            db, request.request_id, current_user.user_id
+        )
+
+        if not revoked:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to revoke the request"
+            )
+
+        logger.info(f"Approval request {request.request_id} revoked by user {current_user.user_id}")
+
+        return RevokeApprovalResponse(
+            id=revoked.id,
+            status=revoked.status,
+            revoked_at=revoked.revoked_at,
+            message="Request has been successfully revoked."
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("Error revoking approval request")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to revoke approval request"
         )
