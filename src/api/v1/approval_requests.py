@@ -1,19 +1,21 @@
 import uuid
 import math
-import logging
 from datetime import date, datetime, time
 from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Body, Depends, HTTPException, Query, status
+from pydantic import json
+from sqlalchemy import and_
+from sqlalchemy.future import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from ...core.logger import logger
 from ...core.database import get_db_session
 from ...api.dependencies import get_current_active_user
 from ...models.user import User
 from ...models.role_mapping import RoleMapping, ProcessingStatus
 from ...models.approval_request import ApprovalRequestItem
 from ...schemas.comman import ApprovalStatus
-from ...crud.role_mapping import crud_role_mapping
 from ...crud.approval_request import crud_approval_request
 from ...schemas.approval_request import (
     SendForApprovalRequest,
@@ -23,18 +25,18 @@ from ...schemas.approval_request import (
     ApprovalRequestResponse,
     ApprovalRequestListResponse,
     ApprovalRequestListItem,
-    ApprovalRequestItemResponse
+    ApprovalRequestItemResponse,
+    MDOAdminListResponse,
+    MDOAdmin
 )
+from ...services.mdo_admin_service import mdo_admin_service
 
-from sqlalchemy.future import select
-from sqlalchemy import and_
 
-logger = logging.getLogger(__name__)
 
-router = APIRouter(tags=["Approval Requests"])
+router = APIRouter(prefix="/approval-requests", tags=["Approval Requests"])
 
 @router.post(
-    "/approval-requests/send",
+    "/send",
     response_model=SendForApprovalResponse,
     status_code=status.HTTP_201_CREATED
 )
@@ -168,7 +170,7 @@ async def send_for_approval(
         )
 
 @router.get(
-    "/approval-requests",
+    "/list",
     response_model=ApprovalRequestListResponse
 )
 async def list_approval_requests(
@@ -241,7 +243,7 @@ async def list_approval_requests(
         )
 
 @router.get(
-    "/approval-requests/{request_id}",
+    "/{request_id}",
     response_model=ApprovalRequestResponse
 )
 async def get_approval_request(
@@ -308,7 +310,7 @@ async def get_approval_request(
         )
 
 @router.post(
-    "/approval-requests/revoke",
+    "/revoke",
     response_model=RevokeApprovalResponse
 )
 async def revoke_approval_request(
@@ -369,4 +371,71 @@ async def revoke_approval_request(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to revoke approval request"
+        )
+    
+@router.post("/mdo-admins", response_model=MDOAdminListResponse, status_code=status.HTTP_200_OK)
+async def fetch_mdo_admins(
+    body: dict = Body(default={
+                "request": {
+                    "filters": {
+                        "organisations.roles": ["MDO_LEADER", "MDO_ADMIN"],
+                        "rootOrgId": 'department_id_placeholder'
+                    },
+                    "fields": ["firstName", "lastName", "id", "rootOrgId", "organisations", "roles"]
+                }
+            }),
+    current_user: User = Depends(get_current_active_user)
+):
+    """
+    Retrieve MDO (Ministry/Department/Organization) admins and leaders from iGOT portal.
+    
+    This endpoint fetches users with MDO_ADMIN or MDO_LEADER roles for a specific department.
+    The data is fetched from the iGOT Karmayogi portal API.
+    
+    Returns:
+    - List of MDO admins with their ID, first name, last name, role type, and department name
+    """
+    try:
+        logger.info(f"Fetching MDO admins for department: {body}")
+        
+        admins_data = await mdo_admin_service.get_mdo_admins(body)
+        
+
+        # Transform to simplified format
+        admins = []
+        for admin in admins_data:
+            # Get roles directly from API response
+            roles = admin.get('roles', [])
+            
+            role_type = "MDO_LEADER" if "MDO_LEADER" in roles else "MDO_ADMIN" if "MDO_ADMIN" in roles else ""
+            
+            # Get department name from organisations
+            department_name = ""
+            organisations = admin.get('organisations', [])
+            if organisations:
+                department_name = organisations[0].get('orgName', '')
+            
+            admins.append(MDOAdmin(
+                id=admin.get('id', ''),
+                first_name=admin.get('firstName', ''),
+                last_name=admin.get('lastName') or '',
+                role_type=role_type,
+                department_name=department_name
+            ))
+        
+        # Sort admins by first_name, last_name
+        admins.sort(key=lambda x: (x.first_name.lower(), x.last_name.lower()))
+        
+        return MDOAdminListResponse(
+            admins=admins,
+            count=len(admins)
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("Error while fetching MDO admins")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to fetch MDO admins list"
         )

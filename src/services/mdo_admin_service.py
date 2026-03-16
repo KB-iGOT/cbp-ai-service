@@ -18,12 +18,12 @@ class MDOAdminService:
         self.base_url = settings.KB_BASE_URL
         self.timeout = 30.0
     
-    async def get_mdo_admins(self, department_id: str) -> List[Dict[str, Any]]:
+    async def get_mdo_admins(self, body: dict) -> List[Dict[str, Any]]:
         """
         Fetch MDO admins and leaders from iGOT portal for a specific department.
         
         Args:
-            department_id: The department (rootOrgId) to filter MDO admins by
+            body: The request body to filter MDO admins by
             
         Returns:
             List of dictionaries containing MDO admin details:
@@ -49,22 +49,10 @@ class MDOAdminService:
                 "Authorization": auth_header
             }
             
-            payload = {
-                "request": {
-                    "filters": {
-                        "organisations.roles": ["MDO_LEADER", "MDO_ADMIN"],
-                        "rootOrgId": department_id
-                    },
-                    "fields": ["firstName", "lastName", "id", "rootOrgId", "organisations", "roles"]
-                }
-            }
-            
-            logger.info(f"Fetching MDO admins for department: {department_id} from {url}")
-            
             async with httpx.AsyncClient(timeout=self.timeout) as client:
                 response = await client.post(
                     url,
-                    json=payload,
+                    json=body,
                     headers=headers
                 )
                 
@@ -99,22 +87,22 @@ class MDOAdminService:
                 return processed_users
                 
         except httpx.HTTPStatusError as e:
-            logger.error(f"HTTP error fetching MDO admins: {e.response.status_code} - {e.response.text}")
+            logger.exception("HTTP error fetching MDO admins")
             raise HTTPException(
                 status_code=status.HTTP_502_BAD_GATEWAY,
-                detail=f"Failed to fetch MDO admins from iGOT portal: {str(e)}"
+                detail="Failed to fetch MDO admins from iGOT portal"
             )
         except httpx.RequestError as e:
-            logger.error(f"Request error fetching MDO admins: {str(e)}")
+            logger.exception("Request error fetching MDO admins")
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail=f"Unable to connect to iGOT portal: {str(e)}"
+                detail="Failed to fetch MDO admins from iGOT portal"
             )
         except Exception as e:
-            logger.error(f"Unexpected error fetching MDO admins: {str(e)}")
+            logger.exception("Unexpected error fetching MDO admins")
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Failed to fetch MDO admins: {str(e)}"
+                detail="Failed to fetch MDO admins"
             )
 
 
