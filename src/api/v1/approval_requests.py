@@ -378,6 +378,7 @@ async def fetch_mdo_admins(
     body: dict = Body(default={
                 "request": {
                     "filters": {
+                        "status": 1,
                         "organisations.roles": ["MDO_LEADER", "MDO_ADMIN"],
                         "rootOrgId": 'department_id_placeholder'
                     },
@@ -396,6 +397,14 @@ async def fetch_mdo_admins(
     - List of MDO admins with their ID, first name, last name, role type, and department name
     """
     try:
+        # Ensure "status": 1 is present in filters
+        if "request" in body and "filters" in body["request"]:
+            body["request"]["filters"] = {**body["request"]["filters"], "status": 1}
+        elif "request" in body:
+            body["request"]["filters"] = {"status": 1}
+        else:
+            body["request"] = {"filters": {"status": 1}}
+
         logger.info(f"Fetching MDO admins for department: {body}")
         
         admins_data = await mdo_admin_service.get_mdo_admins(body)
