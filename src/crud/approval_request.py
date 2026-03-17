@@ -8,6 +8,7 @@ from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload
 
 from ..models.approval_request import ApprovalRequest, ApprovalRequestItem
+from ..models.user import User
 from ..schemas.comman import ApprovalStatus
 
 
@@ -67,7 +68,10 @@ class CRUDApprovalRequest:
 
         stmt = (
             select(ApprovalRequest)
-            .options(selectinload(ApprovalRequest.items))
+            .options(
+                selectinload(ApprovalRequest.items),
+                selectinload(ApprovalRequest.user)
+            )
             .where(and_(*conditions))
         )
         result = await db.execute(stmt)
@@ -123,6 +127,7 @@ class CRUDApprovalRequest:
         offset = (page - 1) * page_size
         stmt = (
             select(ApprovalRequest)
+            .options(selectinload(ApprovalRequest.user))
             .where(where_clause)
             .order_by(desc(ApprovalRequest.created_at))
             .offset(offset)

@@ -15,7 +15,7 @@ class ApprovalRequest(Base):
     request_name = Column(String(100), nullable=False, index=True)  # User-friendly name for the request, e.g. "Role Mapping Update for State X"
     
     # Who submitted
-    user_id = Column(UUID(as_uuid=True), nullable=False, index=True)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.user_id", ondelete="CASCADE"), nullable=False, index=True)
     
     # Context
     org_type = Column(
@@ -50,7 +50,8 @@ class ApprovalRequest(Base):
     # Reviewer comments (set by MDO)
     reviewer_comments = Column(Text, nullable=True)
 
-    # Relationship to items
+    # Relationships
+    user = relationship("User", foreign_keys=[user_id], lazy="selectin")
     items = relationship("ApprovalRequestItem", back_populates="approval_request", cascade="all, delete-orphan", lazy="selectin")
 
 class ApprovalRequestItem(Base):

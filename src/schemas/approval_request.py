@@ -7,6 +7,17 @@ from pydantic import BaseModel, Field, field_validator
 from .comman import ApprovalStatus, Competency
 
 
+# ─── Nested Schemas ───
+
+class UserInfo(BaseModel):
+    user_id: uuid.UUID
+    username: str
+    email: str
+
+    class Config:
+        from_attributes = True
+
+
 # ─── Request Schemas ───
 
 class SendForApprovalRequest(BaseModel):
@@ -80,6 +91,7 @@ class ApprovalRequestResponse(BaseModel):
     id: uuid.UUID
     request_name: str
     user_id: uuid.UUID
+    user: Optional[UserInfo] = None
     org_type: Optional[str] = None
     state_center_id: str = Field(..., description="ID of the associated state/center")
     state_center_name: str = Field(..., description="Name of the associated state/center")
@@ -105,6 +117,7 @@ class ApprovalRequestResponse(BaseModel):
 class ApprovalRequestListItem(BaseModel):
     id: uuid.UUID
     request_name: str
+    user: Optional[UserInfo] = None
     designation_count: int
     status: ApprovalStatus
     created_at: datetime
