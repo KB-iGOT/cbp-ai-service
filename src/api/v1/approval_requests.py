@@ -27,7 +27,8 @@ from ...schemas.approval_request import (
     ApprovalRequestListItem,
     ApprovalRequestItemResponse,
     MDOAdminListResponse,
-    MDOAdmin
+    MDOAdmin,
+    UserInfo
 )
 from ...services.mdo_admin_service import mdo_admin_service
 
@@ -226,6 +227,11 @@ async def list_approval_requests(
                 ApprovalRequestListItem(
                     id=item.id,
                     request_name=item.request_name,
+                    user=UserInfo(
+                        user_id=item.user.user_id,
+                        username=item.user.username,
+                        email=item.user.email
+                    ) if item.user else None,
                     designation_count=item.designation_count,
                     status=item.status,
                     created_at=item.created_at,
@@ -270,6 +276,11 @@ async def get_approval_request(
             id=approval.id,
             request_name=approval.request_name,
             user_id=approval.user_id,
+            user=UserInfo(
+                user_id=approval.user.user_id,
+                username=approval.user.username,
+                email=approval.user.email
+            ) if approval.user else None,
             state_center_name=approval.state_center_name,
             department_name=approval.department_name,
             org_type=approval.org_type,
