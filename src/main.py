@@ -13,7 +13,7 @@ async def lifespan(app: FastAPI):
     
     sessionmanager.init(settings.DATABASE_URL)
     
-    print("--- Creating Tables ---")
+    logger.info("--- Creating Tables ---")
     async with sessionmanager.connect() as conn:
         await conn.run_sync(Base.metadata.create_all)
     logger.info("✅ Database tables ready")
