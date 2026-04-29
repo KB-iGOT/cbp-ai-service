@@ -109,7 +109,15 @@ class ApprovalRequestItem(Base):
     
     # CBP Plan snapshot
     cbp_plan_data = Column(JSON, nullable=True)
-    
+    status = Column(
+        Enum(ApprovalStatus, name="approval_status_item_enum", create_type=True),
+        nullable=False,
+        default=ApprovalStatus.PENDING
+    )
+     # Reviewer comments (set by MDO)
+    reviewer_comments = Column(Text, nullable=True)
+
+    rejected_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
 
     # Relationship back to request
