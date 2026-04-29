@@ -81,10 +81,18 @@ class ApprovalRequestItemResponse(BaseModel):
     igot_designation_name: Optional[str] = Field(None, description="Designation name as it exists in the iGOT portal")
     igot_designation_id: Optional[str] = Field(None, description="Designation ID from the iGOT portal")
 
+    status: ApprovalStatus
+    rejected_at: Optional[datetime] = None
+    reviewer_comments: Optional[str] = None
+    created_at: datetime
     cbp_plan_data: Optional[Any] = None
 
     class Config:
         from_attributes = True
+        json_encoders = {
+            datetime: lambda v: v.isoformat(),
+            uuid.UUID: lambda v: str(v)
+        }
 
 
 class ApprovalRequestResponse(BaseModel):
