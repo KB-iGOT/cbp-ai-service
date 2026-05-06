@@ -20,6 +20,7 @@ from .dashboard import router as dashboard_routes
 from .reports import router as reports_routes
 from .approval_requests import router as approval_requests_router
 from .designation import router as designation_router
+from .designation_approval import router as designation_approval_router
 
 router = APIRouter(prefix="/v1")
 
@@ -40,5 +41,6 @@ router.include_router(dashboard_routes)
 router.include_router(reports_routes)
 router.include_router(approval_requests_router)
 router.include_router(designation_router)
+router.include_router(designation_approval_router)
 
 router.include_router(health_routes)

@@ -9,6 +9,7 @@ from .core.logger import logger
 
 # Import all models to ensure they're registered with Base.metadata
 from .models import approval_request  # noqa: F401
+from .models import designation_approval  # noqa: F401
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
