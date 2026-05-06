@@ -25,4 +25,4 @@ RUN uv pip install playwright && \
 EXPOSE 8000
  
 # Run the application.
-CMD ["/app/.venv/bin/uvicorn", "src.main:app", "--port", "8000", "--host", "0.0.0.0",  "--timeout-keep-alive", "500", "--workers", "4"]
+CMD ["/app/.venv/bin/uvicorn", "src.main:app", "--port", "8000", "--host", "0.0.0.0",  "--timeout-keep-alive", "500"]
