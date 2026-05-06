@@ -4,8 +4,4 @@ from .user_session import UserSession
 from .approval_request import RequestStatus, RequestedRoleMapping, RequestedRoleMappingItem
 from .designation_approval import DesignationApproval, DesignationApprovalStatus
 
-__all__ = [
-    "User", "LoginAttempt", "UserSession",
-    "RequestStatus", "RequestedRoleMapping", "RequestedRoleMappingItem",
-    "DesignationApproval", "DesignationApprovalStatus",
-]
+__all__ = ["User", "LoginAttempt", "UserSession", "RequestStatus", "RequestedRoleMapping", "RequestedRoleMappingItem", "DesignationApproval", "DesignationApprovalStatus"]
