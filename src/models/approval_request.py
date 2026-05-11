@@ -110,7 +110,7 @@ class ApprovalRequestItem(Base):
     # CBP Plan snapshot
     cbp_plan_data = Column(JSON, nullable=True)
     status = Column(
-        Enum(ApprovalStatus, name="approval_status_item_enum", create_type=True),
+        Enum(ApprovalStatus, name="approval_request_item_status_enum", create_type=True),
         nullable=False,
         default=ApprovalStatus.PENDING
     )
