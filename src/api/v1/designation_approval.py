@@ -9,6 +9,7 @@ from ...api.dependencies import get_current_active_user
 from ...core.database import get_db_session
 from ...core.logger import logger
 from ...crud.designation_approval import crud_designation_approval
+from ...crud.role_mapping import crud_role_mapping
 from ...models.user import User
 from ...schemas.designation_approval import (
     DesignationApprovalCreate,
@@ -34,6 +35,25 @@ async def create_designation_approval(
     Duplicate check: same rolemapping_id + user_id + designation_name + wing_division_section → 409.
     """
     try:
+        # Verify rolemapping exists and belongs to this user
+        role_mapping = await crud_role_mapping.get_by_id_and_user(
+            db=db,
+            role_mapping_id=request_data.rolemapping_id,
+            user_id=current_user.user_id,
+        )
+        if not role_mapping:
+            raise HTTPException(
+                status_code=http_status.HTTP_404_NOT_FOUND,
+                detail="Role mapping not found.",
+            )
+
+        # Only unmatched designations (no igot_designation_id) are allowed
+        if role_mapping.igot_designation_id is not None and role_mapping.igot_designation_id != "":
+            raise HTTPException(
+                status_code=http_status.HTTP_400_BAD_REQUEST,
+                detail="This designation is already matched to an iGOT designation. Only unmatched designations can be submitted for approval.",
+            )
+
         existing = await crud_designation_approval.check_duplicate(
             db=db,
             rolemapping_id=request_data.rolemapping_id,
