@@ -305,7 +305,11 @@ async def get_approval_request(
                     igot_designation_name=item.igot_designation_name,
                     igot_designation_id=item.igot_designation_id,
                     cbp_plan_data=item.cbp_plan_data,
-                    sort_order=item.sort_order
+                    sort_order=item.sort_order,
+                    status=item.status,
+                    created_at=item.created_at,
+                    reviewer_comments=item.reviewer_comments,
+                    rejected_at=item.rejected_at,
                 )
                 for item in sorted(approval.items, key=lambda x: x.sort_order or 0)
             ]
