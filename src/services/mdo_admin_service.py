@@ -41,8 +41,6 @@ class MDOAdminService:
             
             # Format token properly - ensure it has 'Bearer ' prefix if needed or handles 'bearer ' prefix
             auth_header = self.auth_token
-            if not auth_header.lower().startswith("bearer "):
-                auth_header = f"Bearer {auth_header}"
                 
             headers = {
                 "Content-Type": "application/json",

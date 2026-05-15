@@ -18,7 +18,7 @@ class DesignationService:
     def _get_headers(self) -> dict:
         return {
             "Content-Type": "application/json",
-            "Authorization": f"Bearer {self.auth_token}",
+            "Authorization": f"{self.auth_token}",
         }
 
     async def search(self, body: dict) -> dict:
