@@ -2,7 +2,7 @@ import uuid
 import math
 from datetime import date, datetime, time
 from typing import Optional
-from fastapi import APIRouter, Body, Depends, HTTPException, Query, status
+from fastapi import APIRouter, BackgroundTasks, Body, Depends, HTTPException, Query, status
 from pydantic import json
 from sqlalchemy import and_
 from sqlalchemy.future import select
@@ -31,6 +31,7 @@ from ...schemas.approval_request import (
     UserInfo
 )
 from ...services.mdo_admin_service import mdo_admin_service
+from ...services.notification_service import notification_service
 
 
 
@@ -43,6 +44,7 @@ router = APIRouter(prefix="/approval-requests", tags=["Approval Requests"])
 )
 async def send_for_approval(
     request: SendForApprovalRequest,
+    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db_session),
     current_user: User = Depends(get_current_active_user)
 ):
@@ -152,6 +154,15 @@ async def send_for_approval(
         )
 
         logger.info(f"Approval request created with {len(items)} designations")
+
+        # Send email notification to MDO admin in background
+        background_tasks.add_task(
+            notification_service.send_cbp_approval_email,
+            mdo_id=request.mdo_id,
+            request_name=request.request_name,
+            requested_by=current_user.email,
+            request_id=str(approval.id),
+        )
 
         return SendForApprovalResponse(
             id=approval.id,
