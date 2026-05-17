@@ -1,7 +1,7 @@
 from datetime import date
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from fastapi import status as http_status
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -16,6 +16,7 @@ from ...schemas.designation_approval import (
     DesignationApprovalListResponse,
     DesignationApprovalResponse,
 )
+from ...services.notification_service import notification_service
 
 router = APIRouter(prefix="/designation-approval", tags=["Designation Approval"])
 
@@ -27,6 +28,7 @@ router = APIRouter(prefix="/designation-approval", tags=["Designation Approval"]
 )
 async def create_designation_approval(
     request_data: DesignationApprovalCreate,
+    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db_session),
     current_user: User = Depends(get_current_active_user),
 ):
@@ -77,6 +79,22 @@ async def create_designation_approval(
         )
 
         logger.info(f"Designation approval created: {record.id} for user {current_user.user_id}")
+
+        # Send email notification to SPV admins in background
+        organization = (
+            role_mapping.department_name
+            if role_mapping.department_name
+            else role_mapping.state_center_name or ""
+        )
+        background_tasks.add_task(
+            notification_service.send_designation_approval_email,
+            designation_name=request_data.designation_name,
+            requested_by=current_user.email,
+            organization=organization,
+            request_id=str(record.id),
+            user_id=str(current_user.user_id)
+        )
+
         return record
 
     except HTTPException:

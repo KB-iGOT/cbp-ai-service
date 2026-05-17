@@ -79,7 +79,8 @@ class MDOAdminService:
                         "lastName": user.get("lastName", ""),
                         "rootOrgId": user.get("rootOrgId", ""),
                         "organisations": user.get("organisations", []),
-                        "roles": roles
+                        "roles": roles,
+                        "profileDetails": user.get("profileDetails", {}),
                     })
                     
                 return processed_users
