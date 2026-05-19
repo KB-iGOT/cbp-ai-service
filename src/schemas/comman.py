@@ -12,6 +12,7 @@ class Competency(BaseModel):
 
 
 class ApprovalStatus(str, enum.Enum):
+    FAILED = "failed"
     DRAFT = "draft"
     PENDING = "pending"
     APPROVED = "approved"
