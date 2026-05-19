@@ -147,19 +147,6 @@ class Settings(BaseSettings):
         default="",
         description="MDO Portal URL for CBP review links"
     )
-    SPV_ADMIN_EMAIL_IDS: Union[str, list[str]] = Field(
-        default="",
-        description="Comma-separated SPV admin email IDs for notifications"
-    )
-
-    @field_validator("SPV_ADMIN_EMAIL_IDS", mode="after")
-    @classmethod
-    def parse_admin_emails(cls, v):
-        if isinstance(v, str):
-            return [x.strip() for x in v.split(",") if x.strip()]
-        elif isinstance(v, list):
-            return v
-        return v
 
 # Create a settings instance that can be imported by other modules
 settings = Settings()

@@ -1,6 +1,5 @@
 """
-Service for fetching MDO (Ministry/Department/Organization) admin and leader information
-from the iGOT Karmayogi portal.
+Service for searching users from the iGOT Karmayogi portal.
 """
 import httpx
 from typing import List, Dict, Any, Optional
@@ -10,20 +9,20 @@ from ..core.configs import settings
 from ..core.logger import logger
 
 
-class MDOAdminService:
-    """Service for interacting with iGOT portal to fetch MDO admin/leader data"""
+class UserSearchService:
+    """Service for searching users from iGOT portal"""
     
     def __init__(self, auth_token: str = None):
         self.auth_token = auth_token or settings.KB_AUTH_TOKEN
         self.base_url = settings.KB_BASE_URL
         self.timeout = 30.0
     
-    async def get_mdo_admins(self, body: dict) -> List[Dict[str, Any]]:
+    async def search_users(self, body: dict) -> List[Dict[str, Any]]:
         """
-        Fetch MDO admins and leaders from iGOT portal for a specific department.
+        Search users from iGOT portal based on provided filters.
         
         Args:
-            body: The request body to filter MDO admins by
+            body: The request body to filter users by
             
         Returns:
             List of dictionaries containing MDO admin details:
@@ -106,4 +105,4 @@ class MDOAdminService:
 
 
 # Initialize the service
-mdo_admin_service = MDOAdminService()
+user_search_service = UserSearchService()

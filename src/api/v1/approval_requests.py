@@ -30,7 +30,7 @@ from ...schemas.approval_request import (
     MDOAdmin,
     UserInfo
 )
-from ...services.mdo_admin_service import mdo_admin_service
+from ...services.user_search_service import user_search_service
 from ...services.notification_service import notification_service
 
 
@@ -433,7 +433,7 @@ async def fetch_mdo_admins(
 
         logger.info(f"Fetching MDO admins for department: {body}")
         
-        admins_data = await mdo_admin_service.get_mdo_admins(body)
+        admins_data = await user_search_service.search_users(body)
         
 
         # Transform to simplified format

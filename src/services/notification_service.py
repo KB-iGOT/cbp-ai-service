@@ -50,9 +50,38 @@ class NotificationService:
             logger.info("Email notifications disabled – skipping designation approval email")
             return
 
-        admin_emails: list[str] = settings.SPV_ADMIN_EMAIL_IDS
+        from .user_search_service import user_search_service
+
+        # Fetch SPV admin emails from iGOT portal
+        body = {
+            "request": {
+                "filters": {
+                    "status": 1,
+                    "organisations.roles": ["SPV_ADMIN"],
+                },
+                "fields": ["profileDetails"],
+            }
+        }
+        try:
+            users = await user_search_service.search_users(body)
+        except Exception as exc:
+            logger.error(f"Failed to fetch SPV admins for designation approval email: {exc}")
+            return
+
+        if not users:
+            logger.warning("No SPV admins found – skipping designation approval email")
+            return
+
+        admin_emails = []
+        for user in users:
+            profile = user.get("profileDetails", {})
+            personal = profile.get("personalDetails", {})
+            email = personal.get("primaryEmail")
+            if email:
+                admin_emails.append(email)
+
         if not admin_emails:
-            logger.warning("SPV_ADMIN_EMAIL_IDS not configured – skipping designation approval email")
+            logger.warning("No SPV admin emails found – skipping designation approval email")
             return
 
         spv_portal_url = settings.SPV_PORTAL_URL+"/app/home/designation-approval"
@@ -117,10 +146,10 @@ class NotificationService:
             logger.info("Email notifications disabled – skipping CBP approval email")
             return
 
-        from .mdo_admin_service import mdo_admin_service
+        from .user_search_service import user_search_service
 
         try:
-            # Use MDO admin service to fetch user details
+            # Use user search service to fetch user details
             body = {
                 "request": {
                     "filters": {
@@ -131,7 +160,7 @@ class NotificationService:
                     "fields": ["firstName", "lastName", "id", "rootOrgId", "organisations", "roles", "profileDetails"],
                 }
             }
-            users = await mdo_admin_service.get_mdo_admins(body)
+            users = await user_search_service.search_users(body)
             if not users:
                 logger.warning(f"No MDO admin found for mdo_id={mdo_id} – skipping CBP approval email")
                 return
