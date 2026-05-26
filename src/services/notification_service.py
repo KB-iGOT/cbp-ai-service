@@ -1,8 +1,11 @@
 from functools import lru_cache
 from pathlib import Path
 from datetime import datetime
+from zoneinfo import ZoneInfo
 
 import httpx
+
+IST = ZoneInfo("Asia/Kolkata")
 
 from ..core.configs import settings
 from ..core.logger import logger
@@ -85,7 +88,7 @@ class NotificationService:
             return
 
         spv_portal_url = settings.SPV_PORTAL_URL+"/app/home/designation-approval"
-        submitted_on = datetime.now().strftime("%d %b %Y, %I:%M %p")
+        submitted_on = datetime.now(IST).strftime("%d %b %Y, %I:%M %p IST")
         template_data = _load_template("new_designation_request_email.html")
 
         params = {
@@ -179,7 +182,7 @@ class NotificationService:
                 return
 
             mdo_portal_url = settings.MDO_PORTAL_URL+"/app/home/ai-cbp-requests/acbp-list/review-request/"+request_id
-            submitted_on = datetime.now().strftime("%d %b %Y, %I:%M %p")
+            submitted_on = datetime.now(IST).strftime("%d %b %Y, %I:%M %p IST")
             template_data = _load_template("cbplan_request_email.html")
 
             params = {
