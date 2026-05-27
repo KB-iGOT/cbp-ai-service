@@ -5,7 +5,7 @@ import uuid
 import asyncio
 from google import genai
 from google.genai import types
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ValidationError
 
 from ...schemas.role_mapping import OrgType
 from ...core.configs import settings
@@ -72,6 +72,23 @@ class DesignationExtractionResponse(BaseModel):
     designations: List[Designation] = Field(
         description="List of extracted unique designations sorted by hierarchy"
     )
+
+
+class FRACCompetency(BaseModel):
+    type: str = Field(description="Competency type")
+    theme: str = Field(description="Competency theme")
+    sub_theme: str = Field(description="Competency sub theme")
+    source: Optional[str] = Field(default=None, description="Competency source")
+
+
+class FRACRoleMapping(BaseModel):
+    designation_name: str = Field(description="Official designation")
+    wing_division_section: str = Field(description="Wing/division/section")
+    role_responsibilities: List[str] = Field(description="Role responsibilities")
+    activities: List[str] = Field(description="Activities")
+    sort_order: int = Field(description="Hierarchy order")
+    competencies: List[FRACCompetency] = Field(description="Competencies")
+    source: Optional[List[str]] = Field(default=None, description="Source references")
 
 class RoleMappingService:
     """Service for generating role mappings using Google AI"""
@@ -220,7 +237,7 @@ class RoleMappingService:
                     contents=contents,
                     config=generate_content_config,
                 )
-                
+
                 logger.info(f"FRAC Batch {batch_number} Gemini usage: {response.usage_metadata}")
                 
                 text_response = response.text
@@ -233,9 +250,29 @@ class RoleMappingService:
                 
                 text_response = text_response.replace("```json", '').replace("```", '')
                 parsed_response = json.loads(text_response)
+
+                if not isinstance(parsed_response, list):
+                    logger.warning(f"Batch {batch_number}: Expected a list response, got {type(parsed_response).__name__}")
+                    return []
                 
-                logger.info(f"Batch {batch_number}: Successfully generated {len(parsed_response)} FRAC mappings")
-                return parsed_response
+                validated_response: List[Dict[str, Any]] = []
+                skipped_records = 0
+                for idx, record in enumerate(parsed_response):
+                    try:
+                        validated_response.append(FRACRoleMapping.model_validate(record).model_dump())
+                    except ValidationError as ve:
+                        skipped_records += 1
+                        logger.warning(
+                            f"Batch {batch_number}: Skipping invalid record at index {idx} due to validation error: {ve}"
+                        )
+
+                if skipped_records:
+                    logger.warning(
+                        f"Batch {batch_number}: Skipped {skipped_records} invalid records after validation"
+                    )
+                
+                logger.info(f"Batch {batch_number}: Successfully generated {len(validated_response)} valid FRAC mappings")
+                return validated_response
             except json.JSONDecodeError as e:
                 logger.warning(f"Batch {batch_number}: JSON parse error on attempt {attempt}: {str(e)}")
                 if attempt < max_retries:
