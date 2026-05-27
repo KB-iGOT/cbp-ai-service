@@ -43,9 +43,10 @@ class CRUDDocument:
         self, 
         user_id: uuid.UUID,
         state_center_id: int | None = None,
-        department_id: int | None = None):
+        department_id: int | None = None,
+        document_type: str | None = None):
         async with sessionmanager.session() as db:
-            return await self.get_documents(db, summary_status='COMPLETED', uploader_id=user_id,state_center_id=state_center_id, department_id=department_id, limit=1000)
+            return await self.get_documents(db, summary_status='COMPLETED', uploader_id=user_id,state_center_id=state_center_id, department_id=department_id, document_type=document_type, limit=1000)
 
     async def get_documents(
         self,
@@ -54,6 +55,7 @@ class CRUDDocument:
         state_center_id: int | None = None,
         department_id: int | None = None,
         filename: str | None = None,
+        document_type: str | None = None,
         document_name: str | None = None,
         uploader_id: int | None = None,
         include_summary: bool = False,
@@ -80,6 +82,9 @@ class CRUDDocument:
 
         if filename:
             filters.append(Document.filename == filename)
+
+        if document_type:
+            filters.append(Document.document_type == document_type)
 
         if document_name:
             filters.append(Document.document_name == document_name)
