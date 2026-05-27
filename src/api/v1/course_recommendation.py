@@ -181,6 +181,7 @@ async def get_filtered_courses_by_llm(query, user_profile):
         contents=contents,
         config=generate_content_config,
     )
+    
     logger.info("Filtered courses successfully")
     return response.text
 
@@ -188,8 +189,9 @@ async def get_general_courses_from_gemini(user_profile) -> List[Dict[str, Any]]:
     """
     Fetches general courses from Gemini based on the designation and department.
     """
+    # Disabled for temporary reasons. Remove below line to enable Gemini fetching of general courses. 
+    return []
     logger.info("Fetching the general courses across the learning platforms")
-    
     generate_content_config = types.GenerateContentConfig(
         system_instruction=f"""
         You are an expert in civil service training and development.
