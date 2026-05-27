@@ -159,8 +159,6 @@ class RoleMappingService:
                 config=generate_content_config,
             )
             
-            logger.info(f"Designation Extraction Gemini usage: {response.usage_metadata}")
-            
             text_response = response.text
             if not text_response:
                 logger.error("Designation extraction response was empty")
@@ -347,9 +345,19 @@ class RoleMappingService:
         logger.info(f"Total FRAC mappings generated: {len(combined_results)}")
         return combined_results
     
-    async def get_documents_summary(self, user_id, state_center_id, department_id=None) -> str:
-        """Get document summaries for the organization formatted as numbered document_summary tags"""
-        _, retrieved_docs = await crud_document.get_all_documents_async(user_id, state_center_id, department_id)
+    async def get_documents_summary(self, user_id, state_center_id, department_id=None, document_type: str | None = None) -> str:
+        """Get document summaries for the organization formatted as numbered document_summary tags
+        
+        Args:
+            user_id: User ID
+            state_center_id: State center ID
+            department_id: Optional department ID
+            document_type: Optional filter for document type (e.g., 'Work Allocation Order')
+            
+        Returns:
+            Formatted document summaries
+        """
+        _, retrieved_docs = await crud_document.get_all_documents_async(user_id, state_center_id, department_id, document_type=document_type)
         if not retrieved_docs:
             return ""
         
@@ -390,25 +398,26 @@ class RoleMappingService:
         try:
             logger.info(f"Starting TWO-PASS role mapping for state_center_id: {state_center_id}")
             
-            # Fetch document summaries
-            docs_summary = await self.get_documents_summary(user_id, state_center_id, department_id)
+            # Fetch document summaries for PASS 1 (only Work Allocation Order type)
+            wao_summary = await self.get_documents_summary(user_id, state_center_id, department_id, document_type="Work Allocation Order")
             
-            # Prepare organization data
-            organization_data = {
+            # Prepare organization data for PASS 1 with filtered summaries
+            organization_data_pass1 = {
                 "org_type": org_type.value,
                 "state_center_id": state_center_id,
                 "department_id": department_id,
                 "organization_name": state_center_name,
                 "department_name": department_name if department_name else "N/A",
-                "docs_summary": docs_summary if docs_summary else 'N/A',
+                "docs_summary": wao_summary if wao_summary else 'N/A',
                 "instruction": instruction if instruction else "N/A"
             }
             
             # ============ PASS 1: DESIGNATION EXTRACTION ============
             logger.info("STARTING PASS 1: DESIGNATION EXTRACTION")
+            logger.info("PASS 1 will use only Work Allocation Order document summaries")
             
             extraction_result = await self._extract_designations(
-                organization_data
+                organization_data_pass1
             )
 
             designations = extraction_result.get('designations', [])
@@ -421,9 +430,24 @@ class RoleMappingService:
             # ============ PASS 2: FRAC GENERATION IN BATCHES ============
             logger.info("STARTING PASS 2: FRAC GENERATION")
             
+            # Fetch all document summaries for PASS 2 (no type filter)
+            all_docs_summary = await self.get_documents_summary(user_id, state_center_id, department_id)
+            
+            # Prepare organization data for PASS 2 with all summaries
+            organization_data_pass2 = {
+                "org_type": org_type.value,
+                "state_center_id": state_center_id,
+                "department_id": department_id,
+                "organization_name": state_center_name,
+                "department_name": department_name if department_name else "N/A",
+                "docs_summary": all_docs_summary if all_docs_summary else 'N/A',
+                "instruction": instruction if instruction else "N/A"
+            }
+            logger.info("PASS 2 will use all document summaries")
+            
             frac_mappings = await self._process_batches_parallel(
                 designations,
-                organization_data,
+                organization_data_pass2,
                 batch_size=30
             )
 
