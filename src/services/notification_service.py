@@ -49,6 +49,7 @@ class NotificationService:
         user_id: str
     ) -> None:
         """Send email notification to SPV admins when a new designation approval request is created."""
+        
         if not settings.ENABLE_EMAIL_NOTIFICATION:
             logger.info("Email notifications disabled – skipping designation approval email")
             return
@@ -62,7 +63,7 @@ class NotificationService:
                     "status": 1,
                     "organisations.roles": ["SPV_ADMIN"],
                 },
-                "fields": ["profileDetails"],
+                "fields": ["profileDetails"]
             }
         }
         try:
@@ -70,23 +71,22 @@ class NotificationService:
         except Exception as exc:
             logger.error(f"Failed to fetch SPV admins for designation approval email: {exc}")
             return
-
+        
         if not users:
             logger.warning("No SPV admins found – skipping designation approval email")
             return
-
+        
         admin_emails = []
         for user in users:
-            profile = user.get("profileDetails", {})
-            personal = profile.get("personalDetails", {})
+            profile = user.get("profileDetails") or {}
+            personal = profile.get("personalDetails") or {}
             email = personal.get("primaryEmail")
             if email:
                 admin_emails.append(email)
-
         if not admin_emails:
             logger.warning("No SPV admin emails found – skipping designation approval email")
             return
-
+        
         spv_portal_url = settings.SPV_PORTAL_URL+"/app/home/designation-approval"
         submitted_on = datetime.now(IST).strftime("%d %b %Y, %I:%M %p IST")
         template_data = _load_template("new_designation_request_email.html")
@@ -171,8 +171,8 @@ class NotificationService:
             # Extract email from profileDetails.personalDetails.primaryEmail
             mdo_emails = []
             for user in users:
-                profile = user.get("profileDetails", {})
-                personal = profile.get("personalDetails", {})
+                profile = user.get("profileDetails") or {}
+                personal = profile.get("personalDetails") or {}
                 email = personal.get("primaryEmail")
                 if email:
                     mdo_emails.append(email)
