@@ -181,7 +181,7 @@ class NotificationService:
                 logger.warning(f"No email found for MDO admin mdo_id={mdo_id} – skipping CBP approval email")
                 return
 
-            mdo_portal_url = settings.MDO_PORTAL_URL+"/app/home/ai-cbp-requests/acbp-list/review-request/"+request_id
+            mdo_portal_url = settings.MDO_PORTAL_URL+"/app/home/ai-cbp-requests/acbp-list/review-request/"+request_id+"?source=mdo"
             submitted_on = datetime.now(IST).strftime("%d %b %Y, %I:%M %p IST")
             template_data = _load_template("cbplan_request_email.html")
 
