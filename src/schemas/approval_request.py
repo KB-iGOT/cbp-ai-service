@@ -128,6 +128,7 @@ class ApprovalRequestListItem(BaseModel):
     user: Optional[UserInfo] = None
     designation_count: int
     status: ApprovalStatus
+    reviewer_comments: Optional[str] = None 
     created_at: datetime
 
     class Config:

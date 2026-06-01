@@ -245,6 +245,7 @@ async def list_approval_requests(
                     ) if item.user else None,
                     designation_count=item.designation_count,
                     status=item.status,
+                    reviewer_comments=item.reviewer_comments,
                     created_at=item.created_at,
                 )
                 for item in items
