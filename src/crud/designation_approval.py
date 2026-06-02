@@ -25,6 +25,7 @@ class CRUDDesignationApproval:
                 DesignationApproval.user_id == user_id,
                 DesignationApproval.designation_name == designation_name,
                 DesignationApproval.wing_division_section == wing_division_section,
+                DesignationApproval.status != DesignationApprovalStatus.REJECTED.value
             )
         )
         result = await db.execute(stmt)
