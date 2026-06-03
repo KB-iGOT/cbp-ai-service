@@ -391,6 +391,7 @@ async def generate_course_recommendations(
             
             if current_status == RecommendationStatus.COMPLETED:
                 response = RecommendedCourseResponse.model_validate(existing_recommendation)
+                response.is_existing = True
                 return JSONResponse(
                     status_code=status.HTTP_201_CREATED,
                     content=response.model_dump(mode="json")

@@ -15,6 +15,7 @@ class RecommendedCourseResponse(RecommendedCourseBase):
     id: uuid.UUID = Field(..., description="Unique identifier")
     user_id: uuid.UUID = Field(..., description="User ID")
     status: str = Field(..., description="Status")
+    is_existing: bool = Field(default=False, description="Indicates whether the recommendation already existed (true) or was newly generated (false).")
     created_at: datetime = Field(..., description="Creation timestamp")
     updated_at: datetime = Field(..., description="Last update timestamp")
     
