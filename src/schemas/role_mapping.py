@@ -1,5 +1,5 @@
 from enum import Enum
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 from typing import Any, Dict, List, Optional
 from datetime import datetime
 import uuid
@@ -60,6 +60,19 @@ class CBPPlan(BaseModel):
             uuid.UUID: lambda v: str(v)
         }
 
+class DesignationApprovalInfo(BaseModel):
+    """Nested schema for designation approval within role mapping response"""
+    rolemapping_id: uuid.UUID = Field(..., description="Role mapping ID")
+    status: str = Field(..., description="Approval status (pending, approved, rejected)")
+    reviewer_comments: Optional[str] = Field(None, description="Reviewer comments")
+
+    class Config:
+        from_attributes = True
+        json_encoders = {
+            uuid.UUID: lambda v: str(v)
+        }
+
+
 class RoleMappingResponse(RoleMappingBase):
     """Schema for Role Mapping response"""
     id: uuid.UUID = Field(..., description="Unique identifier")
@@ -78,6 +91,18 @@ class RoleMappingResponse(RoleMappingBase):
     
     # Add CBP plans relationship
     cbp_plans: List[CBPPlan] = Field(default=[], description="List of CBP plans associated with this role mapping")
+    # Add designation approval relationship
+    designation_approval: Optional[DesignationApprovalInfo] = Field(None, description="Designation approval status for this role mapping")
+
+    @model_validator(mode='before')
+    @classmethod
+    def extract_designation_approval(cls, data):
+        """Extract the approved designation approval from the relationship list."""
+        approvals = getattr(data, 'designation_approvals', None)
+        if approvals and len(approvals) > 0:
+            data.__dict__['designation_approval'] = approvals[0]
+        return data
+
     class Config:
         from_attributes = True
         json_encoders = {

@@ -153,6 +153,11 @@ class RoleMapping(Base):
         back_populates="role_mapping",
         cascade="all, delete-orphan"
     )
+
+    designation_approvals = relationship(
+        "DesignationApproval",
+        back_populates="role_mapping"
+    )
     
     def __repr__(self):
         return f"<RoleMapping(id={self.id}, user_id='{self.user_id}', state_center_id='{self.state_center_id}')>"
