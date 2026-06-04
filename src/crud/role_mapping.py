@@ -3,10 +3,11 @@ from typing import List, Optional
 from sqlalchemy import and_, delete, desc, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
-from sqlalchemy.orm import selectinload, noload
+from sqlalchemy.orm import selectinload, noload, contains_eager
 
 # Assuming RoleMapping is defined in src/models/cbp_plan.py
-from ..models.role_mapping import ProcessingStatus, RoleMapping 
+from ..models.role_mapping import ProcessingStatus, RoleMapping
+from ..models.designation_approval import DesignationApproval
 from ..core.database import sessionmanager 
 
 class CRUDRoleMapping:
@@ -136,10 +137,17 @@ class CRUDRoleMapping:
             # Prevent lazy loading by explicitly setting noload
             stmt = stmt.options(noload(RoleMapping.cbp_plans))
         
+        # Always load only approved designation approvals
+        stmt = stmt.outerjoin(
+            DesignationApproval,
+            and_(
+                DesignationApproval.rolemapping_id == RoleMapping.id,
+                DesignationApproval.status == 'pending' # Load only pending approvals for context in the UI
+            )
+        ).options(contains_eager(RoleMapping.designation_approvals))
+        
         result = await db.execute(stmt)
-        role_mappings = result.scalars().all()
-
-        # Explicitly set cbp_plans to empty list when not loading to avoid lazy loading errors
+        role_mappings = result.unique().scalars().all()
         if not load_cbp_plans:
             for mapping in role_mappings:
                 # Use object.__setattr__ to bypass SQLAlchemy's descriptor

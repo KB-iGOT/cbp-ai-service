@@ -3,6 +3,7 @@ import uuid
 
 from sqlalchemy import Column, DateTime, Enum, ForeignKey, String, Text
 from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 
 from ..core.database import Base
@@ -20,7 +21,7 @@ class DesignationApproval(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     rolemapping_id = Column(
         UUID(as_uuid=True),
-        ForeignKey("role_mappings.id", ondelete="CASCADE"),
+        ForeignKey("role_mappings.id"),
         nullable=False,
         index=True,
     )
@@ -36,3 +37,5 @@ class DesignationApproval(Base):
     reviewer_comments = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    role_mapping = relationship("RoleMapping", back_populates="designation_approvals")

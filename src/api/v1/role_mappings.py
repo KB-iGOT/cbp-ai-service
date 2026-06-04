@@ -403,11 +403,11 @@ async def match_designations_with_igot(
         match_results = await designation_service.match_designations(designation_names)
 
         # 7. Prepare bulk updates
-        match_dict = {m["designation"]: m for m in match_results}
+        match_dict = {m["designation"].lower() : m for m in match_results}
         bulk_updates = []
 
         for rm in records_to_match:
-            match_data = match_dict.get(rm.designation_name)
+            match_data = match_dict.get(rm.designation_name.lower())
             if not match_data:
                 continue
 
