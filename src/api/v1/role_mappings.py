@@ -490,8 +490,7 @@ async def add_designation_to_role_mapping(
                 detail="Role mapping not found"
             )
         
-        next_sort_order = 1 if not role_mapping else role_mapping.sort_order + 1
-        # 🔹 Run LLM calls in parallel
+        # 🔹 Run LLM calls in parallel (sort_order assigned atomically on insert)
         async def generate_and_prepare(input_data: Dict):
             generated = await generate_role_and_competencies(input_data)
             return RoleMapping(
@@ -501,7 +500,6 @@ async def add_designation_to_role_mapping(
                 department_id=request.department_id,
                 department_name=request.department_name,
                 instruction=request.instruction,
-                sort_order=next_sort_order,
                 designation_name=generated.get('designation_name'),
                 wing_division_section=generated.get('wing_division_section'),
                 role_responsibilities=generated.get('role_responsibilities'),
@@ -519,7 +517,13 @@ async def add_designation_to_role_mapping(
             "instruction": request.instruction if request.instruction else "N/A"
         }) for name in designation_names]
         designations_to_insert = await asyncio.gather(*tasks)
-        new_mapping = await crud_role_mapping.create(designations_to_insert)
+        # Assign sort_order atomically to prevent duplicates under parallel calls
+        new_mapping = await crud_role_mapping.create_with_next_sort_order(
+            designations_to_insert,
+            state_center_id=request.state_center_id,
+            user_id=current_user.user_id,
+            department_id=request.department_id
+        )
         return new_mapping[0]
     except HTTPException:
         raise
