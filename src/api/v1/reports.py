@@ -105,7 +105,8 @@ class ReportService:
         self, 
         cbp_records: List[RoleMappingResponse], 
         center_department_name: str,
-        template_type: ReportType = ReportType.CBP
+        template_type: ReportType = ReportType.CBP,
+        language: str = "en"
     ) -> str:
         """Generate HTML for CBP/ACBP report"""
         designation_data = [DesignationData(record).to_dict() for record in cbp_records]
@@ -117,7 +118,8 @@ class ReportService:
         return template.render(
             designations=designation_data,
             stats=stats,
-            current_year=datetime.now().year
+            current_year=datetime.now().year,
+            language=language
         )
     
     async def translate_role_mapping(
@@ -358,7 +360,8 @@ async def download_plan_report(
             report_service.render_cbp_template,
             role_mapping,
             center_department_name,
-            report_type
+            report_type,
+            language
         )
         
         # Generate and return PDF
