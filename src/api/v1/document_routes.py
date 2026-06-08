@@ -13,7 +13,7 @@ from ...core.configs import settings
 from ...api.dependencies import get_current_active_user
 from ...core.database import get_db_session
 
-from ...schemas.document import BatchUploadResponse, DocumentResponse, DocumentListResponse, SummaryTriggerResponse, DocumentDeleteResponse, SummaryDeleteResponse, UploadFailure
+from ...schemas.document import BatchUploadResponse, DocumentResponse, DocumentListResponse, SummaryTriggerResponse, DocumentDeleteResponse, SummaryDeleteResponse, UploadFailure, DocumentType
 from ...services.storage_service import get_storage_service
 from ...prompts.prompts import DOCUMENT_SUMMARY_PROMPT
 from ...crud.document import crud_document
@@ -50,6 +50,7 @@ storage_service = get_storage_service()
 async def upload_files(
     state_center_id: str = Form(...),
     department_id: Optional[str] = Form(None),
+    document_type: DocumentType = Form(...),
     files: List[UploadFile] = File(...),
     db: AsyncSession = Depends(get_db_session),
     current_user=Depends(get_current_active_user)
@@ -126,6 +127,7 @@ async def upload_files(
                     department_id=department_id,
                     uploader_id=current_user.user_id,
                     filename=file_info['filename'],
+                    document_type=document_type.value,
                     stored_path=stored_path,
                     file_size_bytes=file_size,
                     summary_status="NOT_STARTED"
@@ -178,6 +180,7 @@ async def list_files(
     state_center_id: Optional[str] = Query(None),
     department_id: Optional[str] = Query(None),
     filename: Optional[str] = Query(None, description="Exact filename filter"),
+    document_type: Optional[DocumentType] = Query(None, description="Exact document type filter"),
     document_name: Optional[str] = Query(None, description="Exact document name filter"),
     uploader_id: Optional[uuid.UUID] = Query(None, description="Filter by uploader"),
     summary_status: Optional[str] = Query(None),
@@ -195,6 +198,7 @@ async def list_files(
             state_center_id,
             department_id,
             filename,
+            document_type.value if document_type else None,
             document_name,
             uploader_id,
             include_summary,
