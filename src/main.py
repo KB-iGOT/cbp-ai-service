@@ -2,6 +2,8 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from .core.middleware import APILoggingMiddleware
+
 from .core.database import Base, sessionmanager
 from .api import router
 from .core.configs import EnvironmentOption, settings
@@ -43,5 +45,7 @@ app.add_middleware(
     allow_methods=["*"],      # Allow all HTTP methods
     allow_headers=["*"],      # Allow all headers
 )
+
+app.add_middleware(APILoggingMiddleware)
 
 app.include_router(router)
