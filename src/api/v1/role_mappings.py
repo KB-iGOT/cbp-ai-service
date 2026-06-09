@@ -749,7 +749,7 @@ async def delete_role_mapping(
         force_delete: If True, force deletion even with references (future use)
     """
     try:
-        logger.info(f"Deleting role mapping with ID: {role_mapping_id}")
+        logger.info(f"Deleting role mapping with ID: {role_mapping_id} by user {current_user.user_id}")
         
         db_role_mapping = await crud_role_mapping.get_by_id_and_user(db,role_mapping_id, current_user.user_id)
         
@@ -801,7 +801,7 @@ async def delete_role_mappings_by_state_center_and_department(
     """
 
     logger.info(f"Delete role mappings request - state_center_id: {state_center_id}, "
-                   f"department_id: {department_id}")
+                   f"department_id: {department_id} by user {current_user.user_id}")
     
     in_progress_record = await crud_role_mapping.get_in_progress_mapping(db,state_center_id,  current_user.user_id, department_id)
 
