@@ -696,7 +696,7 @@ async def update_role_mapping(
         role_mapping_update: Fields to update
     """
     try:
-        logger.info(f"Updating role mapping with ID: {role_mapping_id}")
+        logger.info(f"Updating role mapping with ID: {role_mapping_id} by user {current_user.user_id}")
 
         update_records = role_mapping_update.model_dump(exclude_unset=True)
         designation_name = update_records.get("designation_name", '').strip()
