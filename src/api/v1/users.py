@@ -187,6 +187,7 @@ async def update_user(
 ):
     """Update a user"""
     try:
+        logger.info(f"Updating user details: {user_id} by {current_user.user_id}")
         user = await crud_user.get_by_id(db, user_id)
         
         if not user:
@@ -199,6 +200,7 @@ async def update_user(
         if user_update.username or user_update.email:
             existing_user = await crud_user.get_by_username(db, user_update.username)
             if existing_user:
+                logger.warning(f"Username/Email already exists: {user_update.username}")
                 raise HTTPException(
                     status_code=status.HTTP_409_CONFLICT,
                     detail=f"Username/Email already exists"
@@ -240,6 +242,7 @@ async def delete_user(
 ):
     """Delete a user (soft delete by setting is_active to False)"""
     try:
+        logger.info(f"Deleting user: {user_id} by {current_user.user_id}")
         user = await crud_user.get_by_id(db, user_id)
         
         if not user:
