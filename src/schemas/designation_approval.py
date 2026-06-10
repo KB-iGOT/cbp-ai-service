@@ -19,6 +19,7 @@ class DesignationApprovalResponse(BaseModel):
     wing_division_section: str
     status: str
     reviewer_comments: Optional[str] = None
+    actioned_by: Optional[str] = None
     created_at: datetime
     updated_at: Optional[datetime] = None
 
