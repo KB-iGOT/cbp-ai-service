@@ -1,12 +1,10 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="{{ language | default('en') }}">
 
 <head>
   <meta charset="UTF-8" />
   <title>View CBP Plan</title>
-  <link href="https://fonts.googleapis.com/css2?family=Lato&display=swap" rel="stylesheet" />
    <style>
-    @import url('https://fonts.googleapis.com/css2?family=Lato&display=swap');
     @media print {
 
       /* Remove shadows/background gradients */
@@ -25,7 +23,7 @@
         /* <-- ADJUST THIS TO FIT PAGE */
       }
        body * {
-      font-family: 'Lato', sans-serif !important;
+      font-family: 'Lato', 'Noto Sans', 'Noto Sans Devanagari', 'Noto Sans Telugu', 'Noto Sans Kannada', 'Noto Sans Tamil', 'Noto Sans Bengali', 'Noto Sans Gujarati', 'Noto Sans Malayalam', 'Noto Sans Oriya', 'Noto Sans Gurmukhi', sans-serif !important;
     }
 
       * {

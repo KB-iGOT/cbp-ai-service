@@ -49,7 +49,7 @@ async def search_courses(identifiers: List[str]) -> List[Dict[str, Any]]:
             json=payload,
             headers={
                 "Content-Type": "application/json",
-                "Authorization": f"Bearer {settings.KB_AUTH_TOKEN}"
+                "Authorization": f"{settings.KB_AUTH_TOKEN}"
             }
         )
         response.raise_for_status()

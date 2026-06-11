@@ -14,6 +14,7 @@ class Document(Base):
     department_id = Column(String(32), nullable=True, index=True)
     uploader_id = Column(UUID(as_uuid=True), nullable=True, index=True)
     filename = Column(String(512), nullable=False)
+    document_type = Column(String(128), nullable=True, index=True, comment="Upload category selected by user")
     document_name = Column(String(512), nullable=True, comment="Custom display name for the document, overrides filename if provided")
     stored_path = Column(String(1024), nullable=False)
     file_size_bytes = Column(Integer, nullable=True)

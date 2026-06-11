@@ -2,6 +2,8 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from .core.middleware import APILoggingMiddleware
+
 from .core.database import Base, sessionmanager
 from .api import router
 from .core.configs import EnvironmentOption, settings
@@ -13,7 +15,7 @@ async def lifespan(app: FastAPI):
     
     sessionmanager.init(settings.DATABASE_URL)
     
-    print("--- Creating Tables ---")
+    logger.info("--- Creating Tables ---")
     async with sessionmanager.connect() as conn:
         await conn.run_sync(Base.metadata.create_all)
     logger.info("✅ Database tables ready")
@@ -43,5 +45,7 @@ app.add_middleware(
     allow_methods=["*"],      # Allow all HTTP methods
     allow_headers=["*"],      # Allow all headers
 )
+
+app.add_middleware(APILoggingMiddleware)
 
 app.include_router(router)

@@ -1,12 +1,13 @@
 import uuid
 from typing import List, Optional
-from sqlalchemy import and_, delete, desc, update
+from sqlalchemy import and_, delete, desc, func, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
-from sqlalchemy.orm import selectinload, noload
+from sqlalchemy.orm import selectinload, noload, contains_eager
 
 # Assuming RoleMapping is defined in src/models/cbp_plan.py
-from ..models.role_mapping import ProcessingStatus, RoleMapping 
+from ..models.role_mapping import ProcessingStatus, RoleMapping
+from ..models.designation_approval import DesignationApproval
 from ..core.database import sessionmanager 
 
 class CRUDRoleMapping:
@@ -136,10 +137,17 @@ class CRUDRoleMapping:
             # Prevent lazy loading by explicitly setting noload
             stmt = stmt.options(noload(RoleMapping.cbp_plans))
         
+        # Always load only approved designation approvals
+        stmt = stmt.outerjoin(
+            DesignationApproval,
+            and_(
+                DesignationApproval.rolemapping_id == RoleMapping.id,
+                DesignationApproval.status == 'pending' # Load only pending approvals for context in the UI
+            )
+        ).options(contains_eager(RoleMapping.designation_approvals))
+        
         result = await db.execute(stmt)
-        role_mappings = result.scalars().all()
-
-        # Explicitly set cbp_plans to empty list when not loading to avoid lazy loading errors
+        role_mappings = result.unique().scalars().all()
         if not load_cbp_plans:
             for mapping in role_mappings:
                 # Use object.__setattr__ to bypass SQLAlchemy's descriptor
@@ -170,6 +178,54 @@ class CRUDRoleMapping:
         new_mappings: List[RoleMapping]
     ) -> List[RoleMapping]:
         async with sessionmanager.session() as db:
+            db.add_all(new_mappings)
+            await db.commit()
+            for mapping in new_mappings:
+                await db.refresh(mapping)
+            return new_mappings
+
+    async def create_with_next_sort_order(
+        self,
+        new_mappings: List[RoleMapping],
+        state_center_id: str,
+        user_id: uuid.UUID,
+        department_id: Optional[str]
+    ) -> List[RoleMapping]:
+        """
+        Atomically assigns the next sort_order(s) and creates the role mapping rows.
+
+        Uses SELECT … FOR UPDATE to lock the existing rows for the given
+        user/state_center/department scope, preventing two concurrent requests
+        from computing the same MAX(sort_order) and producing duplicates.
+        """
+        conditions = [
+            RoleMapping.state_center_id == state_center_id,
+            RoleMapping.user_id == user_id,
+        ]
+        if department_id:
+            conditions.append(RoleMapping.department_id == department_id)
+        else:
+            conditions.append(RoleMapping.department_id.is_(None))
+
+        async with sessionmanager.session() as db:
+            # Lock existing rows so concurrent requests queue up here
+            lock_stmt = (
+                select(RoleMapping.id)
+                .where(and_(*conditions))
+                .with_for_update()
+            )
+            await db.execute(lock_stmt)
+
+            # Compute the next available sort_order within the lock
+            max_stmt = select(
+                func.coalesce(func.max(RoleMapping.sort_order), 0)
+            ).where(and_(*conditions))
+            result = await db.execute(max_stmt)
+            current_max = result.scalar()
+
+            for i, mapping in enumerate(new_mappings):
+                mapping.sort_order = current_max + 1 + i
+
             db.add_all(new_mappings)
             await db.commit()
             for mapping in new_mappings:
@@ -317,6 +373,32 @@ class CRUDRoleMapping:
 
         await db.commit()
         return updated_count
+    
+    async def bulk_update_designation_matching(
+    self,
+    db: AsyncSession,
+    updates: List[dict]
+    ) -> int:
+        """
+        Bulk update designation matching data.
+        
+        Args:
+            updates: List of dicts with 'role_mapping_id', 'igot_designation_name',
+                    'igot_designation_id', and optionally 'designation_name'
+        """
+        if not updates:
+            return 0
+
+        updated_count = 0
+        for update_item in updates:
+            role_mapping_id = update_item.pop('role_mapping_id')
+            stmt = update(RoleMapping).where(RoleMapping.id == role_mapping_id).values(**update_item)
+            result = await db.execute(stmt)
+            updated_count += result.rowcount
+
+        await db.commit()
+        return updated_count
+
 
 # Initialize the CRUD utility for use across the application
 crud_role_mapping = CRUDRoleMapping()

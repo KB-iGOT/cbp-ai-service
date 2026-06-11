@@ -13,7 +13,7 @@ from ...core.configs import settings
 from ...api.dependencies import get_current_active_user
 from ...core.database import get_db_session
 
-from ...schemas.document import BatchUploadResponse, DocumentResponse, DocumentListResponse, SummaryTriggerResponse, DocumentDeleteResponse, SummaryDeleteResponse, UploadFailure
+from ...schemas.document import BatchUploadResponse, DocumentResponse, DocumentListResponse, SummaryTriggerResponse, DocumentDeleteResponse, SummaryDeleteResponse, UploadFailure, DocumentType
 from ...services.storage_service import get_storage_service
 from ...prompts.prompts import DOCUMENT_SUMMARY_PROMPT
 from ...crud.document import crud_document
@@ -50,13 +50,15 @@ storage_service = get_storage_service()
 async def upload_files(
     state_center_id: str = Form(...),
     department_id: Optional[str] = Form(None),
+    document_type: DocumentType = Form(...),
     files: List[UploadFile] = File(...),
     db: AsyncSession = Depends(get_db_session),
-    current_user=Depends(get_current_active_user)
+    current_user: User =Depends(get_current_active_user)
 ):
     """Upload multiple PDF files (1-10 files). Validation errors fail the entire request. Storage errors are tracked per file."""
     
     try:
+        logger.info(f"Received upload request: state_center_id={state_center_id}, department_id={department_id}, document_type={document_type}, num_files={len(files)}, uploader={current_user.user_id}")
         # Validate file count
         if not files or len(files) == 0:
             raise HTTPException(status_code=400, detail="At least 1 file is required")
@@ -126,6 +128,7 @@ async def upload_files(
                     department_id=department_id,
                     uploader_id=current_user.user_id,
                     filename=file_info['filename'],
+                    document_type=document_type.value,
                     stored_path=stored_path,
                     file_size_bytes=file_size,
                     summary_status="NOT_STARTED"
@@ -178,6 +181,7 @@ async def list_files(
     state_center_id: Optional[str] = Query(None),
     department_id: Optional[str] = Query(None),
     filename: Optional[str] = Query(None, description="Exact filename filter"),
+    document_type: Optional[DocumentType] = Query(None, description="Exact document type filter"),
     document_name: Optional[str] = Query(None, description="Exact document name filter"),
     uploader_id: Optional[uuid.UUID] = Query(None, description="Filter by uploader"),
     summary_status: Optional[str] = Query(None),
@@ -195,6 +199,7 @@ async def list_files(
             state_center_id,
             department_id,
             filename,
+            document_type.value if document_type else None,
             document_name,
             uploader_id,
             include_summary,
@@ -300,6 +305,7 @@ async def trigger_summary(
 ):
     """Trigger summary generation for a file. Idempotent behavior."""
     try:
+        logger.info(f"Received request to trigger summary for file_id={file_id} by user={current_user.user_id}")
         doc: Document = await crud_document.get_by_id(file_id)
         if not doc:
             raise HTTPException(status_code=404, detail="File not found")
@@ -330,9 +336,10 @@ async def trigger_summary(
 async def delete_file(
     file_id: uuid.UUID,
     db: AsyncSession = Depends(get_db_session),
-    current_user=Depends(get_current_active_user)
+    current_user: User = Depends(get_current_active_user)
 ):
     """Delete a file and its storage. Cannot delete if summary is in progress."""
+    logger.info(f"Received request to delete file_id={file_id} by user={current_user.user_id}")
     doc: Document = await crud_document.get_by_id(file_id)
     if not doc:
         raise HTTPException(status_code=404, detail="File not found")
@@ -411,9 +418,10 @@ async def get_file(
 async def delete_summary(
     file_id: uuid.UUID,
     db: AsyncSession = Depends(get_db_session),
-    current_user=Depends(get_current_active_user)
+    current_user: User = Depends(get_current_active_user)
 ):
     """Delete only the summary of a file, keeping the file itself"""
+    logger.info(f"Received request to delete summary for file_id={file_id} by user={current_user.user_id}")
     doc: Document = await crud_document.get_by_id(file_id)
     if not doc:
         raise HTTPException(status_code=404, detail="File not found")
@@ -456,6 +464,7 @@ async def download_file(
     #     Document.file_id == file_id,
     #     Document.uploader_id == current_user.user_id
     #     ).first()
+    logger.info(f"Received request to download file_id={file_id} by user={current_user.user_id}")
     doc: Document = await crud_document.get_by_id(file_id)
     if not doc:
         raise HTTPException(status_code=404, detail="File not found")

@@ -181,6 +181,7 @@ async def get_filtered_courses_by_llm(query, user_profile):
         contents=contents,
         config=generate_content_config,
     )
+    
     logger.info("Filtered courses successfully")
     return response.text
 
@@ -188,8 +189,9 @@ async def get_general_courses_from_gemini(user_profile) -> List[Dict[str, Any]]:
     """
     Fetches general courses from Gemini based on the designation and department.
     """
+    # Disabled for temporary reasons. Remove below line to enable Gemini fetching of general courses. 
+    return []
     logger.info("Fetching the general courses across the learning platforms")
-    
     generate_content_config = types.GenerateContentConfig(
         system_instruction=f"""
         You are an expert in civil service training and development.
@@ -368,7 +370,7 @@ async def generate_course_recommendations(
     """Generate Course Recommedation by role mapping ID"""
     try:
         role_mapping_id = request.role_mapping_id
-        logger.info(f"Generating course recommendations for role mapping: {role_mapping_id}")
+        logger.info(f"Generating course recommendations for role mapping: {role_mapping_id} by user: {current_user.user_id}")
         
         # Get role mapping
         role_mapping = await crud_role_mapping.get_by_id_and_user(db, role_mapping_id, current_user.user_id)
@@ -389,6 +391,7 @@ async def generate_course_recommendations(
             
             if current_status == RecommendationStatus.COMPLETED:
                 response = RecommendedCourseResponse.model_validate(existing_recommendation)
+                response.is_existing = True
                 return JSONResponse(
                     status_code=status.HTTP_201_CREATED,
                     content=response.model_dump(mode="json")
@@ -485,7 +488,7 @@ async def delete_course_recommendations_by_role_mapping(
         Deletion summary with counts and details
     """
     try:
-        logger.info(f"Deleting course recommendations for role mapping: {role_mapping_id}")
+        logger.info(f"Deleting course recommendations for role mapping: {role_mapping_id} by user: {current_user.user_id}")
         
         # Get all recommendation records for this role mapping
         recommendation_record = await crud_recommended_course.get_by_role_mapping_id(db, role_mapping_id, current_user.user_id)
@@ -548,7 +551,7 @@ async def delete_course(
         Deletion confirmation with appropriate details
     """
     try:
-        logger.info(f"Searching for course '{course_id}' in role mapping: {role_mapping_id}")
+        logger.info(f"Searching for course '{course_id}' in role mapping: {role_mapping_id} for deletion by user: {current_user.user_id}")
         
         # Step 1: Try recommendations first
         recommendation = await crud_recommended_course.get_by_role_mapping_id(db, role_mapping_id, current_user.user_id)

@@ -1,6 +1,12 @@
 FROM python:3.12-slim
 
-RUN apt-get update && apt-get install -y --no-install-recommends
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    fonts-lato \
+    fonts-noto-core \
+    fonts-noto-extra \
+    fontconfig \
+    && fc-cache -f -v \
+    && rm -rf /var/lib/apt/lists/*
 
 # Install uv.
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
@@ -8,7 +14,6 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 WORKDIR /app
  
 # Copy project files
-COPY requirements.txt .
 COPY pyproject.toml* uv.lock* ./
  
 # Install dependencies using uv
@@ -25,4 +30,4 @@ RUN uv pip install playwright && \
 EXPOSE 8000
  
 # Run the application.
-CMD ["/app/.venv/bin/uvicorn", "src.main:app", "--port", "8000", "--host", "0.0.0.0",  "--timeout-keep-alive", "500", "--workers", "4"]
+CMD ["/app/.venv/bin/uvicorn", "src.main:app", "--port", "8000", "--host", "0.0.0.0",  "--timeout-keep-alive", "500"]

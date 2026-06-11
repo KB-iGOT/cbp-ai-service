@@ -1,13 +1,21 @@
+from enum import Enum
 from pydantic import BaseModel, Field
 from typing import List, Optional
 from datetime import datetime
 import uuid
 
 
+class DocumentType(str, Enum):
+    WORK_ALLOCATION_ORDER = "Work Allocation Order"
+    ANNUAL_REPORTS = "Annual Reports"
+    OTHER_DOCUMENT = "Other Document"
+
+
 
 class DocumentResponse(BaseModel):
     file_id: uuid.UUID
     filename: str
+    document_type: Optional[DocumentType] = None
     document_name: Optional[str] = None
     uploader_id: Optional[uuid.UUID] = None
     state_center_id: str

@@ -38,7 +38,7 @@ async def fetch_course_from_igot_platform(
                 json=body,
                 headers={
                     "Content-Type": "application/json",
-                    "Authorization": f"Bearer {settings.KB_AUTH_TOKEN}"
+                    "Authorization": f"{settings.KB_AUTH_TOKEN}"
                 }
             )
             response.raise_for_status() # Raise an exception for bad status codes (4xx or 5xx)
@@ -153,7 +153,7 @@ async def get_course_suggestions(
                 json=payload,
                 headers={
                     "Content-Type": "application/json",
-                    "Authorization": f"Bearer {settings.KB_AUTH_TOKEN}"
+                    "Authorization": f"{settings.KB_AUTH_TOKEN}"
                 }
             )
             response.raise_for_status() # Raise an exception for bad status codes (4xx or 5xx)
@@ -188,6 +188,7 @@ async def delete_course_suggestions_by_role_mapping(
         204 No Content on successful deletion
     """
     try:
+        logger.info(f"Attempting to delete all course suggestions for role mapping: {role_mapping_id} by user: {current_user.user_id}")
         # Fetch the suggested course for this role mapping and user
         suggested_course = await crud_suggested_course.get_by_role_mapping_and_user(db, role_mapping_id,current_user.user_id)
 
@@ -230,6 +231,7 @@ async def delete_course_suggestion(
         204 No Content on successful deletion
     """
     try:
+        logger.info(f"Attempting to delete course '{course_identifier}' from suggestions for role mapping: {role_mapping_id} by user: {current_user.user_id}")
         # Fetch the existing suggested course
         suggested_course = await crud_suggested_course.get_by_role_mapping_and_user(db, role_mapping_id,current_user.user_id)
 

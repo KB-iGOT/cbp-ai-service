@@ -1,10 +1,14 @@
 from enum import Enum
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 from typing import Any, Dict, List, Optional
 from datetime import datetime
 import uuid
 
-# Role Mapping Schema
+
+class MatchedDesignationDetail(BaseModel):
+    role_mapping_id: str
+    igot_designation_name: str
+    igot_designation_id: str
 
 class OrgType(str, Enum):
     ministry = "ministry"
@@ -33,7 +37,8 @@ class RoleMappingUpdate(BaseModel):
     """Schema for updating a Role Mapping"""
     sector_name: Optional[str] = Field(None, max_length=255, description="Name of the sector")
     instruction: Optional[str] = Field(None, description="Additional instructions")
-    designation_name: Optional[str] = Field(None, max_length=255, description="Name of the designation")
+    designation_name: Optional[str] = Field(None, max_length=255, description="Name of the designation from iGOT portal")
+    igot_designation_id: Optional[str] = Field(None, max_length=255, description="ID of the designation from iGOT portal")
     wing_division_section: Optional[str] = Field(None, max_length=255, description="Wing/Division/Section name")
     role_responsibilities: Optional[List[str]] = Field(None, description="List of role responsibilities")
     activities: Optional[List[str]] = Field(None, description="List of activities")
@@ -55,6 +60,19 @@ class CBPPlan(BaseModel):
             uuid.UUID: lambda v: str(v)
         }
 
+class DesignationApprovalInfo(BaseModel):
+    """Nested schema for designation approval within role mapping response"""
+    rolemapping_id: uuid.UUID = Field(..., description="Role mapping ID")
+    status: str = Field(..., description="Approval status (pending, approved, rejected)")
+    reviewer_comments: Optional[str] = Field(None, description="Reviewer comments")
+
+    class Config:
+        from_attributes = True
+        json_encoders = {
+            uuid.UUID: lambda v: str(v)
+        }
+
+
 class RoleMappingResponse(RoleMappingBase):
     """Schema for Role Mapping response"""
     id: uuid.UUID = Field(..., description="Unique identifier")
@@ -66,11 +84,25 @@ class RoleMappingResponse(RoleMappingBase):
     activities: List[str] = Field(default=[], description="List of activities")
     competencies: List[Competency] = Field(default=[], description="List of competencies")
     sort_order: Optional[int] = Field(None, description="Sort order for hierarchical arrangement")
+    igot_designation_name: Optional[str] = Field(None, description="Designation name as it exists in the iGOT portal")
+    igot_designation_id: Optional[str] = Field(None, description="Designation ID from the iGOT portal")
     created_at: datetime = Field(..., description="Creation timestamp")
     updated_at: datetime = Field(..., description="Last update timestamp")
     
     # Add CBP plans relationship
     cbp_plans: List[CBPPlan] = Field(default=[], description="List of CBP plans associated with this role mapping")
+    # Add designation approval relationship
+    designation_approval: Optional[DesignationApprovalInfo] = Field(None, description="Designation approval status for this role mapping")
+
+    @model_validator(mode='before')
+    @classmethod
+    def extract_designation_approval(cls, data):
+        """Extract the approved designation approval from the relationship list."""
+        approvals = getattr(data, 'designation_approvals', None)
+        if approvals and len(approvals) > 0:
+            data.__dict__['designation_approval'] = approvals[0]
+        return data
+
     class Config:
         from_attributes = True
         json_encoders = {
@@ -89,6 +121,8 @@ class RoleMappingWithoutCBP(RoleMappingBase):
     activities: List[str] = Field(default=[], description="List of activities")
     competencies: List[Competency] = Field(default=[], description="List of competencies")
     sort_order: Optional[int] = Field(None, description="Sort order for hierarchical arrangement")
+    igot_designation_name: Optional[str] = Field(None, description="Designation name as it exists in the iGOT portal")
+    igot_designation_id: Optional[str] = Field(None, description="Designation ID from the iGOT portal")
     created_at: datetime = Field(..., description="Creation timestamp")
     updated_at: datetime = Field(..., description="Last update timestamp")
     class Config:
@@ -130,3 +164,17 @@ class ReorderDesignationsRequest(BaseModel):
     state_center_id: str = Field(..., description="ID of the associated state/center")
     department_id: Optional[str] = Field(None, description="ID of the associated department")
     designations: List[DesignationOrderItem] = Field(..., min_length=1, description="List of designations with their new sort orders")
+
+
+class matchedDesignationsRequest(BaseModel):
+    """Schema for validating role mapping designations against the iGOT portal"""
+    state_center_id: str = Field(..., description="ID of the state/center whose role mappings to matched")
+    department_id: Optional[str] = Field(None, description="Optional department ID to narrow the scope")
+
+
+class DesignationmatchedResult(BaseModel):
+    """Response schema for designation matched result"""
+    total_designations: int = Field(..., description="Total unique designations from role mappings")
+    matched_count: int = Field(..., description="Number of designations found in the iGOT portal")
+    already_matched: bool = Field(False, description="True when all designations were already matched in the DB")
+    matched_details: List[MatchedDesignationDetail] = Field(default_factory=list, description="List of matched designation details")

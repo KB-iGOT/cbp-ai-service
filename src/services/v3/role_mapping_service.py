@@ -5,15 +5,14 @@ import uuid
 import asyncio
 from google import genai
 from google.genai import types
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ValidationError
 
 from ...schemas.role_mapping import OrgType
 from ...core.configs import settings
 from ...prompts.v3.prompts import (
     DESIGNATION_EXTRACTION_PROMPT,
-    DESIGNATION_EXTRACTION_PROMPT_V2,
-    ROLE_MAPPING_PROMPT_CENTRE_V3, 
-    ROLE_MAPPING_PROMPT_STATE_V3
+    ROLE_MAPPING_PROMPT_CENTRE, 
+    ROLE_MAPPING_PROMPT_STATE
 )
 from ...crud.document import crud_document
 from ...core.logger import logger
@@ -74,6 +73,23 @@ class DesignationExtractionResponse(BaseModel):
         description="List of extracted unique designations sorted by hierarchy"
     )
 
+
+class FRACCompetency(BaseModel):
+    type: str = Field(description="Competency type")
+    theme: str = Field(description="Competency theme")
+    sub_theme: str = Field(description="Competency sub theme")
+    source: Optional[str] = Field(default=None, description="Competency source")
+
+
+class FRACRoleMapping(BaseModel):
+    designation_name: str = Field(description="Official designation")
+    wing_division_section: str = Field(description="Wing/division/section")
+    role_responsibilities: List[str] = Field(description="Role responsibilities")
+    activities: List[str] = Field(description="Activities")
+    sort_order: int = Field(description="Hierarchy order")
+    competencies: List[FRACCompetency] = Field(description="Competencies")
+    source: Optional[List[str]] = Field(default=None, description="Source references")
+
 class RoleMappingService:
     """Service for generating role mappings using Google AI"""
     
@@ -130,8 +146,9 @@ class RoleMappingService:
             ]
             
             generate_content_config = types.GenerateContentConfig(
-                system_instruction=DESIGNATION_EXTRACTION_PROMPT_V2,
-                temperature=0.3,  # Lower temperature for extraction accuracy
+                system_instruction=DESIGNATION_EXTRACTION_PROMPT,
+                temperature=0.1,   # Very low — factual extraction, no creativity
+                top_p=0.85, # Restrict to high-probability tokens
                 response_mime_type="application/json",
                 response_schema=DesignationExtractionResponse.model_json_schema()
             )
@@ -141,8 +158,6 @@ class RoleMappingService:
                 contents=contents,
                 config=generate_content_config,
             )
-            
-            logger.info(f"Designation Extraction Gemini usage: {response.usage_metadata}")
             
             text_response = response.text
             if not text_response:
@@ -155,14 +170,15 @@ class RoleMappingService:
             }
             
         except Exception as e:
-            logger.exception(f"Error in designation extraction")
-            raise Exception(f"Designation extraction failed")
+            logger.exception("Error in designation extraction")  
+            raise Exception("Designation extraction failed") from e  # Chain exception
     
     async def _generate_frac_for_batch(
         self,
         designations_batch: List[Dict[str, Any]],
         organization_data: Dict[str, Any],
-        batch_number: int
+        batch_number: int,
+        max_retries: int = 2
     ) -> List[Dict[str, Any]]:
         """
         PASS 2: Generate FRAC mapping for a batch of designations
@@ -176,72 +192,105 @@ class RoleMappingService:
         Returns:
             List of FRAC mappings for the batch (empty list on failure)
         """
-        try:
-            logger.info(f"PASS 2 - Batch {batch_number}: Processing {len(designations_batch)} designations")
-            
-            logger.info(f"Role Mapping is using prompt :: {'STATE_PROMPT' if organization_data["org_type"] == OrgType.state.value else "CENTER_PROMPT"}")
-            PROMPT = ROLE_MAPPING_PROMPT_STATE_V3 if organization_data["org_type"] == OrgType.state.value else ROLE_MAPPING_PROMPT_CENTRE_V3
-            output_json_format = state_json_output if organization_data["org_type"] == OrgType.state.value else center_json_output
-            
-            # Create designation context for the batch
-            designation_context = json.dumps({
-                "validated_designations": designations_batch,
-                "batch_info": {
-                    "batch_number": batch_number,
-                    "total_in_batch": len(designations_batch)
-                }
-            }, indent=2)
-            
-            base_prompt = PROMPT.format(
-                pass1_output=designation_context,
-                organization_name=organization_data.get('organization_name'),
-                department_name=organization_data.get('department_name'),
-                instructions=organization_data.get('instruction'),
-                primary_summary=organization_data.get('docs_summary'),
-                kcm_competencies=json.dumps(COMPETENCY_MAPPING, indent=2),
-                output_json_format=json.dumps(output_json_format, indent=2)
-            )
-            
-            contents = [
-                types.Content(
-                    role="user",
-                    parts=[types.Part.from_text(text=base_prompt)]
+        for attempt in range(1, max_retries + 1):
+            try:
+                logger.info(f"PASS 2 - Batch {batch_number} (attempt {attempt}/{max_retries}): Processing {len(designations_batch)} designations")
+                logger.info(f"Role Mapping is using prompt :: {'STATE_PROMPT' if organization_data["org_type"] == OrgType.state.value else "CENTER_PROMPT"}")
+                PROMPT = ROLE_MAPPING_PROMPT_STATE if organization_data["org_type"] == OrgType.state.value else ROLE_MAPPING_PROMPT_CENTRE
+                output_json_format = state_json_output if organization_data["org_type"] == OrgType.state.value else center_json_output
+                
+                # Create designation context for the batch
+                designation_context = json.dumps({
+                    "validated_designations": designations_batch,
+                    "batch_info": {
+                        "batch_number": batch_number,
+                        "total_in_batch": len(designations_batch)
+                    }
+                }, indent=2)
+                
+                base_prompt = PROMPT.format(
+                    pass1_output=designation_context,
+                    organization_name=organization_data.get('organization_name'),
+                    department_name=organization_data.get('department_name'),
+                    instructions=organization_data.get('instruction'),
+                    primary_summary=organization_data.get('docs_summary'),
+                    kcm_competencies=json.dumps(COMPETENCY_MAPPING, indent=2),
+                    output_json_format=json.dumps(output_json_format, indent=2)
                 )
-            ]
-            
-            generate_content_config = types.GenerateContentConfig(
-                temperature=0.5,
-            )
-            
-            response = await self.client.aio.models.generate_content(
-                model="gemini-2.5-pro",
-                contents=contents,
-                config=generate_content_config,
-            )
-            
-            logger.info(f"FRAC Batch {batch_number} Gemini usage: {response.usage_metadata}")
-            
-            text_response = response.text
-            if not text_response:
-                logger.warning(f"Batch {batch_number}: Empty response, returning empty array")
+                
+                contents = [
+                    types.Content(
+                        role="user",
+                        parts=[types.Part.from_text(text=base_prompt)]
+                    )
+                ]
+                
+                generate_content_config = types.GenerateContentConfig(
+                    temperature=0.3,  # Low-moderate — structured reasoning with some inference
+                    top_p=0.90,  # Slightly broader for competency mapping diversity
+                )
+                
+                response = await self.client.aio.models.generate_content(
+                    model="gemini-2.5-pro",
+                    contents=contents,
+                    config=generate_content_config,
+                )
+
+                logger.info(f"FRAC Batch {batch_number} Gemini usage: {response.usage_metadata}")
+                
+                text_response = response.text
+                if not text_response:
+                    logger.warning(f"Batch {batch_number}: Empty response on attempt {attempt}")
+                    if attempt < max_retries:
+                        await asyncio.sleep(2 ** attempt)  # Exponential backoff
+                        continue
+                    return []
+                
+                text_response = text_response.replace("```json", '').replace("```", '')
+                parsed_response = json.loads(text_response)
+
+                if not isinstance(parsed_response, list):
+                    logger.warning(f"Batch {batch_number}: Expected a list response, got {type(parsed_response).__name__}")
+                    return []
+                
+                validated_response: List[Dict[str, Any]] = []
+                skipped_records = 0
+                for idx, record in enumerate(parsed_response):
+                    try:
+                        validated_response.append(FRACRoleMapping.model_validate(record).model_dump())
+                    except ValidationError as ve:
+                        skipped_records += 1
+                        logger.warning(
+                            f"Batch {batch_number}: Skipping invalid record at index {idx} due to validation error: {ve}"
+                        )
+
+                if skipped_records:
+                    logger.warning(
+                        f"Batch {batch_number}: Skipped {skipped_records} invalid records after validation"
+                    )
+                
+                logger.info(f"Batch {batch_number}: Successfully generated {len(validated_response)} valid FRAC mappings")
+                return validated_response
+            except json.JSONDecodeError as e:
+                logger.warning(f"Batch {batch_number}: JSON parse error on attempt {attempt}: {str(e)}")
+                if attempt < max_retries:
+                    await asyncio.sleep(2 ** attempt)
+                    continue
+                return [] 
+            except Exception as e:
+                logger.error(f"Batch {batch_number}: Error on attempt {attempt}: {str(e)}", exc_info=True)
+                if attempt < max_retries:
+                    await asyncio.sleep(2 ** attempt)
+                    continue
                 return []
-            
-            text_response = text_response.replace("```json", '').replace("```", '')
-            parsed_response = json.loads(text_response)
-            
-            logger.info(f"Batch {batch_number}: Successfully generated {len(parsed_response)} FRAC mappings")
-            return parsed_response
-            
-        except Exception as e:
-            logger.error(f"Error in FRAC generation for batch {batch_number}: {str(e)}", exc_info=True)
-            logger.warning(f"Batch {batch_number}: Returning empty array due to failure")
-            return []  # Return empty array on failure, don't skip
+        return []
     
     async def _process_batches_parallel(
         self,
         all_designations: List[Dict[str, Any]],
         organization_data: Dict[str, Any],
-        batch_size: int = 50
+        batch_size: int = 50,
+        # max_concurrent: int = 3
     ) -> List[Dict[str, Any]]:
         """
         Process designation batches in parallel
@@ -261,6 +310,15 @@ class RoleMappingService:
         ]
         
         logger.info(f"Processing {len(all_designations)} designations in {len(batches)} batches of {batch_size}")
+        
+        # Too Many Parallel Batches Can Hit Rate Limits
+        # semaphore = asyncio.Semaphore(max_concurrent)
+        # async def limited_batch(batch, idx):
+        #     async with semaphore:
+        #         return await self._generate_frac_for_batch(
+        #             batch, organization_data, batch_number=idx + 1
+        #         )
+        # tasks = [limited_batch(batch, idx) for idx, batch in enumerate(batches)]
         
         # Create tasks for parallel processing
         tasks = [
@@ -287,9 +345,19 @@ class RoleMappingService:
         logger.info(f"Total FRAC mappings generated: {len(combined_results)}")
         return combined_results
     
-    async def get_documents_summary(self, user_id, state_center_id, department_id=None) -> str:
-        """Get document summaries for the organization formatted as numbered document_summary tags"""
-        _, retrieved_docs = await crud_document.get_all_documents_async(user_id, state_center_id, department_id)
+    async def get_documents_summary(self, user_id, state_center_id, department_id=None, document_type: str | None = None) -> str:
+        """Get document summaries for the organization formatted as numbered document_summary tags
+        
+        Args:
+            user_id: User ID
+            state_center_id: State center ID
+            department_id: Optional department ID
+            document_type: Optional filter for document type (e.g., 'Work Allocation Order')
+            
+        Returns:
+            Formatted document summaries
+        """
+        _, retrieved_docs = await crud_document.get_all_documents_async(user_id, state_center_id, department_id, document_type=document_type)
         if not retrieved_docs:
             return ""
         
@@ -330,25 +398,26 @@ class RoleMappingService:
         try:
             logger.info(f"Starting TWO-PASS role mapping for state_center_id: {state_center_id}")
             
-            # Fetch document summaries
-            docs_summary = await self.get_documents_summary(user_id, state_center_id, department_id)
+            # Fetch document summaries for PASS 1 (only Work Allocation Order type)
+            wao_summary = await self.get_documents_summary(user_id, state_center_id, department_id, document_type="Work Allocation Order")
             
-            # Prepare organization data
-            organization_data = {
+            # Prepare organization data for PASS 1 with filtered summaries
+            organization_data_pass1 = {
                 "org_type": org_type.value,
                 "state_center_id": state_center_id,
                 "department_id": department_id,
                 "organization_name": state_center_name,
                 "department_name": department_name if department_name else "N/A",
-                "docs_summary": docs_summary if docs_summary else 'N/A',
+                "docs_summary": wao_summary if wao_summary else 'N/A',
                 "instruction": instruction if instruction else "N/A"
             }
             
             # ============ PASS 1: DESIGNATION EXTRACTION ============
             logger.info("STARTING PASS 1: DESIGNATION EXTRACTION")
+            logger.info("PASS 1 will use only Work Allocation Order document summaries")
             
             extraction_result = await self._extract_designations(
-                organization_data
+                organization_data_pass1
             )
 
             designations = extraction_result.get('designations', [])
@@ -361,9 +430,24 @@ class RoleMappingService:
             # ============ PASS 2: FRAC GENERATION IN BATCHES ============
             logger.info("STARTING PASS 2: FRAC GENERATION")
             
+            # Fetch all document summaries for PASS 2 (no type filter)
+            all_docs_summary = await self.get_documents_summary(user_id, state_center_id, department_id)
+            
+            # Prepare organization data for PASS 2 with all summaries
+            organization_data_pass2 = {
+                "org_type": org_type.value,
+                "state_center_id": state_center_id,
+                "department_id": department_id,
+                "organization_name": state_center_name,
+                "department_name": department_name if department_name else "N/A",
+                "docs_summary": all_docs_summary if all_docs_summary else 'N/A',
+                "instruction": instruction if instruction else "N/A"
+            }
+            logger.info("PASS 2 will use all document summaries")
+            
             frac_mappings = await self._process_batches_parallel(
                 designations,
-                organization_data,
+                organization_data_pass2,
                 batch_size=30
             )
 
@@ -373,7 +457,7 @@ class RoleMappingService:
 
             return frac_mappings
         except Exception as e:
-            logger.exception(f"Error in two-pass role mapping generation:")
+            logger.exception("Error in two-pass role mapping generation")
             raise
 
 # Create a singleton instance

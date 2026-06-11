@@ -186,7 +186,7 @@ class CRUDRecommendedCourse:
         MAX(1.0 - (embedding <=> '{embedding_values}'))
         AS distance FROM public.course_metadata_v2
         GROUP BY name, identifier
-        ORDER BY distance DESC LIMIT 20)
+        ORDER BY distance DESC LIMIT 60)
         UNION
         SELECT name, identifier, 0 AS distance FROM public.course_metadata_v2 WHERE name LIKE '%Communication%'
         UNION
