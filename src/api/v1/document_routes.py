@@ -33,7 +33,7 @@ def get_genai_client():
         try:
             _genai_client = genai.Client(
                 project=settings.GOOGLE_PROJECT_ID,
-                location="us-central1",
+                location="global",
                 vertexai=True
             )
         except Exception as e:
@@ -261,8 +261,8 @@ async def _run_document_summary(document_id: uuid.UUID):
             ]
 
             generate_content_config = types.GenerateContentConfig(
-                temperature=0.7,
-                top_p=0.95,
+                temperature=0,
+                top_p=1,
                 safety_settings=[
                     types.SafetySetting(category="HARM_CATEGORY_HATE_SPEECH", threshold="OFF"),
                     types.SafetySetting(category="HARM_CATEGORY_DANGEROUS_CONTENT", threshold="OFF"),
@@ -272,7 +272,7 @@ async def _run_document_summary(document_id: uuid.UUID):
             )
 
             response = await client.aio.models.generate_content(
-                model="gemini-2.5-pro",
+                model="gemini-3.1-pro-preview",
                 contents=contents,
                 config=generate_content_config
             )
