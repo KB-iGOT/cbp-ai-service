@@ -1,8 +1,17 @@
 from typing import Any, Dict, List
 
 import httpx
+from sentence_transformers import SentenceTransformer
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import text
+
 from ..core.configs import settings
 from ..core.logger import logger
+
+#  load once at startup so every API request doesn't pay the load cost
+embedding_model = SentenceTransformer("BAAI/bge-base-en-v1.5")
+
+SIMILARITY_THRESHOLD = 0.92  # cosine similarity; translates to distance <= 0.08
 
 
 class DesignationService:
@@ -24,7 +33,6 @@ class DesignationService:
     async def search(self, body: dict) -> dict:
         """Proxy search request to iGOT designation API."""
         url = f"{self.base_url}{self.DESIGNATION_SEARCH}"
-        logger.info(f"Searching designations at {url} with body: {body}")
 
         async with httpx.AsyncClient(timeout=self.timeout) as client:
             response = await client.post(
@@ -66,6 +74,59 @@ class DesignationService:
         designations = data.get("result", {}).get("result", {}).get("data", [])
         logger.info(f"iGOT API matched {len(designations)}/{len(designation_names)} designation(s)")
         return designations
+
+    async def match_designations_via_embedding(
+        self, db: AsyncSession, designation_names: List[str]
+    ) -> List[Dict[str, Any]]:
+        """
+        Match designation names against the designation_embeddings table using
+        pgvector cosine similarity. Only returns matches >= SIMILARITY_THRESHOLD (0.92).
+
+        Returns list of dicts with:
+            - input_designation : the name that was searched
+            - designation       : matched name from DB
+            - id                : iGOT designation ID from DB
+        """
+        if not designation_names:
+            return []
+
+        # cosine similarity >= 0.92  =>  distance <= 0.08
+        max_distance = 1.0 - SIMILARITY_THRESHOLD
+
+        embeddings = embedding_model.encode(
+            designation_names,
+            normalize_embeddings=True,
+            show_progress_bar=False,
+        )
+
+        results = []
+        for name, emb in zip(designation_names, embeddings):
+            emb_str = "[" + ",".join(f"{x:.6f}" for x in emb.tolist()) + "]"
+
+            row = (
+                await db.execute(
+                    #  emb_str is numpy floats we built — safe to interpolate
+                    # asyncpg chokes on :param::vector, so we inline the literal
+                    text(f"""
+                        SELECT id, designation, 1.0 - (embedding <=> '{emb_str}'::vector) AS similarity_score
+                        FROM designation_embeddings
+                        ORDER BY embedding <=> '{emb_str}'::vector
+                        LIMIT 1
+                    """)
+                )
+            ).fetchone()
+
+            if row:
+                score = float(row.similarity_score)
+                if score >= SIMILARITY_THRESHOLD:
+                    results.append({
+                        "input_designation": name,
+                        "designation": row.designation,
+                        "id": row.id,
+                        "similarity_score": score,
+                    })
+
+        return results
 
 
 designation_service = DesignationService()

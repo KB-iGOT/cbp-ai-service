@@ -401,13 +401,23 @@ async def match_designations_with_igot(
 
         # 6. Initialize matcher and perform matching
         match_results = await designation_service.match_designations(designation_names)
+        
+        # keyed by the matched designation name (which equals input for exact hits)
+        match_dict = {m["designation"].lower(): m for m in match_results}
 
-        # 7. Prepare bulk updates
-        match_dict = {m["designation"].lower() : m for m in match_results}
+        # 7. Embedding fallback for designations that didn't exact-match
+        unmatched_names = [n for n in designation_names if n.lower() not in match_dict]
+        embedding_dict = {}
+        if unmatched_names:
+            logger.info(f"{len(unmatched_names)} designations not exact-matched, trying embedding search")
+            embedding_results = await designation_service.match_designations_via_embedding(db, unmatched_names)
+            embedding_dict = {m["input_designation"].lower(): m for m in embedding_results}
+
+        # Build bulk updates — exact match wins, embedding is fallback, unmatched are skipped
         bulk_updates = []
-
         for rm in records_to_match:
-            match_data = match_dict.get(rm.designation_name.lower())
+            name_lower = rm.designation_name.lower()
+            match_data = match_dict.get(name_lower) or embedding_dict.get(name_lower)
             if not match_data:
                 continue
 
