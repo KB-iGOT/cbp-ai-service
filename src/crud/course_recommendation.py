@@ -25,8 +25,9 @@ HYBRID_SEARCH_ENABLED    = _flag("HYBRID_SEARCH_ENABLED", True)
 COMM_GENAI_BOOST_ENABLED = _flag("COMM_GENAI_BOOST_ENABLED", True)
 # On by default: removing it scored clearly worst in LLM-judge A/B (it nets helpful).
 COMPETENCY_BOOST_ENABLED = _flag("COMPETENCY_BOOST_ENABLED", True)
-# Phase 2 (OPT-IN, off by default): re-rank hybrid candidates against course
-# CONTENT embeddings before the LLM stage. See content_rerank() below.
+# Phase 2 (ON by default; opt out with CONTENT_RERANK_ENABLED=false): re-rank
+# hybrid candidates against course CONTENT embeddings before the LLM stage.
+# See content_rerank() below.
 #
 # REQUIRES a `public.content_embeddings` table that is NOT created by the app's
 # migrations -- it must be restored / populated separately (e.g. from the
@@ -35,10 +36,10 @@ COMPETENCY_BOOST_ENABLED = _flag("COMPETENCY_BOOST_ENABLED", True)
 #     embedding   vector(768)  -- same model/space as course_metadata_v2.embedding
 # Join key to course_metadata_v2.identifier is split_part(path,'/',1) (the parent
 # course id) -- NOT the `identifier` column, which holds the per-chunk/resource id.
-# If the flag is OFF, this table is never touched and the app runs normally.
-# If the flag is ON but the table is missing, content_rerank() logs a warning
-# and falls back to the hybrid ordering -- so the app stays runnable either way.
-CONTENT_RERANK_ENABLED   = _flag("CONTENT_RERANK_ENABLED", False)
+# If the table is MISSING, content_rerank() logs a warning and falls back to the
+# hybrid ordering on every request -- the app stays runnable, but set this flag to
+# false in environments that don't have the table to avoid the per-request warning.
+CONTENT_RERANK_ENABLED   = _flag("CONTENT_RERANK_ENABLED", True)
 CONTENT_RERANK_TOP_N     = int(os.getenv("CONTENT_RERANK_TOP_N", "40"))      # narrow to this many before the LLM
 CONTENT_RERANK_WEIGHT    = float(os.getenv("CONTENT_RERANK_WEIGHT", "0.5"))  # blend weight: content vs hybrid score
 
