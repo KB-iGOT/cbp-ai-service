@@ -407,10 +407,11 @@ async def match_designations_with_igot(
 
         # 7. Embedding fallback for designations that didn't exact-match
         unmatched_names = [n for n in designation_names if n.lower() not in match_dict]
+        logger.info(f"{len(unmatched_names)} designations not exact-matched, trying embedding search")
         embedding_dict = {}
         if unmatched_names:
-            logger.info(f"{len(unmatched_names)} designations not exact-matched, trying embedding search")
             embedding_results = await designation_service.match_designations_via_embedding(db, unmatched_names)
+            logger.info(f"Embedding search returned {len(embedding_results)} matches for {len(unmatched_names)} unmatched designations")
             embedding_dict = {m["input_designation"].lower(): m for m in embedding_results}
 
         # Build bulk updates — exact match wins, embedding is fallback, unmatched are skipped
