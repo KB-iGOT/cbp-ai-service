@@ -212,3 +212,7 @@ __marimo__/
 curl
 
 .vscode/
+# api_flow_test.py run artifacts
+scripts/logs/
+scripts/*.xlsx
+scripts/comparison_*.xlsx
