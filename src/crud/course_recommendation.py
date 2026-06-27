@@ -25,18 +25,21 @@ HYBRID_SEARCH_ENABLED    = _flag("HYBRID_SEARCH_ENABLED", True)
 COMM_GENAI_BOOST_ENABLED = _flag("COMM_GENAI_BOOST_ENABLED", True)
 # On by default: removing it scored clearly worst in LLM-judge A/B (it nets helpful).
 COMPETENCY_BOOST_ENABLED = _flag("COMPETENCY_BOOST_ENABLED", True)
-# Phase 2 (OPT-IN, off by default): re-rank hybrid candidates against course
-# CONTENT embeddings before the LLM stage. See content_rerank() below.
+# Phase 2 (ON by default; opt out with CONTENT_RERANK_ENABLED=false): re-rank
+# hybrid candidates against course CONTENT embeddings before the LLM stage.
+# See content_rerank() below.
 #
 # REQUIRES a `public.content_embeddings` table that is NOT created by the app's
 # migrations -- it must be restored / populated separately (e.g. from the
 # content-embeddings dump or your content-embedding pipeline). Minimum schema:
-#     identifier  text         -- course id; the join key to course_metadata_v2
+#     path        text         -- "<course_id>" or "<course_id>/<resource_id>#chunkN"
 #     embedding   vector(768)  -- same model/space as course_metadata_v2.embedding
-# If the flag is OFF, this table is never touched and the app runs normally.
-# If the flag is ON but the table is missing, content_rerank() logs a warning
-# and falls back to the hybrid ordering -- so the app stays runnable either way.
-CONTENT_RERANK_ENABLED   = _flag("CONTENT_RERANK_ENABLED", False)
+# Join key to course_metadata_v2.identifier is split_part(path,'/',1) (the parent
+# course id) -- NOT the `identifier` column, which holds the per-chunk/resource id.
+# If the table is MISSING, content_rerank() logs a warning and falls back to the
+# hybrid ordering on every request -- the app stays runnable, but set this flag to
+# false in environments that don't have the table to avoid the per-request warning.
+CONTENT_RERANK_ENABLED   = _flag("CONTENT_RERANK_ENABLED", True)
 CONTENT_RERANK_TOP_N     = int(os.getenv("CONTENT_RERANK_TOP_N", "40"))      # narrow to this many before the LLM
 CONTENT_RERANK_WEIGHT    = float(os.getenv("CONTENT_RERANK_WEIGHT", "0.5"))  # blend weight: content vs hybrid score
 
@@ -311,23 +314,35 @@ class CRUDRecommendedCourse:
         """
         Phase-2 middle layer (between hybrid search and the LLM): re-rank the
         hybrid candidates against COURSE CONTENT embeddings
-        (public.content_embeddings, keyed by `identifier`), then narrow to top_n.
+        (public.content_embeddings), then narrow to top_n.
 
-        For each candidate we take the MAX cosine similarity over that course's
-        content chunks, then blend with the hybrid (metadata) similarity:
+        JOIN KEY = the parent course id derived from content_embeddings.path,
+        NOT the `identifier` column. content_embeddings is chunked: a row's `path`
+        is either "<course_id>" (course-level) or "<course_id>/<resource_id>#chunkN"
+        (resource-level), so the parent course id is always split_part(path,'/',1).
+        Joining on `identifier` would match only the course-level rows and miss
+        every resource chunk (the bulk of the content).
+
+        For each candidate course we take the MAX cosine similarity over ALL its
+        content chunks (summary + resources), then blend with the hybrid score:
             score = (1 - weight) * hybrid_cosine + weight * content_cosine
-        Courses with no content embedding keep their hybrid score (no penalty),
-        so partial coverage of content_embeddings never silently drops a course.
-        Falls back to the original order (truncated) if the table is unavailable.
+        Courses with no content keep their hybrid score (no penalty), so partial
+        coverage never silently drops a course. Falls back to the original order
+        (truncated) if the table is unavailable.
+
+        Perf note: filtering on split_part(path,'/',1) scans the table; for a large
+        content_embeddings, add a functional index:
+            CREATE INDEX ON public.content_embeddings (split_part(path, '/', 1));
         """
         if not courses:
             return courses
         identifiers = [c["identifier"] for c in courses]
         sql = text("""
-            SELECT identifier, MAX(1.0 - (embedding <=> :embedding)) AS content_sim
+            SELECT split_part(path, '/', 1) AS course_id,
+                   MAX(1.0 - (embedding <=> :embedding)) AS content_sim
             FROM public.content_embeddings
-            WHERE identifier = ANY(:ids) AND embedding IS NOT NULL
-            GROUP BY identifier
+            WHERE split_part(path, '/', 1) = ANY(:ids) AND embedding IS NOT NULL
+            GROUP BY split_part(path, '/', 1)
         """)
         try:
             async with sessionmanager.session() as db:
