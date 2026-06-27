@@ -18,7 +18,7 @@ from ...core.database import get_db_session
 from ...core.logger import logger
 from ...core.configs import settings
 
-from ...crud.course_recommendation import crud_recommended_course
+from ...crud.course_recommendation import crud_recommended_course, CONTENT_RERANK_ENABLED
 from ...crud.role_mapping import crud_role_mapping
 from ...crud.course_suggestion import crud_suggested_course
 from ...crud.user_added_course import crud_user_added_course
@@ -366,6 +366,11 @@ async def process_recommendation_task(recommendation_id: uuid.UUID, user_profile
                 "identifier": identifier,
                 "distance": distance
             })
+
+        # 4b. (optional) Content-embedding rerank: refine the hybrid candidates
+        # against actual course content, then narrow before the LLM stage.
+        if CONTENT_RERANK_ENABLED:
+            courses = await crud_recommended_course.content_rerank(courses, embedding_values)
 
         # 5. Prepare LLM inputs
         relevant_courses_prompt = [f"Course Name: {c['name']}, Course ID: {c['identifier']}" for c in courses]

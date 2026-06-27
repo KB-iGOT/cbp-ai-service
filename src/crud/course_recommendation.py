@@ -8,6 +8,7 @@ from sqlalchemy.future import select
 
 
 from ..core.database import sessionmanager
+from ..core.logger import logger
 
 from ..models.course_recommendation import RecommendationStatus, RecommendedCourse
 
@@ -24,8 +25,20 @@ HYBRID_SEARCH_ENABLED    = _flag("HYBRID_SEARCH_ENABLED", True)
 COMM_GENAI_BOOST_ENABLED = _flag("COMM_GENAI_BOOST_ENABLED", True)
 # On by default: removing it scored clearly worst in LLM-judge A/B (it nets helpful).
 COMPETENCY_BOOST_ENABLED = _flag("COMPETENCY_BOOST_ENABLED", True)
-# Phase 2 (opt-in): rerank with content-level embeddings (see content_embeddings table).
+# Phase 2 (OPT-IN, off by default): re-rank hybrid candidates against course
+# CONTENT embeddings before the LLM stage. See content_rerank() below.
+#
+# REQUIRES a `public.content_embeddings` table that is NOT created by the app's
+# migrations -- it must be restored / populated separately (e.g. from the
+# content-embeddings dump or your content-embedding pipeline). Minimum schema:
+#     identifier  text         -- course id; the join key to course_metadata_v2
+#     embedding   vector(768)  -- same model/space as course_metadata_v2.embedding
+# If the flag is OFF, this table is never touched and the app runs normally.
+# If the flag is ON but the table is missing, content_rerank() logs a warning
+# and falls back to the hybrid ordering -- so the app stays runnable either way.
 CONTENT_RERANK_ENABLED   = _flag("CONTENT_RERANK_ENABLED", False)
+CONTENT_RERANK_TOP_N     = int(os.getenv("CONTENT_RERANK_TOP_N", "40"))      # narrow to this many before the LLM
+CONTENT_RERANK_WEIGHT    = float(os.getenv("CONTENT_RERANK_WEIGHT", "0.5"))  # blend weight: content vs hybrid score
 
 
 class CRUDRecommendedCourse:
@@ -287,6 +300,60 @@ class CRUDRecommendedCourse:
                 "fusion_depth": fusion_depth,
             })
             return result.all()
+
+    async def content_rerank(
+        self,
+        courses: List[Dict[str, Any]],
+        embedding_values: List[float],
+        top_n: int = CONTENT_RERANK_TOP_N,
+        weight: float = CONTENT_RERANK_WEIGHT,
+    ) -> List[Dict[str, Any]]:
+        """
+        Phase-2 middle layer (between hybrid search and the LLM): re-rank the
+        hybrid candidates against COURSE CONTENT embeddings
+        (public.content_embeddings, keyed by `identifier`), then narrow to top_n.
+
+        For each candidate we take the MAX cosine similarity over that course's
+        content chunks, then blend with the hybrid (metadata) similarity:
+            score = (1 - weight) * hybrid_cosine + weight * content_cosine
+        Courses with no content embedding keep their hybrid score (no penalty),
+        so partial coverage of content_embeddings never silently drops a course.
+        Falls back to the original order (truncated) if the table is unavailable.
+        """
+        if not courses:
+            return courses
+        identifiers = [c["identifier"] for c in courses]
+        sql = text("""
+            SELECT identifier, MAX(1.0 - (embedding <=> :embedding)) AS content_sim
+            FROM public.content_embeddings
+            WHERE identifier = ANY(:ids) AND embedding IS NOT NULL
+            GROUP BY identifier
+        """)
+        try:
+            async with sessionmanager.session() as db:
+                res = await db.execute(sql, {"embedding": str(embedding_values), "ids": identifiers})
+                content_sim = {row[0]: float(row[1]) for row in res.all()}
+        except Exception as e:
+            logger.warning(f"content_rerank skipped (content_embeddings unavailable?): {e}")
+            return courses[:top_n]
+
+        covered = 0
+        for c in courses:
+            cs = content_sim.get(c["identifier"])
+            base = float(c.get("distance") or 0.0)
+            if cs is not None:
+                covered += 1
+                c["content_sim"] = cs
+                c["rerank_score"] = (1.0 - weight) * base + weight * cs
+            else:
+                c["content_sim"] = None
+                c["rerank_score"] = base
+        courses.sort(key=lambda c: c["rerank_score"], reverse=True)
+        logger.info(
+            f"content_rerank: {covered}/{len(courses)} candidates had content embeddings; "
+            f"narrowed to top {top_n}"
+        )
+        return courses[:top_n]
 
     async def fetch_course_metadata(self, identifiers_str: str) -> Dict[str, Dict[str, Any]]:
         """
