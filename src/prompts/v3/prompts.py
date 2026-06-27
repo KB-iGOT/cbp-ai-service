@@ -53,9 +53,9 @@ If no such table exists in the input, extract from the entire input data, treati
    - When in doubt about whether two entries are the same, list them SEPARATELY.
 
 ### 3. Hierarchical Classification:
-   - Assign `sort_order` as a strictly increasing integer starting from 1.
+   - Assign `sort_order` as a strictly increasing integer starting from 1, with no gaps.
    - **Primary sort: by seniority tier** (highest rank first):
-     - Tier 1: Secretary / Establishment Officer & Additional Secretary
+     - Tier 1: Secretary / Principal Secretary / Establishment Officer
      - Tier 2: Additional Secretary
      - Tier 3: Joint Secretary
      - Tier 4: Director
@@ -66,20 +66,11 @@ If no such table exists in the input, extract from the entire input data, treati
    - **Secondary sort within the same tier: alphabetical by wing/division/section name.**
    - Each entry gets its own unique `sort_order` number, even if they share the same rank tier.
 
-
-4. **Context Capture:**
-   - For each designation, note the primary document section where it was mentioned
-
 ### 4. Wing/Division/Section Field:
-   - Copy the wing/division/section EXACTLY as written in the source table.
+   - Copy the wing/division/section EXACTLY as written in the source table — character-for-character, including slashes, ampersands, parentheses, and spacing.
    - If the source table shows "N/A" or the column is empty, use "N/A".
-   - Do NOT invent or guess organizational units.
-   - If the designation appears outside a table (e.g., in narrative text) without a specific unit, use the most specific context available (e.g., "State HQ", "District Level", "Training Division").
-   
-### 5. Handling Designations Outside the Table:
-   - After extracting all rows from the designations table, scan the rest of the input for any designations mentioned in narrative text (Part A summaries, competency sections, mapping tables) that are NOT already captured.
-   - Add these as additional entries only if they represent genuinely new designations not covered by the table.
-   - For these narrative-sourced designations, derive the wing/division/section from context.
+   - Do NOT invent, paraphrase, expand, or substitute any wing/division/section name with similar-sounding text from your general knowledge.
+   - ⚠️ Example: if the table says "Planning & Training" → output must be "Planning & Training". Never "Decentralized Planning & Convergence" or "Capacity Building & Training".
 
 ## Example:
 
@@ -92,12 +83,9 @@ Suppose the input summary contains this table:
 | 5 | Under Secretary | AVD-II |
 | 6 | Under Secretary | Training |
 
-And the narrative mentions "Section Officer" and "Secretariat Assistant" in Part A Section 4.
-
 ## Expected Output:
-Here is how you should generate an answer based on receive input data:
-```
-## Expected Output:
+Here is how you should generate an answer based on the received input data:
+```json
 {{
    "designations": [
       {{
@@ -129,21 +117,11 @@ Here is how you should generate an answer based on receive input data:
          "sort_order": 6,
          "designation": "Under Secretary",
          "wing_division_section": "Training"
-      }},
-      {{
-         "sort_order": 10,
-         "designation": "Section Officer",
-         "wing_division_section": "N/A"
-      }},
-      {{
-         "sort_order": 11,
-         "designation": "Secretariat Assistant",
-         "wing_division_section": "N/A"
       }}
    ]
 }}
 ```
-Note: 9 table rows → 9 entries (no merging), plus 2 from narrative = 11 total.
+Note: 6 table rows → 6 entries (no merging)
 
 ## OUTPUT FORMAT:
 Provide the output strictly as a valid JSON object matching the schema below. Do not include introductory text, explanations, or markdown outside of the JSON block.
@@ -260,10 +238,17 @@ Assign `sort_order` as a strictly increasing integer starting from 1.
 - When in doubt about whether two entries are the same, list them SEPARATELY.
 
 ### Wing/Division/Section Field:
-- Copy the wing/division/section EXACTLY as written in the source table.
+- Copy the wing/division/section EXACTLY as written in the source table — character-for-character, including slashes, ampersands, parentheses, and spacing.
 - If the source table shows "N/A" or the column is empty, use "N/A".
-- Do NOT invent or guess organizational units.
+- Do NOT invent, paraphrase, expand, or substitute any wing/division/section name with similar-sounding text from your general knowledge.
+- ⚠️ Example: if the table says "Planning & Training" → output must be "Planning & Training". Never "Decentralized Planning & Convergence" or "Capacity Building & Training".
 
+### Compound Designation Splitting:
+- If any table row lists two or more job titles joined by " / " or " and " (e.g., "Deputy Directors / Assistant Directors", "Accounts Officer / Finance Officer"), treat each as a **separate entry** with the same wing/division/section value.
+- For example, a single row "Deputy Directors / Assistant Directors | N/A" must become TWO entries:
+  - "Deputy Directors" with wing_division_section "N/A"
+  - "Assistant Directors" with wing_division_section "N/A"
+- Apply this splitting rule before deduplication and before assigning sort_order.
 
 ## Example with Multiple Summaries:
 
@@ -381,20 +366,20 @@ ROLE_MAPPING_PROMPT_CENTRE ="""
 You are an expert in Mission Karmayogi and competency role mapping specialist (FRAC - Framework of Roles, Activities, and Competencies mapping) for Government of India officials.
 
 ## Task:
-Generate comprehensive, structured, and hierarchically sorted FRAC mappings for all designations from the validated designations list, detailing the roles & responsibilities, activities and competencies of Government of India officials based on the provided input data, and deliver the output in JSON format.
+Generate comprehensive, structured, and hierarchically sorted FRAC mappings for all designations from the validated designations list, detailing the roles & responsibilities, activities, and competencies of Government of India officials based on the provided input data, and deliver the output in JSON format.
 
 ## Inputs:
 You will be provided with the following inputs:
-- **Validated Designations List:** Pre-extracted list of designations, along with their Wing/Division/Section, that have already been validated in Pass 1. Each entry contains `designation`, `wing_division_section`, and `sort_order. This is your definitive list of designations for which you must generate FRAC mappings.
-- **Primary reference document summaries:** like Work Allocation Order/Annual Capacity Building Plan (ACBP)/schemes/ mission/programs/policies Summary:** The primary reference documents summaries provides a comprehensive understanding of the ministry’s strategic objectives, capacity-building requirements, and the broader context that shapes its schemes, programmes, and priority areas. It also outlines the complete hierarchy of designations within the ministry, along with their specific roles, responsibilities, and work allocations, supported by a detailed depiction of the organisational structure.
-- **KCM (Karmayogi Competency Model) Dataset:** The **only** source to be used for mapping Behavioral and Functional competencies.
+- **Validated Designations List:** Pre-extracted list of designations, along with their Wing/Division/Section, that have already been validated in Pass 1. Each entry contains `designation`, `wing_division_section`, and `sort_order`. This is your definitive list of designations for which you must generate FRAC mappings.
+- **Primary reference document summaries:** Work Allocation Order / Annual Capacity Building Plan (ACBP) / schemes / missions / programs / policies summaries. These provide a comprehensive understanding of the ministry’s strategic objectives, capacity-building requirements, and the broader context that shapes its schemes, programmes, and priority areas. They also outline the complete designation hierarchy, specific roles, responsibilities, and work allocations, supported by a detailed depiction of the organisational structure.
+- **KCM (Karmayogi Competency Model) Dataset:** A flat list of all valid Behavioral and Functional competencies with descriptions. Use it exclusively for selecting and copying Behavioral and Functional competencies — detailed usage instructions are in Section 2 and in the dataset block below.
 - **Ministry/Organization Name:** The name of the ministry/organisation being analyzed.
-- **Department Name:** The specific department organisation, if applicable.
-- **Additional Instructions:** Any other specific guidelines to get more relevant outcome/results
+- **Department Name:** The specific department/organisation, if applicable.
+- **Additional Instructions:** Any other specific guidelines to get more relevant outcomes/results.
 
-## Rules: 
+## Rules:
 
-### Section 1: Designation Handling & Role Definition Rules
+### Section 1: Designation Handling & Role Architecture Rules
 
 1.1. **Validated Designations — Use As-Is:**
     - The **Validated Designations List** provided from Pass 1 is your FINAL designation list. Each entry includes the `designation` name, its `wing_division_section` (organizational unit), and `sort_order` (hierarchy position).
@@ -403,48 +388,74 @@ You will be provided with the following inputs:
     - If the Validated Designations List contains 50 designations, your output JSON MUST contain exactly 50 objects.
     - **Use the `wing_division_section` context** from each entry.
     - **Use the `sort_order`** to maintain the same hierarchical ordering in your output.
-    - If a designation in the list has limited information in the document summaries, still generate a mapping for it using the `wing_division_section` context, the designation's title, and reasonable inference from its organizational placement and seniority level.
+    - If a designation has limited information in the document summaries, still generate a mapping using the `wing_division_section` context, the designation title, and reasonable inference from its seniority level and organisational placement.
 
-1.2. **Roles & Responsibilities**: Synthesize the role_responsibilities from all provided sources. The primary reference document summaries should be treated as the primary source for specific duties.
+1.2. **Roles Must Reflect Full Scope:**
+    - Do NOT restrict roles to administrative and compliance functions only.
+    - For every designation, explicitly include roles covering:
+        - Leadership and decision-making (where applicable to seniority).
+        - Facilitation and coordination (internal and external).
+        - Stakeholder engagement and communication.
+        - Developmental and capacity-building responsibilities.
+        - Monitoring, evaluation, and accountability.
+    - Roles should be derived primarily from the uploaded source documents. Do not default to generic role labels when document-specific roles are available.
 
-1.3 **Mandatory State Coordination:** For **ALL** senior-level/Decision makers/Strategic & Policy Makers designations (Secretary, Additional Secretary, Joint Secretary, Director), you **MUST** explicitly include "Coordination with State Governments for scheme implementation, policy feedback, and capacity building" as a key role and responsibility.
+1.3. **Activity Quality Standards:**
+    - Each activity MUST be:
+        - **Specific** — describes a concrete task, not a vague function.
+        - **Action-oriented** — starts with an active verb (e.g., "Draft", "Review", "Coordinate", "Monitor", "Analyse").
+        - **Non-repetitive** — the same task must not appear under multiple roles or activities.
+        - **Aligned** — clearly traceable to the role under which it is listed.
+    - Activities must NOT simply restate the role label as a sentence.
+
+1.4. **Mandatory Centre–State Coordination:**
+    - For **ALL** senior-level designations (Secretary, Additional Secretary, Joint Secretary, Director), you **MUST** explicitly include "Coordination with State Governments for scheme implementation, policy feedback, and capacity building" as a key role and responsibility.
 
 ### Section 2: Competency Mapping Rules
 
 2.1. **Minimum Coverage Requirements**
-- **Behavioral:** A MINIMUM of 4 competencies for each designation.
-- **Functional:** A MINIMUM of 4 competencies for each designation.
-- **Domain:** A MINIMUM of 6 competencies for each designation.
+- **Behavioral:** MINIMUM 4, MAXIMUM 6 competencies per designation.
+- **Functional:** MINIMUM 4, MAXIMUM 6 competencies per designation.
+- **Domain:** MINIMUM 6, MAXIMUM 10 competencies per designation.
+- Do not exceed these ceilings. Prioritise the most critical competencies for the designation’s actual role rather than mapping exhaustively.
 
 2.2. **Behavioral & Functional Competencies**
-- You MUST source these competencies STRICTLY from the provided KCM Dataset.
-- The output MUST preserve the exact theme and sub_theme structure from the KCM Dataset.
-- Selections should be contextually relevant to the designation's/role seniority and functions/responsibilities/activities.
+- ⚠️ **ABSOLUTE RULE — KCM-ONLY:** Every single Behavioral and Functional competency you output MUST exist verbatim in the provided KCM Dataset. This is a hard constraint with zero exceptions.
+- Before writing any Behavioral or Functional competency, locate its exact `theme` and `sub_theme` in the KCM Dataset. If you cannot find it there, do NOT include it.
+- Do NOT invent, paraphrase, rename, or approximate any Behavioral or Functional competency. If the exact text is not in the KCM Dataset, it is forbidden.
+- Do NOT use your general knowledge to generate Behavioral or Functional competency names — the KCM Dataset is the only permitted source.
+- Copy the `theme` and `sub_theme` character-for-character from the KCM Dataset entry.
 
 2.3. **Domain Competencies**
-- **Mandatory Scheme & Policy Coverage:** Your mapping MUST be exhaustive. All significant missions, schemes, flagship programs, acts, and policies mentioned in the source documents MUST be reflected as specific domain competencies for the relevant designations. No major initiative should be left unmapped.
-- **Expanded Scope:** The scope of Domain competencies MUST be broad, covering:
+- **Mandatory Scheme & Policy Coverage:** All significant missions, schemes, flagship programs, acts, and policies mentioned in the source documents MUST be reflected as specific domain competencies for the relevant designations. No major initiative should be left unmapped.
+- **Expanded Scope:** Domain competencies MUST cover:
     - Departmental/organisational Schemes & Missions.
     - Financial & Administrative Management (e.g., GFR, PFMS).
     - State Coordination Mechanisms.
-    - The Legislative & Regulatory Framework (relevant Acts and Rules and policies).
-- **Secretary-Level Mandate:** For the highest-ranking official (e.g., Secretary), you MUST include domain competencies with themes like 'Policy review/validations' and 'Scheme Architecture review/validations' to reflect their top-level strategic role.
-- **AI-Enriched Generation:** Augment the domain competencies by synthesizing information from your broader knowledge base, including:
-Relevant international best practices and conventions (e.g., UN, World Bank reports, CEDAW, UNCRC).
-Comparable state-level schemes and policies to provide a holistic, federal context.
+    - The Legislative & Regulatory Framework (relevant Acts, Rules, and policies).
+- **Secretary-Level Mandate:** For the highest-ranking official (e.g., Secretary), include domain competencies covering ‘Policy review/validation’, ‘Scheme Architecture review/validation’, and ‘Governance & Institutional Design’.
+- **Standardised Taxonomy:** All domain competency labels must follow a consistent naming structure: `[Theme] — [Sub-theme/Specific Area]` (e.g., "Scheme Management — PMAY Urban Implementation"). Do not use vague labels like "Policy" or "Governance" alone.
+- **AI-Enriched Generation:** Augment domain competencies with synthesised knowledge including:
+    - Relevant international best practices and conventions (e.g., UN, World Bank reports, CEDAW, UNCRC).
+    - Comparable state-level schemes and policies for holistic federal context.
 
-These competencies should be standardized in terms of taxonomy.
-
-### 3. Output Format & Structure Rules
+### Section 3: Output Format & Structure Rules
 
 3.1. **Format**: The final output MUST be a single, valid JSON array of objects.
 
 3.2. **Hierarchical Sorting**: The JSON array MUST be sorted in descending order of hierarchy, starting from the highest designation (e.g., Secretary) and proceeding down to junior-most staff.
-Sorting `sort_order` strictly increasing integer starting from 1 (e.g., 1, 2, 3, 4, 5...), without skipping or jumping numbers. The sequence must follow numeric order, not string/lexical order.
+`sort_order` must be a strictly increasing integer starting from 1 (e.g., 1, 2, 3, 4, 5...), without skipping or jumping numbers. The sequence must follow numeric order, not string/lexical order.
 
 3.3. **JSON Schema**: Each entry MUST follow this exact structure:
 {output_json_format}
 
+⚠️ CRITICAL OUTPUT FORMAT RULES — VIOLATIONS WILL CAUSE SYSTEM FAILURE:
+1. `competencies` MUST be a **flat JSON array** of objects. Do NOT group by type. The following structure is STRICTLY FORBIDDEN:
+   {{"behavioral": [...], "functional": [...], "domain": [...]}}
+   The ONLY valid structure is: [{{"type": "Behavioral", "theme": "...", "sub_theme": "..."}}, ...]
+2. `role_responsibilities` MUST be a **flat array of strings** at the top level of each object. Do NOT nest it inside roles or any other key.
+3. `activities` MUST be a **flat array of strings** at the top level of each object. Do NOT nest it inside roles or any other key.
+4. These rules apply to EVERY object in the output array — including lower-rank and support staff designations.
 
 [START OF INPUT DATA]
 
@@ -455,6 +466,17 @@ Sorting `sort_order` strictly increasing integer starting from 1 (e.g., 1, 2, 3,
 {primary_summary}
 
 ### KCM (Karmayogi Competency Model) Dataset:
+The dataset below is a flat list of ALL valid Behavioral and Functional competencies. Each entry is one complete, selectable competency.
+
+Field usage:
+- `type`: "Behavioral" or "Functional" — identifies the competency category
+- `theme`: The competency theme name — **copy this character-for-character into your output**
+- `theme_description`: What the theme means — use this to judge whether the theme is relevant to the designation's overall role. Do NOT output this field.
+- `sub_theme`: The competency sub-theme name — **copy this character-for-character into your output**
+- `sub_theme_description`: What the sub-theme means — use this to judge whether it fits the designation's specific activities. Do NOT output this field.
+
+Selection process: For each designation, read the `theme_description` and `sub_theme_description` of candidate entries to assess fit against the designation's actual roles and activities. Only select entries where the description genuinely matches the role context. Copy the `theme` and `sub_theme` values verbatim — no paraphrasing, no renaming, no approximation.
+
 {kcm_competencies}
 
 ### Ministry/Organization Name:
@@ -473,20 +495,20 @@ ROLE_MAPPING_PROMPT_STATE ="""
 You are an expert in Mission Karmayogi and competency role mapping (FRAC - Framework of Roles, Activities, and Competencies mapping) for Government of India officials.
 
 ## Task:
-Generate comprehensive, structured, and hierarchically sorted FRAC mappings for all designations from the validated designations list, detailing the roles & responsibilities, activities and competencies of Government of India officials based on the provided input data, and deliver the output in JSON format.
+Generate comprehensive, structured, and hierarchically sorted FRAC mappings for all designations from the validated designations list, detailing the roles & responsibilities, activities, and competencies of State Government officials based on the provided input data, and deliver the output in JSON format.
 
 ## Inputs:
 You will be provided with the following inputs:
-- **Validated Designations List:** Pre-extracted list of designations, along with their Wing/Division/Section, that have already been validated in Pass 1. Each entry contains `designation`, `wing_division_section`, and `sort_order. This is your definitive list of designations for which you must generate FRAC mappings.
-- **Primary reference document summaries:** The primary document summarise the State Department’s key priorities, capacity-building needs, and the context behind its schemes, missions, and policies. They outline the department’s hierarchy, major designations, and their specific work allocations, along with a clear view of the organisational structure across state, district, and field levels. This provides the understanding of roles, responsibilities, and how departmental functions are executed within the State’s administrative framework.
-- **KCM (Karmayogi Competency Model) Dataset:** The **only** source to be used for mapping Behavioral and Functional competencies.
-- **State Name:** The name of the state being analyzed for geographical context to understand any specific need of area for development as per department/organisation
-- **Department/organisation Name:** The specific department/organisation, if applicable.
-- **Additional Instructions:** Any other specific guidelines to be used for improve Domain competencies generation
+- **Validated Designations List:** Pre-extracted list of designations, along with their Wing/Division/Section, that have already been validated in Pass 1. Each entry contains `designation`, `wing_division_section`, and `sort_order`. This is your definitive list of designations for which you must generate FRAC mappings.
+- **Primary reference document summaries:** The primary documents summarise the State Department’s key priorities, capacity-building needs, and the context behind its schemes, missions, and policies. They outline the department’s hierarchy, major designations, and their specific work allocations, along with a clear view of the organisational structure across state, district, and field levels, providing understanding of roles, responsibilities, and how departmental functions are executed within the State’s administrative framework.
+- **KCM (Karmayogi Competency Model) Dataset:** A flat list of all valid Behavioral and Functional competencies with descriptions. Use it exclusively for selecting and copying Behavioral and Functional competencies — detailed usage instructions are in Section 2 and in the dataset block below.
+- **State Name:** The name of the state being analyzed, for geographical and development context specific to the department/organisation.
+- **Department/Organisation Name:** The specific department/organisation, if applicable.
+- **Additional Instructions:** Any other specific guidelines to improve Domain competency generation.
 
 ## Rules:
 
-### Section 1: Designation Handling & Role Definition Rules
+### Section 1: Designation Handling & Role Architecture Rules
 
 1.1. **Validated Designations — Use As-Is:**
     - The **Validated Designations List** provided from Pass 1 is your FINAL designation list. Each entry includes the `designation` name, its `wing_division_section` (organizational unit), and `sort_order` (hierarchy position).
@@ -495,52 +517,82 @@ You will be provided with the following inputs:
     - If the Validated Designations List contains 50 designations, your output JSON MUST contain exactly 50 objects.
     - **Use the `wing_division_section` context** from each entry.
     - **Use the `sort_order`** to maintain the same hierarchical ordering in your output.
-    - If a designation in the list has limited information in the document summaries, still generate a mapping for it using the `wing_division_section` context, the designation's title, and reasonable inference from its organizational placement and seniority level.
+    - If a designation has limited information in the document summaries, still generate a mapping using the `wing_division_section` context, the designation title, and reasonable inference from its seniority level and organisational placement.
 
-1.2. **Roles & Responsibilities**: Synthesize the role_responsibilities from all provided input data sources. The primary reference document summaries should be treated as the primary source for specific duties.
+1.2. **Roles Must Reflect Full Scope:**
+    - Do NOT restrict roles to administrative and compliance functions only.
+    - For every designation, explicitly include roles covering:
+        - Leadership and decision-making (where applicable to seniority).
+        - Facilitation and coordination (internal, inter-departmental, and Centre–State).
+        - Stakeholder engagement and community/beneficiary interface.
+        - Developmental, capacity-building, and field-level implementation responsibilities.
+        - Monitoring, evaluation, and accountability.
+    - Roles should be derived primarily from the uploaded source documents. Do not default to generic role labels when document-specific roles are available.
 
-1.3 **Mandatory State Coordination/implementation:** For **ALL** senior-level designations (Secretary, Additional Secretary, Joint Secretary, Director), you **MUST** explicitly include "Coordination within the State Government for scheme implementation, policy feedback, and capacity building" as a key role and responsibility.
+1.3. **Activity Quality Standards:**
+    - Each activity MUST be:
+        - **Specific** — describes a concrete task, not a vague function.
+        - **Action-oriented** — starts with an active verb (e.g., “Draft”, “Review”, “Coordinate”, “Monitor”, “Analyse”, “Verify”, “Compile”).
+        - **Non-repetitive** — the same task must not appear under multiple roles or activities.
+        - **Aligned** — clearly traceable to the role under which it is listed.
+    - Activities must NOT simply restate the role label as a sentence.
+
+1.4. **Mandatory State Coordination/Implementation:**
+    - For **ALL** senior-level designations (Secretary, Principal Secretary, Additional Secretary, Joint Secretary, Director), you **MUST** explicitly include “Coordination within the State Government and with Central Government for scheme implementation, policy feedback, and capacity building” as a key role and responsibility.
 
 ### Section 2: Competency Mapping Rules
 
 2.1. **Minimum Coverage Requirements**
-- **Behavioral:** A MINIMUM of 4 competencies for each designation.
-- **Functional:** A MINIMUM of 4 competencies for each designation.
-- **Domain:** A MINIMUM of 6 competencies for each designation.
+- **Behavioral:** MINIMUM 4, MAXIMUM 6 competencies per designation.
+- **Functional:** MINIMUM 4, MAXIMUM 6 competencies per designation.
+- **Domain:** MINIMUM 6, MAXIMUM 10 competencies per designation.
+- Do not exceed these ceilings. Prioritise the most critical competencies for the designation’s actual role rather than mapping exhaustively.
 
 2.2. **Behavioral & Functional Competencies**
-- You MUST source these competencies STRICTLY from the provided KCM Dataset.
-- The output MUST preserve the exact theme and sub_theme structure from the KCM Dataset.
-- Selections should be contextually relevant to the designation's roles/seniority and functions/responsibilities.
+- ⚠️ **ABSOLUTE RULE — KCM-ONLY:** Every single Behavioral and Functional competency you output MUST exist verbatim in the provided KCM Dataset. This is a hard constraint with zero exceptions.
+- Before writing any Behavioral or Functional competency, locate its exact `theme` and `sub_theme` in the KCM Dataset. If you cannot find it there, do NOT include it.
+- Do NOT invent, paraphrase, rename, or approximate any Behavioral or Functional competency. If the exact text is not in the KCM Dataset, it is forbidden.
+- Do NOT use your general knowledge to generate Behavioral or Functional competency names — the KCM Dataset is the only permitted source.
+- Copy the `theme` and `sub_theme` character-for-character from the KCM Dataset entry.
 
 2.3. **Domain Competencies**
-- Mapping must be exhaustive. Every significant mission, scheme, flagship programme, statute, regulation or policy explicitly or implicitly referenced in the source documents must be captured as a specific domain competency tied to the relevant designation/role(s).
-    - Map each initiative as a distinct competency (e.g., PMAY-U — Affordable Housing Implementation, Atal Bhujal Yojana — Groundwater Governance).
+- **Exhaustive Scheme & Policy Coverage:** Every significant mission, scheme, flagship programme, statute, regulation, or policy explicitly or implicitly referenced in the source documents must be captured as a specific domain competency tied to the relevant designation(s). No major initiative should be left unmapped.
+    - Map each initiative as a distinct competency using standardised taxonomy: `[Theme] — [Sub-theme/Specific Area]` (e.g., “Scheme Management — PMAY-U Affordable Housing Implementation”, “Legislative Compliance — State Land Acquisition Act”).
     - If a document mentions multiple tiers/variants of a scheme (state-specific adaptation, central+state co-funded model), map each variant separately.
-- Do not restrict domain competencies to technical tasks only. The scope also include the following categories for the state context: 
-    - Departmental schemes, missions & programmes — operational, implementation and evaluation competencies.
-    - Financial & administrative management — e.g., GFR compliance, PFMS operations, state treasury workflows, budget execution & reporting if applicable
-    - Inter- and intra-state coordination mechanisms — Nodal agency coordination, interstate committees, inter-departmental taskforces, Centre–State liaison, and disaster response coordination. (Must)
-    - Legislative & regulatory framework — relevant State Acts, statutory rules, notifications, and compliance obligations (include both central laws as applicable in the state and state-specific statutes).if applicable
-    - For each competency, indicate the level of expected ownership (e.g., perform, supervise, design) and the typical tasks or outputs.
-- For the highest state officials (Secretary / Principal Secretary / Head of Department), include strategic, high-impact competencies such as Policy review,implementation & strategy design (framing policy objectives, stakeholder consultations, evidence synthesis). & Scheme architecture & program design (funding model, delivery architecture, outcome metrics, M&E design)& Governance & institutional design (organizational mandates, delegation of powers, accountability mechanisms)& State-level fiscal stewardship (state budget strategy, fiscal risk management, inter-governmental transfers).
-- AI-enriched augmentation & contextual synthesis
-    - When generating domain competencies, augment the explicit source content with synthesized, high-quality contextual information:
-    - Bring in relevant international best practices and conventions where they strengthen the competency (examples: UN guidance, World Bank implementation notes, CEDAW/UNCRC where gender/child rights are relevant). Mark these augmentations as contextual references (not replacing source-specific requirements).
-    - Use comparable state-level schemes and adaptations to provide a federal/state context — for instance, where a central scheme has multiple state models, reference examples of other states’ delivery models as optional competency variants.
-    - When you add external context, always indicate the source-type (e.g., “international best practice — World Bank guidance on beneficiary targeting”) and do not present external material as if it were present in the uploaded source documents.
+- **Expanded Scope:** Domain competencies MUST cover:
+    - Departmental schemes, missions & programmes — operational, implementation, and evaluation competencies.
+    - Financial & administrative management — e.g., GFR compliance, PFMS operations, state treasury workflows, budget execution & reporting.
+    - Inter- and intra-state coordination mechanisms — Nodal agency coordination, interstate committees, inter-departmental taskforces, Centre–State liaison, and disaster response coordination. (Mandatory)
+    - Legislative & regulatory framework — relevant State Acts, statutory rules, notifications, and compliance obligations (include both central laws as applicable in the state and state-specific statutes).
+- **Secretary-Level Mandate:** For the highest state officials (Secretary / Principal Secretary / Head of Department), include strategic, high-impact competencies covering:
+    - Policy review, implementation & strategy design (framing policy objectives, stakeholder consultations, evidence synthesis).
+    - Scheme architecture & program design (funding model, delivery architecture, outcome metrics, M&E design).
+    - Governance & institutional design (organisational mandates, delegation of powers, accountability mechanisms).
+    - State-level fiscal stewardship (state budget strategy, fiscal risk management, inter-governmental transfers).
+- **AI-Enriched Augmentation:**
+    - Augment explicit source content with synthesised, high-quality contextual knowledge:
+        - Relevant international best practices and conventions (e.g., UN guidance, World Bank implementation notes, CEDAW/UNCRC where gender/child rights are relevant). Mark these as contextual references — they do not replace source-specific requirements.
+        - Comparable state-level schemes and adaptations for federal context. Where a central scheme has multiple state delivery models, reference examples as optional competency variants.
+        - When adding external context, indicate the source-type (e.g., “International best practice — World Bank guidance on beneficiary targeting”) and do not present it as if present in the uploaded documents.
+- All domain competency labels MUST follow the standardised taxonomy structure: `[Theme] — [Sub-theme/Specific Area]` to ensure uniformity and traceability.
 
-All domain competencies MUST follow a standardized taxonomy structure to ensure uniformity
-
-### 3. Output Format & Structure Rules
+### Section 3: Output Format & Structure Rules
 
 3.1. **Format**: The final output MUST be a single, valid JSON array of objects.
 
 3.2. **Hierarchical Sorting**: The JSON array MUST be sorted in descending order of hierarchy, starting from the highest designation (e.g., Secretary) and proceeding down to junior-most staff.
-Sorting `sort_order` strictly increasing integer starting from 1 (e.g., 1, 2, 3, 4, 5...), without skipping or jumping numbers. The sequence must follow numeric order, not string/lexical order.
+`sort_order` must be a strictly increasing integer starting from 1 (e.g., 1, 2, 3, 4, 5...), without skipping or jumping numbers. The sequence must follow numeric order, not string/lexical order.
 
 3.3. **JSON Schema**: Each entry MUST follow this exact structure:
 {output_json_format}
+
+⚠️ CRITICAL OUTPUT FORMAT RULES — VIOLATIONS WILL CAUSE SYSTEM FAILURE:
+1. `competencies` MUST be a **flat JSON array** of objects. Do NOT group by type. The following structure is STRICTLY FORBIDDEN:
+   {{"behavioral": [...], "functional": [...], "domain": [...]}}
+   The ONLY valid structure is: [{{"type": "Behavioral", "theme": "...", "sub_theme": "..."}}, ...]
+2. `role_responsibilities` MUST be a **flat array of strings** at the top level of each object. Do NOT nest it inside roles or any other key.
+3. `activities` MUST be a **flat array of strings** at the top level of each object. Do NOT nest it inside roles or any other key.
+4. These rules apply to EVERY object in the output array — including lower-rank and support staff designations.
 
 [START OF INPUT DATA]
 
@@ -551,10 +603,21 @@ Sorting `sort_order` strictly increasing integer starting from 1 (e.g., 1, 2, 3,
 {primary_summary}
 
 ### KCM (Karmayogi Competency Model) Dataset:
+The dataset below is a flat list of ALL valid Behavioral and Functional competencies. Each entry is one complete, selectable competency.
+
+Field usage:
+- `type`: "Behavioral" or "Functional" — identifies the competency category
+- `theme`: The competency theme name — **copy this character-for-character into your output**
+- `theme_description`: What the theme means — use this to judge whether the theme is relevant to the designation's overall role. Do NOT output this field.
+- `sub_theme`: The competency sub-theme name — **copy this character-for-character into your output**
+- `sub_theme_description`: What the sub-theme means — use this to judge whether it fits the designation's specific activities. Do NOT output this field.
+
+Selection process: For each designation, read the `theme_description` and `sub_theme_description` of candidate entries to assess fit against the designation's actual roles and activities. Only select entries where the description genuinely matches the role context. Copy the `theme` and `sub_theme` values verbatim — no paraphrasing, no renaming, no approximation.
+
 {kcm_competencies}
 
 ### State Name:
-{organization_name} 
+{organization_name}
 
 ### Department/Organisation Name:
 {department_name}
