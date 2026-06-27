@@ -57,22 +57,26 @@ async def get_embedding(text: str) -> list:
 async def generate_vector_query(query):
     logger.info(f"Generating vector query for this profile :: {query}")
     user_part = types.Part.from_text(text=f"""
-    You are provided with the following information:
+    You are given a government official's role profile:
     {query}
 
-    Return and generate a query based on the provided data that helps to fetch relevant courses from the vector database.""")
-    system_instruction = f"You are an expert vector query generator. Your task is to generate a query based on the provided data that helps to fetch relevant courses from the vector database."
+    Write a concise search query (3-5 sentences, ~60-100 words) describing the IDEAL training courses for THIS specific role.
+    It will be used for combined semantic + keyword retrieval over a training-course catalog.
 
-    # New prompt for the LLM
-    # user_part = types.Part.from_text(text=f"""
-    # You are provided with detailed information about a professional role. Synthesize this information into a single, rich, descriptive paragraph. 
-    # This paragraph should capture the essence of the role's function, responsibilities, and required skill set. This will be used to find relevant training courses by converting it into a vector embedding.
-    
-    # Here's the user information:
-    # {query}                                                                      
-    # """)
- 
-    # system_instruction = "You are an expert at synthesizing professional role descriptions into a concise, rich profile for skills mapping and course recommendation."
+    Requirements:
+    - Calibrate to the SENIORITY / LEVEL implied by the profile. For senior or strategic roles (e.g. Director-General,
+      Secretary, Commissioner, Joint Secretary, senior executives) emphasise ADVANCED, strategic, leadership and
+      policy-level courses, and explicitly EXCLUDE introductory / foundational / basic / awareness-level courses.
+      For junior or operational roles, emphasise foundational and skill-building courses.
+    - Capture the role's core domain, key responsibilities and required competencies in natural descriptive language,
+      and also include the important domain terms / keywords (so keyword matching works too).
+    - Be specific to this role; avoid generic filler.
+    """)
+    system_instruction = (
+        "You are an expert at writing retrieval queries that match training courses to a government role's LEVEL and domain. "
+        "Always calibrate the seniority of the recommended courses to the role (advanced for senior roles, foundational for junior). "
+        "Output ONLY the raw query text - no preamble (e.g. 'Here is the query'), no headings, no rationale, no bullet points, no markdown."
+    )
     
     model = "gemini-2.5-pro"
     contents = [
@@ -85,7 +89,7 @@ async def generate_vector_query(query):
     ]
 
     generate_content_config = types.GenerateContentConfig(
-        temperature=1,
+        temperature=0.3,
         top_p=1,
         seed=0,
         max_output_tokens=65535,
@@ -113,8 +117,26 @@ async def generate_vector_query(query):
         contents=contents,
         config=generate_content_config,
     )
-    logger.info(f"Vector query generated successfully.")
-    return response.text
+    
+    response_text = response.text or ""
+    # Post-process: strip markdown code blocks if the model wrapped the response
+    if response_text.startswith("```"):
+        lines = response_text.splitlines()
+        if len(lines) >= 2 and lines[0].startswith("```"):
+            if lines[-1].startswith("```"):
+                response_text = "\n".join(lines[1:-1])
+            else:
+                response_text = "\n".join(lines[1:])
+    
+    # Remove any headers or rationales that might have leaked
+    if "### Rationale" in response_text:
+        response_text = response_text.split("### Rationale")[0]
+    elif "Rationale:" in response_text:
+        response_text = response_text.split("Rationale:")[0]
+        
+    cleaned_query = response_text.strip()
+    logger.info(f"Vector query generated successfully: '{cleaned_query[:60]}...'")
+    return cleaned_query
 
 async def get_filtered_courses_by_llm(query, user_profile):
     
@@ -176,14 +198,34 @@ async def get_filtered_courses_by_llm(query, user_profile):
         ),
     )
 
-    response = await client.aio.models.generate_content(
-        model=model,
-        contents=contents,
-        config=generate_content_config,
-    )
-    
-    logger.info("Filtered courses successfully")
-    return response.text
+    max_retries = 3
+    for attempt in range(max_retries):
+        try:
+            response = await client.aio.models.generate_content(
+                model=model,
+                contents=contents,
+                config=generate_content_config,
+            )
+            res_text = response.text
+            if res_text.startswith("```"):
+                lines = res_text.splitlines()
+                if lines[0].startswith("```"):
+                    lines = lines[1:]
+                if lines[-1].startswith("```"):
+                    lines = lines[:-1]
+                res_text = "\n".join(lines).strip()
+            
+            parsed = json.loads(res_text)
+            logger.info("Filtered courses successfully")
+            return parsed
+        except json.JSONDecodeError as je:
+            logger.warning(f"JSON decode failed on attempt {attempt + 1} for course filtering: {je}. Raw response: {response.text[:200] if 'response' in locals() else 'None'}")
+            if attempt == max_retries - 1:
+                raise je
+        except Exception as e:
+            logger.warning(f"Error on attempt {attempt + 1} for course filtering: {e}")
+            if attempt == max_retries - 1:
+                raise e
 
 async def get_general_courses_from_gemini(user_profile) -> List[Dict[str, Any]]:
     """
@@ -290,6 +332,18 @@ async def process_recommendation_task(recommendation_id: uuid.UUID, user_profile
             logger.error(f"Record {recommendation_id} not found in background task")
             return
 
+        # Get role mapping details to retrieve competencies for boosting
+        themes = []
+        sub_themes = []
+        if rec_record.role_mapping_id:
+            role_mapping = await crud_role_mapping.get_by_id(rec_record.role_mapping_id)
+            if role_mapping and role_mapping.competencies:
+                for comp in role_mapping.competencies:
+                    if comp.get("theme"):
+                        themes.append(comp.get("theme"))
+                    if comp.get("sub_theme"):
+                        sub_themes.append(comp.get("sub_theme"))
+
         # 2. Generate Vector Query
         query_text = await generate_vector_query(user_profile)
         
@@ -298,8 +352,13 @@ async def process_recommendation_task(recommendation_id: uuid.UUID, user_profile
         if not embedding_list:
             raise Exception("Failed to generate embeddings")
         embedding_values = embedding_list[0].values
-        # 4. Vector DB Search (Sync DB call)
-        result = await crud_recommended_course.fetch_vector_search_courses(embedding_values)
+        # 4. Hybrid DB Search (dense + lexical RRF)
+        result = await crud_recommended_course.fetch_vector_search_courses(
+            embedding_values,
+            query_text=query_text,
+            themes=themes,
+            sub_themes=sub_themes
+        )
         courses = []
         for name, identifier, distance in result:
             courses.append({
@@ -313,10 +372,9 @@ async def process_recommendation_task(recommendation_id: uuid.UUID, user_profile
         relevant_courses_prompt = "\n".join(relevant_courses_prompt)
         # 6. Run Concurrent LLM Tasks
         tasks = [get_filtered_courses_by_llm(relevant_courses_prompt, user_profile), get_general_courses_from_gemini(user_profile)]
-        filtered_courses_json, general_courses = await asyncio.gather(*tasks)
+        filtered_courses, general_courses = await asyncio.gather(*tasks)
         
-        # 7. Process Results
-        filtered_courses = json.loads(filtered_courses_json)
+        # 7. Process Results (already parsed)
         
         # 8. Enrich Data (Fetch competencies)
         filtered_identifiers = [course['identifier'] for course in filtered_courses]

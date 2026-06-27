@@ -1,4 +1,5 @@
 import json
+import os
 import uuid
 from typing import Optional, List, Dict, Any, Literal
 from sqlalchemy import text, update
@@ -6,9 +7,25 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 
 
-from ..core.database import sessionmanager 
+from ..core.database import sessionmanager
 
-from ..models.course_recommendation import RecommendationStatus, RecommendedCourse 
+from ..models.course_recommendation import RecommendationStatus, RecommendedCourse
+
+
+def _flag(name: str, default: bool) -> bool:
+    """Read a boolean feature flag from the environment."""
+    return os.getenv(name, str(default)).strip().lower() in ("1", "true", "yes", "on")
+
+
+# --- retrieval feature flags (override via env vars) ------------------------
+# Phase 1 core: keyword (lexical) + semantic (dense) hybrid.
+HYBRID_SEARCH_ENABLED    = _flag("HYBRID_SEARCH_ENABLED", True)
+# Business rule: gently prefer Communication / GenAI courses among relevant ones.
+COMM_GENAI_BOOST_ENABLED = _flag("COMM_GENAI_BOOST_ENABLED", True)
+# On by default: removing it scored clearly worst in LLM-judge A/B (it nets helpful).
+COMPETENCY_BOOST_ENABLED = _flag("COMPETENCY_BOOST_ENABLED", True)
+# Phase 2 (opt-in): rerank with content-level embeddings (see content_embeddings table).
+CONTENT_RERANK_ENABLED   = _flag("CONTENT_RERANK_ENABLED", False)
 
 
 class CRUDRecommendedCourse:
@@ -169,32 +186,106 @@ class CRUDRecommendedCourse:
             updated_record = result.scalar_one()
             return updated_record
 
-    async def fetch_vector_search_courses(self, embedding_values: List[float]) -> List[Dict[str, Any]]:
+    async def fetch_vector_search_courses(
+        self,
+        embedding_values: List[float],
+        query_text: str = "",
+        themes: List[str] = None,
+        sub_themes: List[str] = None,
+        candidate_pool: int = 60,
+        fusion_depth: int = 150,
+    ) -> List[Dict[str, Any]]:
         """
-        Executes the raw SQL query against the database using vector similarity 
-        and hardcoded filters, managing its own session.
+        Executes the raw SQL query against the database using vector similarity,
+        dynamic competency overlap boosting, and hardcoded keyword boosts, 
+        managing its own session.
         
         Args:
             embedding_values: The list of floats representing the query vector.
+            themes: List of competency themes associated with the designation.
+            sub_themes: List of competency sub-themes associated with the designation.
             
         Returns:
-            A list of dictionaries containing course name, identifier, and distance.
+            A list of tuples containing course name, identifier, and distance (combined score).
         """
+        # Guard against empty themes/sub_themes lists by passing a list with an empty string
+        themes_param = themes if themes else [""]
+        sub_themes_param = sub_themes if sub_themes else [""]
 
-        sql_query = text(f"""
-        (SELECT name, identifier,
-        MAX(1.0 - (embedding <=> '{embedding_values}'))
-        AS distance FROM public.course_metadata_v2
-        GROUP BY name, identifier
-        ORDER BY distance DESC LIMIT 60)
-        UNION
-        SELECT name, identifier, 0 AS distance FROM public.course_metadata_v2 WHERE name LIKE '%Communication%'
-        UNION
-        SELECT name, identifier, 0 AS distance FROM public.course_metadata_v2 WHERE name LIKE '%GenAI%'
+        # Assemble the ranking SQL from feature flags. The metadata core is a
+        # keyword(lexical) + semantic(dense) hybrid fused with Reciprocal Rank
+        # Fusion; optional competency / Communication-GenAI boosts nudge ordering.
+        # 'distance' is ALWAYS reported as raw cosine similarity (for cross-run
+        # comparison), independent of how ordering is computed.
+        if HYBRID_SEARCH_ENABLED:
+            base_score = "f.rrf"               # RRF scale (~0 .. 0.033)
+            comp_w, cg_w = 0.005, 0.01         # boosts scaled to RRF magnitude
+            from_clause = """
+        WITH dense AS (
+            SELECT identifier,
+                   ROW_NUMBER() OVER (ORDER BY embedding <=> :embedding) AS rnk
+            FROM public.course_metadata_v2
+            ORDER BY embedding <=> :embedding
+            LIMIT :fusion_depth
+        ),
+        lexical AS (
+            SELECT identifier,
+                   ROW_NUMBER() OVER (
+                       ORDER BY ts_rank_cd(
+                           to_tsvector('english',
+                               coalesce(name,'') || ' ' || coalesce(description,'') || ' ' ||
+                               array_to_string(coalesce(keywords, ARRAY[]::text[]), ' ')),
+                           websearch_to_tsquery('english', :qtext)) DESC
+                   ) AS rnk
+            FROM public.course_metadata_v2
+            WHERE :qtext <> ''
+              AND to_tsvector('english',
+                      coalesce(name,'') || ' ' || coalesce(description,'') || ' ' ||
+                      array_to_string(coalesce(keywords, ARRAY[]::text[]), ' ')
+                  ) @@ websearch_to_tsquery('english', :qtext)
+            LIMIT :fusion_depth
+        ),
+        fused AS (
+            SELECT COALESCE(d.identifier, l.identifier) AS identifier,
+                   COALESCE(1.0/(60 + d.rnk), 0.0) + COALESCE(1.0/(60 + l.rnk), 0.0) AS rrf
+            FROM dense d
+            FULL OUTER JOIN lexical l ON d.identifier = l.identifier
+        )
+        SELECT c.name, c.identifier, (1.0 - (c.embedding <=> :embedding)) AS distance
+        FROM fused f
+        JOIN public.course_metadata_v2 c ON c.identifier = f.identifier"""
+        else:
+            base_score = "(1.0 - (c.embedding <=> :embedding))"   # pure cosine (0 .. 1)
+            comp_w, cg_w = 0.05, 0.05                              # boosts on cosine scale
+            from_clause = """
+        SELECT c.name, c.identifier, (1.0 - (c.embedding <=> :embedding)) AS distance
+        FROM public.course_metadata_v2 c"""
+
+        score_terms = [base_score]
+        if COMPETENCY_BOOST_ENABLED:
+            score_terms.append(f"""{comp_w} * COALESCE((
+                SELECT COUNT(*) FROM jsonb_to_recordset(c.competencies_v6)
+                     AS cv("competencyThemeName" text, "competencySubThemeName" text)
+                WHERE cv."competencyThemeName" = ANY(:themes) OR cv."competencySubThemeName" = ANY(:sub_themes)
+            ), 0)""")
+        if COMM_GENAI_BOOST_ENABLED:
+            score_terms.append(f"""{cg_w} * (CASE WHEN c.name ILIKE '%Communication%' OR c.name ILIKE '%GenAI%' THEN 1.0 ELSE 0.0 END)""")
+        order_expr = " + ".join(score_terms)
+
+        sql_query = text(f"""{from_clause}
+        ORDER BY ({order_expr}) DESC
+        LIMIT :limit;
         """)
 
         async with sessionmanager.session() as db:
-            result = await db.execute(sql_query)
+            result = await db.execute(sql_query, {
+                "embedding": str(embedding_values),
+                "qtext": query_text or "",
+                "themes": themes_param,
+                "sub_themes": sub_themes_param,
+                "limit": candidate_pool,
+                "fusion_depth": fusion_depth,
+            })
             return result.all()
 
     async def fetch_course_metadata(self, identifiers_str: str) -> Dict[str, Dict[str, Any]]:
