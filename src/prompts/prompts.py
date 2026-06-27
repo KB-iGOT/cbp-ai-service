@@ -581,7 +581,8 @@ Generate a structured output:
    - Explain a detailed summary of all missions, schemes, and programs mentioned in the document.
 
 2. **Roles & Activities of Designations**
-   - Summarize the roles, activities, and responsibilities of each **formally listed** designation in the document.
+   - Provide a comprehensive and detailed summary of the roles, activities, and responsibilities of each **formally listed** designation in the document.
+   - Do not provide a brief or condensed summary
 
 3. **Organizational Structure**
    - Provide an overview of wings, divisions, sections, or departments.

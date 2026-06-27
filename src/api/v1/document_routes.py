@@ -33,7 +33,7 @@ def get_genai_client():
         try:
             _genai_client = genai.Client(
                 project=settings.GOOGLE_PROJECT_ID,
-                location="us-central1",
+                location="global",
                 vertexai=True
             )
         except Exception as e:
@@ -272,7 +272,7 @@ async def _run_document_summary(document_id: uuid.UUID):
             )
 
             response = await client.aio.models.generate_content(
-                model="gemini-2.5-pro",
+                model="gemini-3.1-pro-preview",
                 contents=contents,
                 config=generate_content_config
             )

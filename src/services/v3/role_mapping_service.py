@@ -1,11 +1,11 @@
 # src/role_mapping_service.py
 import json
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Literal, Optional
 import uuid
 import asyncio
 from google import genai
 from google.genai import types
-from pydantic import BaseModel, Field, ValidationError
+from pydantic import BaseModel, Field
 
 from ...schemas.role_mapping import OrgType
 from ...core.configs import settings
@@ -23,39 +23,43 @@ with open("data/competencies.json") as f:
 # src/prompts/v2/prompts.py (add this to your existing prompts file)
 
 
-center_json_output = [{
-    "designation_name": "string",
-    "wing_division_section": "string",
-    "role_responsibilities": ["string", "string"],
-    "activities": ["string", "string"],
-    "sort_order": "integer", 
-    "competencies": [
-        {
-            "type": "Behavioral | Functional | Domain",
-            "theme": "string",
-            "sub_theme": "string",
-            "source": "KCM or AI Suggested"
-        }
-    ],
-    "source": ["ACBP", "Work Allocation Order", "AI Suggested"]
-}]
+center_json_output = {
+    "mappings": [{
+        "designation_name": "string",
+        "wing_division_section": "string",
+        "role_responsibilities": ["string", "string"],
+        "activities": ["string", "string"],
+        "sort_order": "integer",
+        "competencies": [
+            {
+                "type": "Behavioral | Functional | Domain",
+                "theme": "string",
+                "sub_theme": "string",
+                "source": "KCM or AI Suggested"
+            }
+        ],
+        "source": ["ACBP", "Work Allocation Order", "AI Suggested"]
+    }]
+}
 
-state_json_output = [{
-    "designation_name": "string",
-    "wing_division_section": "string",
-    "role_responsibilities": ["string", "string"],
-    "activities": ["string", "string"],
-    "sort_order": "integer",
-    "competencies": [
-        {
-            "type": "Behavioral | Functional | Domain",
-            "theme": "string",
-            "sub_theme": "string",
-            "source": "KCM or AI Suggested"
-        }
-    ],
-    "source": ["Work Allocation Order", "ACBP", "Additional supporting document", "AI Suggested"]
-}]
+state_json_output = {
+    "mappings": [{
+        "designation_name": "string",
+        "wing_division_section": "string",
+        "role_responsibilities": ["string", "string"],
+        "activities": ["string", "string"],
+        "sort_order": "integer",
+        "competencies": [
+            {
+                "type": "Behavioral | Functional | Domain",
+                "theme": "string",
+                "sub_theme": "string",
+                "source": "KCM or AI Suggested"
+            }
+        ],
+        "source": ["Work Allocation Order", "ACBP", "Additional supporting document", "AI Suggested"]
+    }]
+}
 
 class Designation(BaseModel):
     sort_order: int = Field(
@@ -75,20 +79,24 @@ class DesignationExtractionResponse(BaseModel):
 
 
 class FRACCompetency(BaseModel):
-    type: str = Field(description="Competency type")
+    type: Literal["Behavioral", "Functional", "Domain"] = Field(description="Competency type: Behavioral, Functional, or Domain")
     theme: str = Field(description="Competency theme")
     sub_theme: str = Field(description="Competency sub theme")
     source: Optional[str] = Field(default=None, description="Competency source")
 
 
 class FRACRoleMapping(BaseModel):
-    designation_name: str = Field(description="Official designation")
-    wing_division_section: str = Field(description="Wing/division/section")
-    role_responsibilities: List[str] = Field(description="Role responsibilities")
-    activities: List[str] = Field(description="Activities")
-    sort_order: int = Field(description="Hierarchy order")
-    competencies: List[FRACCompetency] = Field(description="Competencies")
+    designation_name: str = Field(description="Official designation name")
+    wing_division_section: str = Field(description="Wing/division/section the designation belongs to")
+    role_responsibilities: List[str] = Field(description="Flat list of role responsibilities as strings")
+    activities: List[str] = Field(description="Flat list of activity strings")
+    sort_order: int = Field(description="Hierarchy sort order, strictly increasing from 1")
+    competencies: List[FRACCompetency] = Field(description="Flat list of competency objects")
     source: Optional[List[str]] = Field(default=None, description="Source references")
+
+
+class FRACBatchResponse(BaseModel):
+    mappings: List[FRACRoleMapping] = Field(description="List of FRAC role mappings for all designations in the batch")
 
 class RoleMappingService:
     """Service for generating role mappings using Google AI"""
@@ -98,7 +106,7 @@ class RoleMappingService:
         try:
             self.client = genai.Client(
                 project=settings.GOOGLE_PROJECT_ID,
-                location="us-central1",
+                location="global",
                 vertexai=True
             )
             logger.info("Google AI service for role mapping initialized successfully")
@@ -154,11 +162,11 @@ class RoleMappingService:
             )
             
             response = await self.client.aio.models.generate_content(
-                model="gemini-2.5-flash-lite",
+                model="gemini-3.5-flash",
                 contents=contents,
                 config=generate_content_config,
             )
-            
+            print(response.candidates)
             text_response = response.text
             if not text_response:
                 logger.error("Designation extraction response was empty")
@@ -224,52 +232,34 @@ class RoleMappingService:
                         parts=[types.Part.from_text(text=base_prompt)]
                     )
                 ]
-                
+
                 generate_content_config = types.GenerateContentConfig(
-                    temperature=0.3,  # Low-moderate — structured reasoning with some inference
-                    top_p=0.90,  # Slightly broader for competency mapping diversity
+                    temperature=0.3,
+                    top_p=0.90,
+                    response_mime_type="application/json",
+                    response_schema=FRACBatchResponse.model_json_schema(),
                 )
-                
+
                 response = await self.client.aio.models.generate_content(
-                    model="gemini-2.5-pro",
+                    model="gemini-3.1-pro-preview",
                     contents=contents,
                     config=generate_content_config,
                 )
 
                 logger.info(f"FRAC Batch {batch_number} Gemini usage: {response.usage_metadata}")
-                
+
                 text_response = response.text
                 if not text_response:
                     logger.warning(f"Batch {batch_number}: Empty response on attempt {attempt}")
                     if attempt < max_retries:
-                        await asyncio.sleep(2 ** attempt)  # Exponential backoff
+                        await asyncio.sleep(2 ** attempt)
                         continue
                     return []
-                
-                text_response = text_response.replace("```json", '').replace("```", '')
-                parsed_response = json.loads(text_response)
 
-                if not isinstance(parsed_response, list):
-                    logger.warning(f"Batch {batch_number}: Expected a list response, got {type(parsed_response).__name__}")
-                    return []
-                
-                validated_response: List[Dict[str, Any]] = []
-                skipped_records = 0
-                for idx, record in enumerate(parsed_response):
-                    try:
-                        validated_response.append(FRACRoleMapping.model_validate(record).model_dump())
-                    except ValidationError as ve:
-                        skipped_records += 1
-                        logger.warning(
-                            f"Batch {batch_number}: Skipping invalid record at index {idx} due to validation error: {ve}"
-                        )
+                batch_response = FRACBatchResponse.model_validate_json(text_response)
+                validated_response = [record.model_dump() for record in batch_response.mappings]
 
-                if skipped_records:
-                    logger.warning(
-                        f"Batch {batch_number}: Skipped {skipped_records} invalid records after validation"
-                    )
-                
-                logger.info(f"Batch {batch_number}: Successfully generated {len(validated_response)} valid FRAC mappings")
+                logger.info(f"Batch {batch_number}: Successfully generated {len(validated_response)} FRAC mappings")
                 return validated_response
             except json.JSONDecodeError as e:
                 logger.warning(f"Batch {batch_number}: JSON parse error on attempt {attempt}: {str(e)}")
