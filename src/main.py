@@ -4,6 +4,8 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from .core.middleware import APILoggingMiddleware
 
+from sqlalchemy import text
+
 from .core.database import Base, sessionmanager
 from .api import router
 from .core.configs import EnvironmentOption, settings
@@ -18,6 +20,7 @@ async def lifespan(app: FastAPI):
     logger.info("--- Creating Tables ---")
     try:
         async with sessionmanager.connect() as conn:
+            await conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
             await conn.run_sync(Base.metadata.create_all)
         logger.info("✅ Database tables ready")
     except Exception as e:
