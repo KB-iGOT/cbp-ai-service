@@ -44,7 +44,7 @@ async def get_embedding(text: str) -> list:
         return []
     try:
         response = await client.aio.models.embed_content(
-            model=settings.EMBEDDING_MODEL_NAME,
+            model="text-multilingual-embedding-002",
             contents=text,
             config=types.EmbedContentConfig(task_type="RETRIEVAL_QUERY")
         )

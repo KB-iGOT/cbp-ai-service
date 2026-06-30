@@ -18,6 +18,7 @@ from ...prompts.prompts import DESIGNATION_ROLE_MAPPING_PROMPT
 from ...schemas.role_mapping import AddDesignationToRoleMappingRequest, DesignationmatchedResult, ReorderDesignationsRequest, RoleMappingBackgroundResponse, RoleMappingResponse, RoleMappingUpdate, RoleMappingWithoutCBP, matchedDesignationsRequest, MatchedDesignationDetail
 from ...services.role_mapping_service import role_mapping_service
 from ...services.designation_service import designation_service
+from ...services.designation_matcher_service import designation_matcher_service
 
 from ...core.database import get_db_session
 from ...core.logger import logger
@@ -399,26 +400,16 @@ async def match_designations_with_igot(
 
         logger.info(f"Matching {len(designation_names)} unique designations from {len(records_to_match)} records")
 
-        # 6. Initialize matcher and perform matching
-        match_results = await designation_service.match_designations(designation_names)
-        
-        # keyed by the matched designation name (which equals input for exact hits)
-        match_dict = {m["designation"].lower(): m for m in match_results}
-
-        # 7. Embedding fallback for designations that didn't exact-match
-        unmatched_names = [n for n in designation_names if n.lower() not in match_dict]
-        logger.info(f"{len(unmatched_names)} designations not exact-matched, trying embedding search")
-        embedding_dict = {}
-        if unmatched_names:
-            embedding_results = await designation_service.match_designations_via_embedding(db, unmatched_names)
-            logger.info(f"Embedding search returned {len(embedding_results)} matches for {len(unmatched_names)} unmatched designations")
-            embedding_dict = {m["input_designation"].lower(): m for m in embedding_results}
+        # 6 & 7. Exact match first, semantic fallback for unmatched — combined result
+        all_match_results = await designation_matcher_service.match(db, designation_names)
+        match_dict = {m["input_designation"].lower(): m for m in all_match_results}
+        logger.info(f"Matched: {len(match_dict)}/{len(designation_names)} (exact + semantic)")
 
         # Build bulk updates — exact match wins, embedding is fallback, unmatched are skipped
         bulk_updates = []
         for rm in records_to_match:
             name_lower = rm.designation_name.lower()
-            match_data = match_dict.get(name_lower) or embedding_dict.get(name_lower)
+            match_data = match_dict.get(name_lower)
             if not match_data:
                 continue
 
