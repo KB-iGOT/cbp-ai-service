@@ -19,6 +19,8 @@ from ...core.logger import logger
 from ...core.configs import settings
 
 from ...crud.role_mapping import crud_role_mapping
+from ...services.designation_matcher_service import designation_matcher_service
+from ...core.database import sessionmanager
 from ...api.dependencies import get_current_active_user
 
 
@@ -118,8 +120,39 @@ async def process_role_mapping_task(
                 sort_order=data.get('sort_order')
             )
             new_mappings.append(new_mapping)
-
+            
         await crud_role_mapping.create(new_mappings)
+
+        # 5. Auto-match all completed designations against iGOT master
+        try:
+            async with sessionmanager.session() as db:
+                all_completed = await crud_role_mapping.get_all_completed_mapping(
+                    db, state_center_id, user_id, department_id
+                )
+            records_to_match = [rm for rm in (all_completed or []) if not rm.igot_designation_id]
+            if records_to_match:
+                designation_names = list({rm.designation_name for rm in records_to_match})
+                async with sessionmanager.session() as db:
+                    all_match_results = await designation_matcher_service.match(db, designation_names)
+                match_dict = {m["input_designation"].lower(): m for m in all_match_results}
+
+                bulk_updates = []
+                for rm in records_to_match:
+                    match_data = match_dict.get(rm.designation_name.lower())
+                    if match_data:
+                        bulk_updates.append({
+                            "role_mapping_id": rm.id,
+                            "igot_designation_name": match_data.get("designation"),
+                            "igot_designation_id": match_data.get("id"),
+                        })
+
+                if bulk_updates:
+                    async with sessionmanager.session() as db:
+                        updated = await crud_role_mapping.bulk_update_designation_matching(db, bulk_updates)
+                    logger.info(f"Auto-matched {updated}/{len(records_to_match)} designations")
+        except Exception as match_err:
+            logger.exception(f"Auto designation match failed (non-critical)")
+
         logger.info(f"Task Completed. Updated placeholder {placeholder_id} and added {len(new_mappings)} new rows.")
     except Exception as e:  
         error_msg = str(e)

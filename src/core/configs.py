@@ -27,10 +27,21 @@ class Settings(BaseSettings):
     APP_ROOT_PATH: str = "/cbp-tpc-ai"
 
     DATABASE_URL: str
+    REDIS_HOST: str = Field(default="localhost", description="Redis host")
+    REDIS_PORT: int = Field(default=6379, description="Redis port")
+    REDIS_DB: int = Field(default=0, description="Redis database index")
+    REDIS_DESIG_EMB_PREFIX: str = Field(default="cbp_desig_emb", description="Redis key prefix for designation embeddings cache")
+    DESIGNATION_SIMILARITY_THRESHOLD: float = Field(default=0.92, description="Minimum cosine similarity score for semantic designation match")
+    DESIGNATION_EMBED_BATCH_SIZE: int = Field(default=100, description="Max designations per Gemini embedding API call")
+
+    @property
+    def REDIS_URL(self) -> str:
+        return f"redis://{self.REDIS_HOST}:{self.REDIS_PORT}/{self.REDIS_DB}"
 
     GOOGLE_PROJECT_LOCATION: str
     GOOGLE_APPLICATION_CREDENTIALS: str
-    EMBEDDING_MODEL_NAME: str = "text-multilingual-embedding-002"
+    GOOGLE_API_KEY: str
+    GOOGLE_EMBEDDING_MODEL: str = Field(default="gemini-embedding-2", description="Gemini embedding model name")
     GOOGLE_PROJECT_ID: str
 
     KB_BASE_URL: str
