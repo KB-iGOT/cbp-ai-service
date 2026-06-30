@@ -216,3 +216,7 @@ curl
 *.csv
 
 scripts/
+logs/
+data/
+docs/
+approaches/
