@@ -52,7 +52,7 @@ async def _get_embeddings(texts: List[str]) -> List[List[float]]:
         client = _get_genai_client()
         fresh_embeddings: List[List[float]] = []
         for i in range(0, len(uncached_texts), settings.DESIGNATION_EMBED_BATCH_SIZE):
-            batch = uncached_texts[i: i + EMBED_BATCH_SIZE]
+            batch = uncached_texts[i: i + settings.DESIGNATION_EMBED_BATCH_SIZE]
             contents = [_format_for_matching(t) for t in batch]
             response = await client.aio.models.embed_content(
                 model=settings.GOOGLE_EMBEDDING_MODEL,
