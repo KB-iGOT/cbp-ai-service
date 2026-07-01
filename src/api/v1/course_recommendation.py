@@ -34,6 +34,10 @@ client = genai.Client(
     vertexai=True
 )
 
+embedding_client = genai.Client(
+    api_key=settings.GOOGLE_API_KEY
+)
+
 # Curse Recommendation APIs
 async def get_embedding(text: str) -> list:
 
@@ -42,11 +46,14 @@ async def get_embedding(text: str) -> list:
     if not text.strip():
         print("Warning: Attempted to get embedding for empty text. Returning empty list.")
         return []
+    
+    vector_query = f"task: search result | query: {text}"
+
     try:
-        response = await client.aio.models.embed_content(
-            model="text-multilingual-embedding-002",
-            contents=text,
-            config=types.EmbedContentConfig(task_type="RETRIEVAL_QUERY")
+        response = await embedding_client.aio.models.embed_content(
+            model=settings.GOOGLE_EMBEDDING_MODEL,
+            contents=vector_query,
+            config=types.EmbedContentConfig(output_dimensionality=settings.EMBEDDING_OUTPUT_DIMENSIONALITY)
         )
         
         return response.embeddings
@@ -55,7 +62,7 @@ async def get_embedding(text: str) -> list:
         return []
 
 async def generate_vector_query(query):
-    logger.info(f"Generating vector query for this profile :: {query}")
+    logger.info(f"Generating vector query for this profile :: {query[:50]}")
     user_part = types.Part.from_text(text=f"""
     You are provided with the following information:
     {query}
@@ -403,18 +410,13 @@ async def generate_course_recommendations(
                 db.delete(existing_recommendation)
                 db.commit()
         
-        # user_profile = f"""
-        # Ministry/Organization Name: {role_mapping.state_center.name}
-        # Department Name: {role_mapping.department.name if role_mapping.department else 'N/A'}
-        # Designation Name: {role_mapping.designation_name}
-        # Roles & Responsibilities: {role_mapping.role_responsibilities}
-        # Activities: {role_mapping.activities}
-        # Competencies: {json.dumps(role_mapping.competencies, indent=2)}
-        # """
-
         user_profile = f"""
-        Ministry/Organization Name: {role_mapping.state_center_name}
+        Ministry/State Name: {role_mapping.state_center_name}
+        Department Name: {role_mapping.department_name if role_mapping.department_name else 'N/A'}
         Designation Name: {role_mapping.designation_name}
+        Roles & Responsibilities: {role_mapping.role_responsibilities}
+        Activities: {role_mapping.activities}
+        Competencies: {json.dumps(role_mapping.competencies, indent=2)}
         """
 
         new_recommendation = await crud_recommended_course.create(

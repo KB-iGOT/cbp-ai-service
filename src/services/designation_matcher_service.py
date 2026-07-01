@@ -8,6 +8,7 @@ from sqlalchemy import text
 from ..core.configs import settings
 from ..core.logger import logger
 from .redis_service import redis_service
+from .designation_service import designation_service
 
 
 _genai_client: genai.Client | None = None
@@ -85,35 +86,42 @@ class DesignationMatcherService:
         self, db: AsyncSession, designation_names: List[str]
     ) -> List[Dict[str, Any]]:
         """
-        Case-insensitive exact match against designation_embeddings.
-        Single DB query using LOWER(designation) = ANY(...).
+        Case-insensitive exact match via iGOT designation search API.
+        Calls the KB /api/designation/search endpoint for each name and
+        picks the first result whose name matches exactly (case-insensitive).
 
         Returns list of dicts: input_designation, designation, id, match_type.
         """
         if not designation_names:
             return []
 
-        rows = (
-            await db.execute(
-                text(
-                    "SELECT id, designation FROM designation_embeddings "
-                    "WHERE LOWER(designation) = ANY(:names)"
-                ),
-                {"names": [n.lower() for n in designation_names]},
-            )
-        ).fetchall()
-
-        matched = {row.designation.lower(): row for row in rows}
-        results = [
-            {
-                "input_designation": name,
-                "designation": matched[name.lower()].designation,
-                "id": matched[name.lower()].id,
-                "match_type": "exact",
+        try:
+            payload = {
+                "filterCriteriaMap": {
+                    "status": "Active",
+                    "designation": designation_names,
+                },
+                "requestedFields": ["designation", "id"],
+                "pageNumber": 0,
+                "pageSize": max(len(designation_names), 1000),
             }
-            for name in designation_names
-            if name.lower() in matched
-        ]
+            response = await designation_service.search(payload)
+            designations = response.get("result", {}).get("result", {}).get("data", [])
+        except Exception as e:
+            logger.warning(f"iGOT designation search failed: {e}")
+            content = []
+
+        lookup = {item.get("designation", "").lower(): item for item in designations}
+        results = []
+        for name in designation_names:
+            item = lookup.get(name.lower())
+            if item:
+                results.append({
+                    "input_designation": name,
+                    "designation": item["designation"],
+                    "id": item["id"],
+                    "match_type": "exact",
+                })
 
         logger.info(f"Exact match: {len(results)}/{len(designation_names)} found")
         return results
