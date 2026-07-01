@@ -212,13 +212,9 @@ __marimo__/
 curl
 
 .vscode/
-# api_flow_test.py run artifacts
-scripts/logs/
-scripts/*.xlsx
-scripts/comparison_*.xlsx
+# local dev/test scripts and their run artifacts are not committed
+scripts/
+*.csv
 
 # local-only tuning report / slides (not committed for now)
 docs/retrieval-tuning-report*
-
-# contains an API key — never commit
-scripts/test_embedding2_apikey.py

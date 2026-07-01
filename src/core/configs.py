@@ -27,10 +27,26 @@ class Settings(BaseSettings):
     APP_ROOT_PATH: str = "/cbp-tpc-ai"
 
     DATABASE_URL: str
+    REDIS_HOST: str = Field(default="localhost", description="Redis host")
+    REDIS_PORT: int = Field(default=6379, description="Redis port")
+    REDIS_DB: int = Field(default=0, description="Redis database index")
+    REDIS_DESIG_EMB_PREFIX: str = Field(default="cbp_desig_emb", description="Redis key prefix for designation embeddings cache")
+    DESIGNATION_SIMILARITY_THRESHOLD: float = Field(default=0.92, description="Minimum cosine similarity score for semantic designation match")
+    DESIGNATION_EMBED_BATCH_SIZE: int = Field(default=100, description="Max designations per Gemini embedding API call")
+
+    @property
+    def REDIS_URL(self) -> str:
+        return f"redis://{self.REDIS_HOST}:{self.REDIS_PORT}/{self.REDIS_DB}"
 
     GOOGLE_PROJECT_LOCATION: str
     GOOGLE_APPLICATION_CREDENTIALS: str
-    EMBEDDING_MODEL_NAME: str = "text-multilingual-embedding-002"
+    GOOGLE_API_KEY: str
+    GOOGLE_EMBEDDING_MODEL: str = Field(default="gemini-embedding-2", description="Gemini embedding model name")
+    EMBEDDING_OUTPUT_DIMENSIONALITY: int = Field(default=1536, description="Output dimensionality for Gemini embedding model")
+    # Legacy embedding model for the optional content_rerank layer only. content_embeddings
+    # was built in this model's 768-dim space, which is DIFFERENT from GOOGLE_EMBEDDING_MODEL
+    # (gemini-embedding-2, 1536). content_rerank embeds the query with this model separately.
+    CONTENT_EMBEDDING_MODEL: str = Field(default="text-multilingual-embedding-002", description="Legacy embedding model matching the content_embeddings vector space (used by content_rerank)")
     GOOGLE_PROJECT_ID: str
 
     KB_BASE_URL: str
@@ -147,6 +163,14 @@ class Settings(BaseSettings):
         default="",
         description="MDO Portal URL for CBP review links"
     )
+
+    # --- Course-recommendation retrieval tuning (feature flags) ---------------
+    HYBRID_SEARCH_ENABLED: bool = Field(default=True, description="Hybrid dense (semantic) + lexical (full-text) retrieval fused with RRF")
+    COMM_GENAI_BOOST_ENABLED: bool = Field(default=True, description="Gently boost Communication / GenAI courses among relevant results")
+    COMPETENCY_BOOST_ENABLED: bool = Field(default=True, description="Boost courses whose competencies overlap the role's competencies")
+    CONTENT_RERANK_ENABLED: bool = Field(default=True, description="Content-embedding rerank layer between hybrid search and the LLM")
+    CONTENT_RERANK_TOP_N: int = Field(default=40, description="Candidates kept after content rerank (passed to the LLM)")
+    CONTENT_RERANK_WEIGHT: float = Field(default=0.5, description="Blend weight: (1-w)*hybrid + w*content")
 
 # Create a settings instance that can be imported by other modules
 settings = Settings()

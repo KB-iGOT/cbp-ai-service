@@ -9,22 +9,18 @@ from sqlalchemy.future import select
 
 from ..core.database import sessionmanager
 from ..core.logger import logger
+from ..core.configs import settings
 
 from ..models.course_recommendation import RecommendationStatus, RecommendedCourse
 
 
-def _flag(name: str, default: bool) -> bool:
-    """Read a boolean feature flag from the environment."""
-    return os.getenv(name, str(default)).strip().lower() in ("1", "true", "yes", "on")
-
-
-# --- retrieval feature flags (override via env vars) ------------------------
+# --- retrieval feature flags (pydantic Settings fields -> overridable in .env) --
 # Phase 1 core: keyword (lexical) + semantic (dense) hybrid.
-HYBRID_SEARCH_ENABLED    = _flag("HYBRID_SEARCH_ENABLED", True)
+HYBRID_SEARCH_ENABLED    = settings.HYBRID_SEARCH_ENABLED
 # Business rule: gently prefer Communication / GenAI courses among relevant ones.
-COMM_GENAI_BOOST_ENABLED = _flag("COMM_GENAI_BOOST_ENABLED", True)
+COMM_GENAI_BOOST_ENABLED = settings.COMM_GENAI_BOOST_ENABLED
 # On by default: removing it scored clearly worst in LLM-judge A/B (it nets helpful).
-COMPETENCY_BOOST_ENABLED = _flag("COMPETENCY_BOOST_ENABLED", True)
+COMPETENCY_BOOST_ENABLED = settings.COMPETENCY_BOOST_ENABLED
 # Phase 2 (ON by default; opt out with CONTENT_RERANK_ENABLED=false): re-rank
 # hybrid candidates against course CONTENT embeddings before the LLM stage.
 # See content_rerank() below.
@@ -33,15 +29,19 @@ COMPETENCY_BOOST_ENABLED = _flag("COMPETENCY_BOOST_ENABLED", True)
 # migrations -- it must be restored / populated separately (e.g. from the
 # content-embeddings dump or your content-embedding pipeline). Minimum schema:
 #     path        text         -- "<course_id>" or "<course_id>/<resource_id>#chunkN"
-#     embedding   vector(768)  -- same model/space as course_metadata_v2.embedding
-# Join key to course_metadata_v2.identifier is split_part(path,'/',1) (the parent
+#     embedding   vector(768)  -- LEGACY space (text-multilingual-embedding-002)
+# NOTE: content_embeddings is 768-dim, a DIFFERENT space from course_metadata_v3's
+# 1536-dim gemini-embedding-2 vectors. content_rerank therefore embeds the query
+# separately in this legacy space (api.get_content_embedding) rather than reusing
+# the 1536-dim main search vector.
+# Join key to course_metadata_v3.identifier is split_part(path,'/',1) (the parent
 # course id) -- NOT the `identifier` column, which holds the per-chunk/resource id.
 # If the table is MISSING, content_rerank() logs a warning and falls back to the
 # hybrid ordering on every request -- the app stays runnable, but set this flag to
 # false in environments that don't have the table to avoid the per-request warning.
-CONTENT_RERANK_ENABLED   = _flag("CONTENT_RERANK_ENABLED", True)
-CONTENT_RERANK_TOP_N     = int(os.getenv("CONTENT_RERANK_TOP_N", "40"))      # narrow to this many before the LLM
-CONTENT_RERANK_WEIGHT    = float(os.getenv("CONTENT_RERANK_WEIGHT", "0.5"))  # blend weight: content vs hybrid score
+CONTENT_RERANK_ENABLED   = settings.CONTENT_RERANK_ENABLED
+CONTENT_RERANK_TOP_N     = settings.CONTENT_RERANK_TOP_N      # narrow to this many before the LLM
+CONTENT_RERANK_WEIGHT    = settings.CONTENT_RERANK_WEIGHT     # blend weight: content vs hybrid score
 
 
 class CRUDRecommendedCourse:
@@ -233,6 +233,8 @@ class CRUDRecommendedCourse:
         # Fusion; optional competency / Communication-GenAI boosts nudge ordering.
         # 'distance' is ALWAYS reported as raw cosine similarity (for cross-run
         # comparison), independent of how ordering is computed.
+        # NOTE: searches course_metadata_v3 (embedding is vector(1536), gemini-embedding-2);
+        # the caller must pass a 1536-dim query vector (see get_embedding).
         if HYBRID_SEARCH_ENABLED:
             base_score = "f.rrf"               # RRF scale (~0 .. 0.033)
             comp_w, cg_w = 0.005, 0.01         # boosts scaled to RRF magnitude
@@ -240,7 +242,7 @@ class CRUDRecommendedCourse:
         WITH dense AS (
             SELECT identifier,
                    ROW_NUMBER() OVER (ORDER BY embedding <=> :embedding) AS rnk
-            FROM public.course_metadata_v2
+            FROM public.course_metadata_v3
             ORDER BY embedding <=> :embedding
             LIMIT :fusion_depth
         ),
@@ -253,7 +255,7 @@ class CRUDRecommendedCourse:
                                array_to_string(coalesce(keywords, ARRAY[]::text[]), ' ')),
                            websearch_to_tsquery('english', :qtext)) DESC
                    ) AS rnk
-            FROM public.course_metadata_v2
+            FROM public.course_metadata_v3
             WHERE :qtext <> ''
               AND to_tsvector('english',
                       coalesce(name,'') || ' ' || coalesce(description,'') || ' ' ||
@@ -269,13 +271,13 @@ class CRUDRecommendedCourse:
         )
         SELECT c.name, c.identifier, (1.0 - (c.embedding <=> :embedding)) AS distance
         FROM fused f
-        JOIN public.course_metadata_v2 c ON c.identifier = f.identifier"""
+        JOIN public.course_metadata_v3 c ON c.identifier = f.identifier"""
         else:
             base_score = "(1.0 - (c.embedding <=> :embedding))"   # pure cosine (0 .. 1)
             comp_w, cg_w = 0.05, 0.05                              # boosts on cosine scale
             from_clause = """
         SELECT c.name, c.identifier, (1.0 - (c.embedding <=> :embedding)) AS distance
-        FROM public.course_metadata_v2 c"""
+        FROM public.course_metadata_v3 c"""
 
         score_terms = [base_score]
         if COMPETENCY_BOOST_ENABLED:
@@ -307,7 +309,7 @@ class CRUDRecommendedCourse:
     async def content_rerank(
         self,
         courses: List[Dict[str, Any]],
-        embedding_values: List[float],
+        content_embedding_values: List[float],
         top_n: int = CONTENT_RERANK_TOP_N,
         weight: float = CONTENT_RERANK_WEIGHT,
     ) -> List[Dict[str, Any]]:
@@ -315,6 +317,14 @@ class CRUDRecommendedCourse:
         Phase-2 middle layer (between hybrid search and the LLM): re-rank the
         hybrid candidates against COURSE CONTENT embeddings
         (public.content_embeddings), then narrow to top_n.
+
+        IMPORTANT (dimension/space): content_embeddings is in the LEGACY 768-dim
+        space (text-multilingual-embedding-002), which is DIFFERENT from the
+        1536-dim gemini-embedding-2 space used to search course_metadata_v3. So
+        `content_embedding_values` MUST be a query vector embedded in that legacy
+        space (see api.get_content_embedding) -- NEVER the 1536-dim main search
+        vector. If a wrong-dimension vector is passed, the cosine SQL raises and
+        this method degrades gracefully (returns candidates unchanged, truncated).
 
         JOIN KEY = the parent course id derived from content_embeddings.path,
         NOT the `identifier` column. content_embeddings is chunked: a row's `path`
@@ -346,7 +356,7 @@ class CRUDRecommendedCourse:
         """)
         try:
             async with sessionmanager.session() as db:
-                res = await db.execute(sql, {"embedding": str(embedding_values), "ids": identifiers})
+                res = await db.execute(sql, {"embedding": str(content_embedding_values), "ids": identifiers})
                 content_sim = {row[0]: float(row[1]) for row in res.all()}
         except Exception as e:
             logger.warning(f"content_rerank skipped (content_embeddings unavailable?): {e}")
@@ -384,7 +394,7 @@ class CRUDRecommendedCourse:
         
         # Execute the raw SQL query
         competencies_query = text(f"""
-            SELECT identifier, competencies_v6, duration, organisation FROM public.course_metadata_v2
+            SELECT identifier, competencies_v6, duration, organisation FROM public.course_metadata_v3
             WHERE identifier IN ({identifiers_str});
             """)
         

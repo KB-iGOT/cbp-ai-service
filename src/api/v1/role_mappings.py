@@ -18,6 +18,7 @@ from ...prompts.prompts import DESIGNATION_ROLE_MAPPING_PROMPT
 from ...schemas.role_mapping import AddDesignationToRoleMappingRequest, DesignationmatchedResult, ReorderDesignationsRequest, RoleMappingBackgroundResponse, RoleMappingResponse, RoleMappingUpdate, RoleMappingWithoutCBP, matchedDesignationsRequest, MatchedDesignationDetail
 from ...services.role_mapping_service import role_mapping_service
 from ...services.designation_service import designation_service
+from ...services.designation_matcher_service import designation_matcher_service
 
 from ...core.database import get_db_session
 from ...core.logger import logger
@@ -399,15 +400,16 @@ async def match_designations_with_igot(
 
         logger.info(f"Matching {len(designation_names)} unique designations from {len(records_to_match)} records")
 
-        # 6. Initialize matcher and perform matching
-        match_results = await designation_service.match_designations(designation_names)
+        # 6 & 7. Exact match first, semantic fallback for unmatched — combined result
+        all_match_results = await designation_matcher_service.match(db, designation_names)
+        match_dict = {m["input_designation"].lower(): m for m in all_match_results}
+        logger.info(f"Matched: {len(match_dict)}/{len(designation_names)} (exact + semantic)")
 
-        # 7. Prepare bulk updates
-        match_dict = {m["designation"].lower() : m for m in match_results}
+        # Build bulk updates — exact match wins, embedding is fallback, unmatched are skipped
         bulk_updates = []
-
         for rm in records_to_match:
-            match_data = match_dict.get(rm.designation_name.lower())
+            name_lower = rm.designation_name.lower()
+            match_data = match_dict.get(name_lower)
             if not match_data:
                 continue
 

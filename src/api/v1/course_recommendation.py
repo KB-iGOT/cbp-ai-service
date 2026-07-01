@@ -34,6 +34,10 @@ client = genai.Client(
     vertexai=True
 )
 
+embedding_client = genai.Client(
+    api_key=settings.GOOGLE_API_KEY
+)
+
 # Curse Recommendation APIs
 async def get_embedding(text: str) -> list:
 
@@ -42,11 +46,14 @@ async def get_embedding(text: str) -> list:
     if not text.strip():
         print("Warning: Attempted to get embedding for empty text. Returning empty list.")
         return []
+    
+    vector_query = f"task: search result | query: {text}"
+
     try:
-        response = await client.aio.models.embed_content(
-            model=settings.EMBEDDING_MODEL_NAME,
-            contents=text,
-            config=types.EmbedContentConfig(task_type="RETRIEVAL_QUERY")
+        response = await embedding_client.aio.models.embed_content(
+            model=settings.GOOGLE_EMBEDDING_MODEL,
+            contents=vector_query,
+            config=types.EmbedContentConfig(output_dimensionality=settings.EMBEDDING_OUTPUT_DIMENSIONALITY)
         )
         
         return response.embeddings
@@ -54,8 +61,37 @@ async def get_embedding(text: str) -> list:
         print(f"Error generating embedding for text '{text[:50]}...': {e}")
         return []
 
+
+async def get_content_embedding(text: str) -> list:
+    """Embed a query in the LEGACY content-embedding space for content_rerank ONLY.
+
+    The main search uses gemini-embedding-2 @ 1536 (get_embedding) against
+    course_metadata_v3. But `content_embeddings` was built with the legacy
+    text-multilingual-embedding-002 model (768-dim), a DIFFERENT vector space.
+    To rerank against it we must embed the query with that same legacy model --
+    reusing the 1536-dim main vector would be dimension-incompatible and, even at
+    a matching size, semantically meaningless across models.
+
+    Uses the regional Vertex `client` (the legacy model is a Vertex text-embedding
+    model), mirroring how content_embeddings were generated. Returns [] on failure
+    so the caller can simply skip content_rerank without breaking the request.
+    """
+    if not text.strip():
+        return []
+    try:
+        response = await client.aio.models.embed_content(
+            model=settings.CONTENT_EMBEDDING_MODEL,
+            contents=text,
+            config=types.EmbedContentConfig(task_type="RETRIEVAL_QUERY"),
+        )
+        return response.embeddings
+    except Exception as e:
+        logger.warning(f"get_content_embedding failed; content_rerank will be skipped: {e}")
+        return []
+
+
 async def generate_vector_query(query):
-    logger.info(f"Generating vector query for this profile :: {query}")
+    logger.info(f"Generating vector query for this profile :: {query[:50]}")
     user_part = types.Part.from_text(text=f"""
     You are given a government official's role profile:
     {query}
@@ -369,8 +405,17 @@ async def process_recommendation_task(recommendation_id: uuid.UUID, user_profile
 
         # 4b. (optional) Content-embedding rerank: refine the hybrid candidates
         # against actual course content, then narrow before the LLM stage.
+        # content_embeddings is in the LEGACY 768-dim space (text-multilingual-
+        # embedding-002), NOT the 1536-dim gemini-embedding-2 space of `embedding_values`.
+        # So embed the query separately in that legacy space and pass THAT vector.
         if CONTENT_RERANK_ENABLED:
-            courses = await crud_recommended_course.content_rerank(courses, embedding_values)
+            content_embedding_list = await get_content_embedding(query_text)
+            if content_embedding_list:
+                courses = await crud_recommended_course.content_rerank(
+                    courses, content_embedding_list[0].values
+                )
+            else:
+                logger.warning("content_rerank skipped: no legacy content embedding produced")
 
         # 5. Prepare LLM inputs
         relevant_courses_prompt = [f"Course Name: {c['name']}, Course ID: {c['identifier']}" for c in courses]
@@ -466,18 +511,13 @@ async def generate_course_recommendations(
                 db.delete(existing_recommendation)
                 db.commit()
         
-        # user_profile = f"""
-        # Ministry/Organization Name: {role_mapping.state_center.name}
-        # Department Name: {role_mapping.department.name if role_mapping.department else 'N/A'}
-        # Designation Name: {role_mapping.designation_name}
-        # Roles & Responsibilities: {role_mapping.role_responsibilities}
-        # Activities: {role_mapping.activities}
-        # Competencies: {json.dumps(role_mapping.competencies, indent=2)}
-        # """
-
         user_profile = f"""
-        Ministry/Organization Name: {role_mapping.state_center_name}
+        Ministry/State Name: {role_mapping.state_center_name}
+        Department Name: {role_mapping.department_name if role_mapping.department_name else 'N/A'}
         Designation Name: {role_mapping.designation_name}
+        Roles & Responsibilities: {role_mapping.role_responsibilities}
+        Activities: {role_mapping.activities}
+        Competencies: {json.dumps(role_mapping.competencies, indent=2)}
         """
 
         new_recommendation = await crud_recommended_course.create(
