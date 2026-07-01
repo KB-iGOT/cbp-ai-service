@@ -216,3 +216,9 @@ curl
 scripts/logs/
 scripts/*.xlsx
 scripts/comparison_*.xlsx
+
+# local-only tuning report / slides (not committed for now)
+docs/retrieval-tuning-report*
+
+# contains an API key — never commit
+scripts/test_embedding2_apikey.py
