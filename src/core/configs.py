@@ -172,5 +172,17 @@ class Settings(BaseSettings):
     CONTENT_RERANK_TOP_N: int = Field(default=40, description="Candidates kept after content rerank (passed to the LLM)")
     CONTENT_RERANK_WEIGHT: float = Field(default=0.5, description="Blend weight: (1-w)*hybrid + w*content")
 
+    # --- Recommendation composition (provider priority + competency-type mix) ---
+    PROVIDER_PRIORITY_ENABLED: bool = Field(default=True, description="Prioritise courses published by the learner's own organisation, then fill remaining by relevance")
+    COMPETENCY_MIX_ENABLED: bool = Field(default=True, description="Compose the final list toward a Domain/Behavioural/Functional mix based on the designation group (A&B vs C&D)")
+    # Group A&B (officers) target fractions: Domain / Behavioural / Functional
+    MIX_AB_DOMAIN: float = Field(default=0.50)
+    MIX_AB_BEHAVIOURAL: float = Field(default=0.25)
+    MIX_AB_FUNCTIONAL: float = Field(default=0.25)
+    # Group C&D (support) target fractions: Domain / Behavioural / Functional
+    MIX_CD_DOMAIN: float = Field(default=0.40)
+    MIX_CD_BEHAVIOURAL: float = Field(default=0.30)
+    MIX_CD_FUNCTIONAL: float = Field(default=0.30)
+
 # Create a settings instance that can be imported by other modules
 settings = Settings()

@@ -38,6 +38,13 @@ embedding_client = genai.Client(
     api_key=settings.GOOGLE_API_KEY
 )
 
+# Vertex client on the GLOBAL endpoint, for models served only there (e.g. gemini-3.5-flash)
+client_global = genai.Client(
+    vertexai=True,
+    project=settings.GOOGLE_PROJECT_ID,
+    location="global",
+)
+
 # Curse Recommendation APIs
 async def get_embedding(text: str) -> list:
 
@@ -354,6 +361,111 @@ async def get_general_courses_from_gemini(user_profile) -> List[Dict[str, Any]]:
         print(f"Error fetching general courses from Gemini: {e}")
         return []
 
+# ---- Recommendation composition: provider priority + competency-type mix ----
+_COMPETENCY_TYPES = ("Domain", "Behavioural", "Functional")
+_TYPE_TIEBREAK = {"Domain": 3, "Functional": 2, "Behavioural": 1}  # domain wins ties (it's emphasised)
+
+
+async def classify_designation_group(designation_name: str) -> str:
+    """Classify a designation into "AB" (Group A/B, gazetted/officer) or "CD"
+    (Group C/D, clerical/support). Uses gemini-3.5-flash on the global endpoint
+    with thinking disabled (so it returns a token instead of burning the budget).
+    Falls back to "AB" (officer) on any error."""
+    name = (designation_name or "").strip()
+    if not name:
+        return "AB"
+    try:
+        resp = await client_global.aio.models.generate_content(
+            model="gemini-3.5-flash",
+            contents=(
+                'Classify this Indian government designation into its service group. '
+                'Reply with EXACTLY one token: "AB" for Group A or B (gazetted / officer / '
+                'supervisory / policy), or "CD" for Group C or D (clerical / support / '
+                f'operational).\nDesignation: "{name}"'
+            ),
+            config=types.GenerateContentConfig(
+                temperature=0, max_output_tokens=16,
+                thinking_config=types.ThinkingConfig(thinking_budget=0),
+            ),
+        )
+        out = (resp.text or "").strip().upper()
+        return "CD" if "CD" in out else "AB"
+    except Exception as e:
+        logger.warning(f"classify_designation_group('{name}') failed, defaulting to AB: {e}")
+        return "AB"
+
+
+def _primary_competency_type(course: Dict[str, Any]):
+    """The course's dominant competency area (Domain/Behavioural/Functional), or None."""
+    comps = course.get("competencies") or []
+    counts: Dict[str, int] = {}
+    for c in comps:
+        area = (c or {}).get("competencyAreaName")
+        if area in _COMPETENCY_TYPES:
+            counts[area] = counts.get(area, 0) + 1
+    if not counts:
+        return None
+    return max(counts, key=lambda a: (counts[a], _TYPE_TIEBREAK.get(a, 0)))
+
+
+def _org_matches(course: Dict[str, Any], org_terms: List[str]) -> bool:
+    orgs = course.get("organisation") or []
+    if isinstance(orgs, str):
+        orgs = [orgs]
+    hay = " ".join(o.lower() for o in orgs if o)
+    return bool(hay) and any(t and (t in hay or hay in t) for t in org_terms)
+
+
+def compose_recommendations(courses: List[Dict[str, Any]], group: str, org_terms: List[str]) -> List[Dict[str, Any]]:
+    """Reorder the enriched, relevancy-scored courses to (a) approach the group's
+    Domain/Behavioural/Functional mix and (b) prioritise the learner's own
+    organisation, filling the rest by relevance. Non-destructive (no course dropped,
+    only reordered); degrades to relevance order when competency/org data is thin.
+    """
+    if not courses:
+        return courses
+    q = ({"Domain": settings.MIX_AB_DOMAIN, "Behavioural": settings.MIX_AB_BEHAVIOURAL, "Functional": settings.MIX_AB_FUNCTIONAL}
+         if group == "AB" else
+         {"Domain": settings.MIX_CD_DOMAIN, "Behavioural": settings.MIX_CD_BEHAVIOURAL, "Functional": settings.MIX_CD_FUNCTIONAL})
+
+    for c in courses:
+        c["_type"] = _primary_competency_type(c)
+        c["_org"] = _org_matches(c, org_terms) if org_terms else False
+
+    def _key(c):  # provider-first (if enabled), then relevance
+        provider = 1 if (settings.PROVIDER_PRIORITY_ENABLED and c.get("_org")) else 0
+        return (provider, c.get("relevancy") or 0)
+
+    buckets: Dict[str, List[Dict[str, Any]]] = {t: [] for t in _COMPETENCY_TYPES}
+    other: List[Dict[str, Any]] = []
+    for c in courses:
+        (buckets[c["_type"]] if c["_type"] in buckets else other).append(c)
+    for lst in list(buckets.values()) + [other]:
+        lst.sort(key=_key, reverse=True)
+
+    n = len(courses)
+    if settings.COMPETENCY_MIX_ENABLED:
+        targets = {t: int(round(q.get(t, 0) * n)) for t in _COMPETENCY_TYPES}
+        result: List[Dict[str, Any]] = []
+        for t in _COMPETENCY_TYPES:
+            result.extend(buckets[t][:targets[t]])
+        chosen = {id(c) for c in result}
+        leftovers = [c for c in courses if id(c) not in chosen]
+        leftovers.sort(key=_key, reverse=True)
+        result.extend(leftovers)
+    else:
+        result = sorted(courses, key=_key, reverse=True)
+
+    # Provider priority as the top-level ordering (stable: preserves the mix order within each side)
+    if settings.PROVIDER_PRIORITY_ENABLED and org_terms:
+        result.sort(key=lambda c: 1 if c.get("_org") else 0, reverse=True)
+
+    for c in result:
+        c.pop("_type", None)
+        c.pop("_org", None)
+    return result
+
+
 async def process_recommendation_task(recommendation_id: uuid.UUID, user_profile: str):
     """
     Background task to perform LLM calls and Vector Search.
@@ -369,6 +481,7 @@ async def process_recommendation_task(recommendation_id: uuid.UUID, user_profile
             return
 
         # Get role mapping details to retrieve competencies for boosting
+        role_mapping = None
         themes = []
         sub_themes = []
         if rec_record.role_mapping_id:
@@ -446,7 +559,17 @@ async def process_recommendation_task(recommendation_id: uuid.UUID, user_profile
                 course['competencies'] = None
                 course['duration'] = None
                 course['organisation'] = None
-        
+
+        # 8b. Compose the final list: provider priority + competency-type mix by group.
+        if role_mapping and (settings.COMPETENCY_MIX_ENABLED or settings.PROVIDER_PRIORITY_ENABLED):
+            group = await classify_designation_group(role_mapping.designation_name) if settings.COMPETENCY_MIX_ENABLED else "AB"
+            org_terms = [t for t in [
+                (role_mapping.state_center_name or "").strip().lower(),
+                (role_mapping.department_name or "").strip().lower(),
+            ] if t]
+            filtered_courses = compose_recommendations(filtered_courses, group, org_terms)
+            logger.info(f"composed recommendations: group={group}, provider_terms={org_terms}, n={len(filtered_courses)}")
+
         final_filtered_courses = filtered_courses + general_courses
 
         # 9. Update DB Record to COMPLETED
