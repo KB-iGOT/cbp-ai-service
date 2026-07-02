@@ -30,7 +30,7 @@ router = APIRouter(tags=["Course Recommendations"])
 os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = settings.GOOGLE_APPLICATION_CREDENTIALS
 client = genai.Client(
     project=settings.GOOGLE_PROJECT_ID,
-    location=settings.GOOGLE_PROJECT_LOCATION,
+    location="global",
     vertexai=True
 )
 
@@ -150,7 +150,7 @@ async def expand_query_for_hybrid_search(user_profile: str) -> dict:
     )
 
     response = await client.aio.models.generate_content(
-        model="gemini-2.5-pro",
+        model="gemini-3.1-pro-preview",
         contents=[types.Content(role="user", parts=[user_part])],
         config=generate_content_config,
     )
@@ -179,7 +179,7 @@ async def get_filtered_courses_by_llm(query, user_profile):
     You are responsible for the competencies of civil servants.
     """
     
-    model = "gemini-2.5-flash"
+    model = "gemini-3.5-flash"
     contents = [
         types.Content(
             role="user",
