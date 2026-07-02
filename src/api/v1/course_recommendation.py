@@ -408,8 +408,8 @@ async def generate_course_recommendations(
             if current_status == RecommendationStatus.FAILED:
                 logger.info("Found failed records. Cleaning up to retry...")
                 # Delete all records matching the filter to ensure a clean slate
-                db.delete(existing_recommendation)
-                db.commit()
+                await db.delete(existing_recommendation)
+                await db.commit()
         
         user_profile = f"""
         Ministry/State Name: {role_mapping.state_center_name}
