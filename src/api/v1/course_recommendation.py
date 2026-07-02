@@ -30,7 +30,7 @@ router = APIRouter(tags=["Course Recommendations"])
 os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = settings.GOOGLE_APPLICATION_CREDENTIALS
 client = genai.Client(
     project=settings.GOOGLE_PROJECT_ID,
-    location=settings.GOOGLE_PROJECT_LOCATION,
+    location="global",
     vertexai=True
 )
 
@@ -81,7 +81,7 @@ async def generate_vector_query(query):
  
     # system_instruction = "You are an expert at synthesizing professional role descriptions into a concise, rich profile for skills mapping and course recommendation."
     
-    model = "gemini-2.5-pro"
+    model = "gemini-3.1-pro-preview"
     contents = [
         types.Content(
             role="user",
@@ -146,7 +146,7 @@ async def get_filtered_courses_by_llm(query, user_profile):
     You are responsible for the competencies of civil servants.
     """
     
-    model = "gemini-2.5-flash"
+    model = "gemini-3.5-flash"
     contents = [
         types.Content(
             role="user",
