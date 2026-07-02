@@ -43,6 +43,7 @@ class Settings(BaseSettings):
     GOOGLE_API_KEY: str
     GOOGLE_EMBEDDING_MODEL: str = Field(default="gemini-embedding-2", description="Gemini embedding model name")
     EMBEDDING_OUTPUT_DIMENSIONALITY: int = Field(default=1536, description="Output dimensionality for Gemini embedding model")
+    CONTENT_CHUNK_EMBEDDING_MODEL: str = Field(default="text-multilingual-embedding-002", description="Embedding model matching public.content_embeddings' (768-dim) vector space, used for HYPR4 Layer 2 chunk-level refinement")
     GOOGLE_PROJECT_ID: str
 
     KB_BASE_URL: str

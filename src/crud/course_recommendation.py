@@ -169,34 +169,6 @@ class CRUDRecommendedCourse:
             updated_record = result.scalar_one()
             return updated_record
 
-    async def fetch_vector_search_courses(self, embedding_values: List[float]) -> List[Dict[str, Any]]:
-        """
-        Executes the raw SQL query against the database using vector similarity 
-        and hardcoded filters, managing its own session.
-        
-        Args:
-            embedding_values: The list of floats representing the query vector.
-            
-        Returns:
-            A list of dictionaries containing course name, identifier, and distance.
-        """
-
-        sql_query = text(f"""
-        (SELECT name, identifier,
-        MAX(1.0 - (embedding <=> '{embedding_values}'))
-        AS distance FROM public.course_metadata_v3
-        GROUP BY name, identifier
-        ORDER BY distance DESC LIMIT 60)
-        UNION
-        SELECT name, identifier, 0 AS distance FROM public.course_metadata_v3 WHERE name LIKE '%Communication%'
-        UNION
-        SELECT name, identifier, 0 AS distance FROM public.course_metadata_v3 WHERE name LIKE '%GenAI%'
-        """)
-
-        async with sessionmanager.session() as db:
-            result = await db.execute(sql_query)
-            return result.all()
-
     async def fetch_course_metadata(self, identifiers_str: str) -> Dict[str, Dict[str, Any]]:
         """
         Fetches competencies, duration, and organization for a list of course identifiers

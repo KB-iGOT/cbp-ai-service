@@ -67,7 +67,6 @@ class RecommendedCourse(Base):
         default=list,
         comment="Filtered and ranked course recommendations"
     )
-    
     created_at = Column(
         DateTime(timezone=True), 
         server_default=func.now(),
