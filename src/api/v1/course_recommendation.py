@@ -536,7 +536,7 @@ async def generate_course_recommendations(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Role mapping not found"
             )
-        role_mapping
+        
         existing_recommendation = await crud_recommended_course.get_by_role_mapping_id(db, role_mapping_id, current_user.user_id)
         if existing_recommendation:
             print(f"Found existing recommendation for Role mapping ID: {role_mapping_id}")
