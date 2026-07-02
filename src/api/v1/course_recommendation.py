@@ -305,6 +305,7 @@ async def process_recommendation_task(recommendation_id: uuid.UUID, user_profile
         if not embedding_list:
             raise Exception("Failed to generate embeddings")
         embedding_values = embedding_list[0].values
+
         # 4. Vector DB Search (Sync DB call)
         result = await crud_recommended_course.fetch_vector_search_courses(embedding_values)
         courses = []
@@ -360,12 +361,12 @@ async def process_recommendation_task(recommendation_id: uuid.UUID, user_profile
         logger.info(f"Course Recommendation Background task completed successfully for {recommendation_id}")
 
     except Exception as e:
-        logger.error(f"Course Recommmendation Background task failed for {recommendation_id}: {str(e)}")
+        logger.exception("Course Recommmendation Background task failed for {recommendation_id}:")
         # Update record to FAILED
         try:
             await crud_recommended_course.update_status_to_failed(recommendation_id, str(e))
         except Exception as db_e:
-            logger.error(f"CRITICAL: Failed to update status to FAILED: {db_e}")
+            logger.exception("CRITICAL: Failed to update status to FAILED:")
 
 @router.post("/course-recommendations/generate", response_model=RecommendedCourseResponse, status_code=status.HTTP_202_ACCEPTED)
 async def generate_course_recommendations(
@@ -437,7 +438,7 @@ async def generate_course_recommendations(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error initiating course recommendation: {str(e)}")
+        logger.exception("Error initiating course recommendation:")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to initiating course recommendations: {str(e)}"
