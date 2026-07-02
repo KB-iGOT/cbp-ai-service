@@ -30,7 +30,7 @@ router = APIRouter(tags=["Course Recommendations"])
 os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = settings.GOOGLE_APPLICATION_CREDENTIALS
 client = genai.Client(
     project=settings.GOOGLE_PROJECT_ID,
-    location="global",
+    location=settings.GOOGLE_PROJECT_LOCATION,
     vertexai=True
 )
 
