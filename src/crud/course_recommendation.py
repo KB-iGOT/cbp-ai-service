@@ -169,52 +169,117 @@ class CRUDRecommendedCourse:
             updated_record = result.scalar_one()
             return updated_record
 
-    async def fetch_vector_search_courses(self, embedding_values: List[float]) -> List[Dict[str, Any]]:
+    async def fetch_hybrid_search_courses(
+        self,
+        keyword_emb: List[float],
+        description_emb: List[float],
+        combined_emb: List[float],
+        limit: int = 80,
+    ) -> List[Dict[str, Any]]:
         """
-        Executes the raw SQL query against the database using vector similarity 
-        and hardcoded filters, managing its own session.
-        
-        Args:
-            embedding_values: The list of floats representing the query vector.
-            
-        Returns:
-            A list of dictionaries containing course name, identifier, and distance.
-        """
+        Hybrid weighted vector search across three embedding columns in
+        course_metadata_weightage.
 
+        Weightage: keywords 40%, description 20%, combined 40%.
+        Returns rows sorted by weighted_score DESC.
+        """
         sql_query = text(f"""
-        (SELECT name, identifier,
-        MAX(1.0 - (embedding <=> '{embedding_values}'))
-        AS distance FROM public.course_metadata_v3
-        GROUP BY name, identifier
-        ORDER BY distance DESC LIMIT 60)
-        UNION
-        SELECT name, identifier, 0 AS distance FROM public.course_metadata_v3 WHERE name LIKE '%Communication%'
-        UNION
-        SELECT name, identifier, 0 AS distance FROM public.course_metadata_v3 WHERE name LIKE '%GenAI%'
+            SELECT
+                identifier,
+                name,
+                (
+                    0.40 * (1.0 - (keywords_embedding    <=> '{keyword_emb}')) +
+                    0.20 * (1.0 - (description_embedding <=> '{description_emb}')) +
+                    0.40 * (1.0 - (combined_embedding    <=> '{combined_emb}'))
+                ) AS weighted_score
+            FROM public.course_metadata_weightage
+            ORDER BY weighted_score DESC
+            LIMIT {limit};
+        """)
+        async with sessionmanager.session() as db:
+            result = await db.execute(sql_query)
+            return result.all()
+
+    async def fetch_keyword_search_courses(
+        self,
+        keywords: List[str],
+        limit: int = 40,
+    ) -> List[Dict[str, Any]]:
+        """
+        Full-text + array keyword search on course_metadata_weightage.
+
+        Strategy (OR-combined, ranked by match count):
+          1. keywords[] array overlap  — GIN index hit
+          2. name trigram match        — pg_trgm ilike
+          3. description FTS           — to_tsvector / plainto_tsquery
+
+        Returns (identifier, name, keyword_score) sorted DESC.
+        keyword_score = number of distinct match signals (1-3).
+        """
+        if not keywords:
+            return []
+
+        # Build per-keyword conditions
+        array_overlaps = " OR ".join(
+            f"keywords && ARRAY[:{f'kw{i}'}]" for i, _ in enumerate(keywords)
+        )
+        name_ilike = " OR ".join(
+            f"name ILIKE :{f'nl{i}'}" for i, _ in enumerate(keywords)
+        )
+        # plainto_tsquery handles multi-word phrases safely (no operator syntax needed)
+        fts_parts = " OR ".join(
+            f"to_tsvector('english', COALESCE(description, '')) @@ plainto_tsquery('english', :{f'fts{i}'})"
+            for i, _ in enumerate(keywords)
+        )
+
+        params: Dict[str, Any] = {}
+        for i, kw in enumerate(keywords):
+            params[f"kw{i}"] = kw          # plain str — asyncpg wraps it in ARRAY on the SQL side
+            params[f"nl{i}"] = f"%{kw}%"
+            params[f"fts{i}"] = kw
+
+        sql = text(f"""
+            SELECT
+                identifier,
+                name,
+                (
+                    CASE WHEN ({array_overlaps}) THEN 1 ELSE 0 END +
+                    CASE WHEN ({name_ilike})     THEN 1 ELSE 0 END +
+                    CASE WHEN ({fts_parts})       THEN 1 ELSE 0 END
+                )::float AS keyword_score
+            FROM public.course_metadata_weightage
+            WHERE
+                ({array_overlaps})
+                OR ({name_ilike})
+                OR ({fts_parts})
+            ORDER BY keyword_score DESC
+            LIMIT {limit};
         """)
 
+        async with sessionmanager.session() as db:
+            result = await db.execute(sql, params)
+            return result.all()
+
+    async def fetch_vector_search_courses(self, embedding_values: List[float], limit: int = 60) -> List[Dict[str, Any]]:
+        """Legacy single-embedding vector search (course_metadata_v3). Kept for fallback."""
+        sql_query = text(f"""
+        SELECT name, identifier,
+               MAX(1.0 - (embedding <=> '{embedding_values}')) AS distance
+        FROM public.course_metadata_v3
+        GROUP BY name, identifier
+        ORDER BY distance DESC LIMIT {limit};
+        """)
         async with sessionmanager.session() as db:
             result = await db.execute(sql_query)
             return result.all()
 
     async def fetch_course_metadata(self, identifiers_str: str) -> Dict[str, Dict[str, Any]]:
-        """
-        Fetches competencies, duration, and organization for a list of course identifiers
-        using a raw SQL query and manages its own session.
-        
-        Args:
-            identifiers_str: identifiers (str) to look up.
-            
-        Returns:
-            A dictionary mapped by identifier to a dictionary of its metadata.
-        """
-        
-        # Execute the raw SQL query
+        """Fetches competencies, duration, and organisation for a list of course identifiers."""
         competencies_query = text(f"""
-            SELECT identifier, competencies_v6, duration, organisation FROM public.course_metadata_v3
+            SELECT identifier, competencies_v6, duration, organisation
+            FROM public.course_metadata_weightage
             WHERE identifier IN ({identifiers_str});
             """)
-        
         async with sessionmanager.session() as db:
             competencies_result = await db.execute(competencies_query)
             return competencies_result.all()
