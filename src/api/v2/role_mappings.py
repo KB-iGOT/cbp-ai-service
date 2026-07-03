@@ -33,7 +33,7 @@ with open("data/competencies.json") as f:
 os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = settings.GOOGLE_APPLICATION_CREDENTIALS
 client = genai.Client(
     project=settings.GOOGLE_PROJECT_ID,
-    location="us-central1",
+    location="global",
     vertexai=True
 )
 
@@ -296,7 +296,7 @@ async def generate_role_and_competencies(input_data):
         ]
 
         response = await client.aio.models.generate_content(
-            model="gemini-2.5-pro",
+            model="gemini-3.1-pro-preview",
             contents=contents,
             config=generate_content_config,
         )

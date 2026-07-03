@@ -98,7 +98,7 @@ Do NOT return markdown. Return raw JSON only."""
     config = types.GenerateContentConfig(
         temperature=0.4,
         top_p=0.95,
-        max_output_tokens=2048,
+        # max_output_tokens=2048,
         safety_settings=[
             types.SafetySetting(category="HARM_CATEGORY_HATE_SPEECH", threshold="OFF"),
             types.SafetySetting(category="HARM_CATEGORY_DANGEROUS_CONTENT", threshold="OFF"),
@@ -249,7 +249,7 @@ Candidate Courses (Course ID | Name | Similarity Score | Organisation | Own Org 
     config = types.GenerateContentConfig(
         temperature=0,
         top_p=1,
-        max_output_tokens=8192,
+        # max_output_tokens=8192,
         safety_settings=[
             types.SafetySetting(category="HARM_CATEGORY_HATE_SPEECH", threshold="OFF"),
             types.SafetySetting(category="HARM_CATEGORY_DANGEROUS_CONTENT", threshold="OFF"),
@@ -509,7 +509,8 @@ async def process_recommendation_task(
         courses_prompt = "\n".join(candidate_lines)
 
         # 8. Determine designation group for mix ratios (LLM-reasoned)
-        designation_group = await infer_designation_group(user_profile)
+        # designation_group = await infer_designation_group(user_profile)
+        designation_group = None
 
         # 9. LLM filtering + general courses (parallel)
         filtered_courses_json, general_courses = await asyncio.gather(
