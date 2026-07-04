@@ -11,14 +11,27 @@ from ...schemas.role_mapping import OrgType
 from ...core.configs import settings
 from ...prompts.v3.prompts import (
     DESIGNATION_EXTRACTION_PROMPT,
-    ROLE_MAPPING_PROMPT_CENTRE, 
-    ROLE_MAPPING_PROMPT_STATE
+    ROLE_MAPPING_PROMPT_CENTRE,
+    ROLE_MAPPING_PROMPT_STATE,
+    DOMAIN_FROM_WAO_PROMPT
 )
 from ...crud.document import crud_document
+from ...services.pdf_service import pdf_service
+from ...services.storage_service import get_storage_service
 from ...core.logger import logger
 
 with open("data/competencies.json") as f:
     COMPETENCY_MAPPING = json.load(f)
+
+# Response schema for the per-designation domain-from-WAO pass (PASS 3)
+DOMAIN_FROM_WAO_SCHEMA = {
+    "type": "ARRAY",
+    "items": {
+        "type": "OBJECT",
+        "properties": {"theme": {"type": "STRING"}, "sub_theme": {"type": "STRING"}},
+        "required": ["theme", "sub_theme"],
+    },
+}
 
 # src/prompts/v2/prompts.py (add this to your existing prompts file)
 
@@ -358,6 +371,113 @@ class RoleMappingService:
         
         return "\n\n".join(parts)
     
+    async def get_documents_raw_text(
+        self, user_id, state_center_id, department_id=None,
+        document_type: str | None = "Work Allocation Order"
+    ) -> str:
+        """Read the raw (verbatim) text of the WAO document(s) from storage.
+
+        Used by the per-designation domain pass (PASS 3). Returns "" on any failure so the
+        caller falls back to the summary-based domain competencies (non-breaking).
+        """
+        try:
+            _, docs = await crud_document.get_all_documents_async(
+                user_id, state_center_id, department_id, document_type=document_type)
+            if not docs:
+                return ""
+            storage = get_storage_service()
+            parts = []
+            for doc in docs:
+                try:
+                    pdf_bytes = storage.read_file(doc.stored_path)
+                    text = pdf_service.extract_text_from_pdf(pdf_bytes)
+                    if text and text.strip():
+                        parts.append(text)
+                except Exception as e:
+                    logger.warning(f"WAO raw-text read failed for '{getattr(doc, 'stored_path', '?')}': {e}")
+            return "\n\n".join(parts)
+        except Exception as e:
+            logger.warning(f"get_documents_raw_text failed: {e}")
+            return ""
+
+    async def _generate_domain_from_wao(
+        self, organization_data: Dict[str, Any], designation: str, wing: str, wao_text: str
+    ) -> List[Dict[str, Any]]:
+        """PASS 3 (per designation): derive Domain competencies from the raw WAO text.
+        Returns a list of {type:'Domain', theme, sub_theme, source} (empty on failure)."""
+        prompt = DOMAIN_FROM_WAO_PROMPT.format(
+            wao_text=wao_text,
+            organization_name=organization_data.get("organization_name"),
+            department_name=organization_data.get("department_name"),
+            designation=designation,
+            wing=wing or "N/A",
+        )
+        resp = await self.client.aio.models.generate_content(
+            model="gemini-3.1-pro-preview",
+            contents=[types.Content(role="user", parts=[types.Part.from_text(text=prompt)])],
+            config=types.GenerateContentConfig(
+                temperature=0.3, top_p=0.90, max_output_tokens=32768,
+                response_mime_type="application/json", response_schema=DOMAIN_FROM_WAO_SCHEMA),
+        )
+        data = json.loads(resp.text or "[]")
+        out = []
+        for d in data:
+            theme, sub_theme = (d or {}).get("theme"), (d or {}).get("sub_theme")
+            if theme and sub_theme:
+                out.append({"type": "Domain", "theme": theme, "sub_theme": sub_theme,
+                            "source": "Work Allocation Order"})
+        return out
+
+    async def _apply_wao_domain(
+        self, frac_mappings: List[Dict[str, Any]], organization_data: Dict[str, Any], wao_text: str
+    ) -> List[Dict[str, Any]]:
+        """Replace each mapping's Domain competencies with WAO-derived ones (Behavioural and
+        Functional kept as-is). Per-designation, concurrency-limited.
+
+        Minimum floor (settings.DOMAIN_FROM_WAO_MIN): if the WAO yields fewer domain competencies
+        than the floor, the shortfall is topped up (deduplicated) from that role's summary-based
+        (PASS 2) domain set — never dropping below the floor and never padding with invented items.
+        On a per-designation failure or empty WAO result, the original competencies are unchanged."""
+        sem = asyncio.Semaphore(max(1, settings.DOMAIN_FROM_WAO_CONCURRENCY))
+        floor = max(0, settings.DOMAIN_FROM_WAO_MIN)
+        stats = {"replaced": 0, "topped_up": 0, "kept_original": 0}
+
+        async def _one(mapping: Dict[str, Any]):
+            async with sem:
+                try:
+                    domain = await self._generate_domain_from_wao(
+                        organization_data,
+                        mapping.get("designation_name", ""),
+                        mapping.get("wing_division_section", ""),
+                        wao_text)
+                except Exception as e:
+                    logger.warning(f"WAO domain pass failed for '{mapping.get('designation_name')}': {e}; keeping original domain")
+                    stats["kept_original"] += 1
+                    return
+                if not domain:
+                    stats["kept_original"] += 1
+                    return  # keep original (non-breaking)
+                comps = mapping.get("competencies") or []
+                non_domain = [c for c in comps if (c or {}).get("type") != "Domain"]
+                pass2_domain = [c for c in comps if (c or {}).get("type") == "Domain"]
+                if len(domain) >= floor:
+                    stats["replaced"] += 1
+                else:
+                    # Top up to the floor from the summary-based domain (deduped). If that is also
+                    # thin, keep what we have — graceful, no invented padding.
+                    have = {(d.get("theme"), d.get("sub_theme")) for d in domain}
+                    topup = [c for c in pass2_domain
+                             if (c.get("theme"), c.get("sub_theme")) not in have]
+                    domain = domain + topup[:max(0, floor - len(domain))]
+                    stats["topped_up"] += 1
+                mapping["competencies"] = non_domain + domain
+
+        await asyncio.gather(*[_one(m) for m in frac_mappings])
+        logger.info(f"PASS 3 summary: replaced={stats['replaced']} "
+                    f"topped_up_to_floor={stats['topped_up']} kept_original={stats['kept_original']} "
+                    f"(floor={floor})")
+        return frac_mappings
+
     async def generate_role_mapping(
         self,
         user_id: uuid.UUID,
@@ -440,6 +560,25 @@ class RoleMappingService:
                 organization_data_pass2,
                 batch_size=30
             )
+
+            # ============ PASS 3: DOMAIN COMPETENCIES FROM RAW WAO (per designation) ============
+            # Behavioural/Functional competencies from PASS 2 are kept; only Domain competencies
+            # are replaced with an exhaustive, WAO-derived set. Fully guarded — any failure or a
+            # missing raw WAO leaves PASS 2's (summary-based) domain competencies untouched.
+            if settings.DOMAIN_FROM_WAO_ENABLED and frac_mappings:
+                try:
+                    wao_text = await self.get_documents_raw_text(
+                        user_id, state_center_id, department_id, document_type="Work Allocation Order")
+                    if wao_text and wao_text.strip():
+                        logger.info(f"STARTING PASS 3: DOMAIN FROM RAW WAO ({len(wao_text)} chars) "
+                                    f"for {len(frac_mappings)} designations")
+                        frac_mappings = await self._apply_wao_domain(
+                            frac_mappings, organization_data_pass2, wao_text)
+                        logger.info("PASS 3 SUCCESS: WAO-derived domain competencies applied")
+                    else:
+                        logger.info("PASS 3 skipped: no raw WAO text available; keeping summary-based domain competencies")
+                except Exception as e:
+                    logger.warning(f"PASS 3 (WAO domain) failed: {e}; keeping summary-based domain competencies")
 
             logger.info("TWO-PASS ROLE MAPPING COMPLETE")
             logger.info(f"Designations Extracted: {len(designations)}")
