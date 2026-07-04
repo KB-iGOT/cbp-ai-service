@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from google import genai
 from google.genai import types
 
-from ...prompts.prompts import COURSE_SELECTION_SYSTEM_PROMPT, DESIGNNATION_GROUP_SYSTEM_PROMPT, VECTOR_QUERY_SYSTEM_PROMPT
+from ...prompts.prompts import COURSE_SELECTION_SYSTEM_PROMPT, DESIGNNATION_GROUP_SYSTEM_PROMPT, VECTOR_QUERY_SYSTEM_PROMPT, SENIORITY_GROUP_SYSTEM_PROMPT
 
 from ...models.course_recommendation import RecommendationStatus
 from ...models.user import User
@@ -114,14 +114,22 @@ async def generate_contextual_queries(user_profile: str) -> Dict[str, Any]:
         raise Exception("generate_contextual_queries: LLM returned empty response")
     return json.loads(response.text)
 
-async def infer_seniority_tier(user_profile: str) -> str:
+async def infer_designation_group(user_profile: str) -> dict:
     """
-    Classify the designation's seniority tier using the same 5-tier taxonomy
-    used by the course seniority tagger. Returns the seniority tier string.
+    Classify the designation into Group (AB/CD) and seniority tier using the same
+    5-tier taxonomy used by the course seniority tagger.
+    Returns dict with 'group' and 'seniority_tier'.
     """
     system_instruction = """You are an expert in Indian government service classification rules.
-Given a civil servant role profile, classify the designation into a seniority_tier —
-one of these exact values:
+Given a civil servant role profile, classify the designation into:
+
+1. group — one of:
+   - AB: Group A or Group B — gazetted/senior officers, policymakers, managers, specialists
+         (IAS, IPS, directors, deputy secretaries, section officers, engineers, doctors, scientists, etc.)
+   - CD: Group C or Group D — supporting/clerical/operational staff
+         (clerks, assistants, stenographers, drivers, MTS, helpers, data entry operators, technicians, constables, peons, etc.)
+
+2. seniority_tier — one of these exact values:
    - "Entry Level"       → Probationers, LDCs, newly recruited staff, 0–3 yrs experience
    - "Junior Officer"    → Section Officers, Inspectors, field operational officers, 3–8 yrs
    - "Mid-Level Officer" → Under Secretary, Deputy Secretary, Director, 8–15 yrs
@@ -129,7 +137,58 @@ one of these exact values:
    - "Apex / Leadership" → Secretary, DG, HoD, Cabinet Secretary, 25+ yrs
 
 Use the designation name, responsibilities, and activities to reason before classifying.
-Return ONLY a JSON object with the field. No markdown."""
+Return ONLY a JSON object with both fields. No markdown."""
+
+    user_part = types.Part.from_text(text=f"Role Profile:\n{user_profile}")
+
+    config = types.GenerateContentConfig(
+        temperature=0,
+        max_output_tokens=256,
+        safety_settings=[
+            types.SafetySetting(category="HARM_CATEGORY_HATE_SPEECH", threshold="OFF"),
+            types.SafetySetting(category="HARM_CATEGORY_DANGEROUS_CONTENT", threshold="OFF"),
+            types.SafetySetting(category="HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold="OFF"),
+            types.SafetySetting(category="HARM_CATEGORY_HARASSMENT", threshold="OFF"),
+        ],
+        response_mime_type="application/json",
+        response_schema={
+            "type": "OBJECT",
+            "properties": {
+                "group": {
+                    "type": "STRING",
+                    "enum": ["AB", "CD"]
+                },
+                "seniority_tier": {
+                    "type": "STRING",
+                    "enum": ["Entry Level", "Junior Officer", "Mid-Level Officer", "Senior Officer", "Apex / Leadership"]
+                },
+            },
+            "required": ["group", "seniority_tier"],
+        },
+        system_instruction=[types.Part.from_text(text=DESIGNNATION_GROUP_SYSTEM_PROMPT)],
+    )
+
+    try:
+        response = await client.aio.models.generate_content(
+            model="gemini-3.5-flash",
+            contents=[types.Content(role="user", parts=[user_part])],
+            config=config,
+        )
+        if not response.text:
+            logger.warning("Designation group LLM returned empty response, defaulting to AB/Mid-Level Officer")
+            return {"group": "AB", "seniority_tier": "Mid-Level Officer"}
+        result = json.loads(response.text)
+        logger.info(f"LLM classified designation — group: {result.get('group')} | seniority: {result.get('seniority_tier')}")
+        return result
+    except Exception as e:
+        logger.warning(f"Designation group inference failed, defaulting to AB/Mid-Level Officer: {e}")
+        return {"group": "AB", "seniority_tier": "Mid-Level Officer"}
+
+async def infer_seniority_tier(user_profile: str) -> str:
+    """
+    Classify the designation's seniority tier using the same 5-tier taxonomy
+    used by the course seniority tagger. Returns the seniority tier string.
+    """
 
     user_part = types.Part.from_text(text=f"Role Profile:\n{user_profile}")
 
@@ -153,7 +212,7 @@ Return ONLY a JSON object with the field. No markdown."""
             },
             "required": ["seniority_tier"],
         },
-        system_instruction=[types.Part.from_text(text=system_instruction)],
+        system_instruction=[types.Part.from_text(text=SENIORITY_GROUP_SYSTEM_PROMPT)],
     )
 
     try:
@@ -195,87 +254,6 @@ async def get_filtered_courses_by_llm(
 
     mix_rule = "Domain: ~45%, Behavioral: ~27%, Functional: ~28%"
 
-    system_instruction = f"""You are a senior Learning & Development advisor for government civil servants.
-Your task: evaluate EVERY candidate course listed and decide "selected" (best 20-25 for the role) or "discarded".
-Return one verdict object per candidate course — do not omit any candidate.
-
-## User Seniority Context
-The user is a **{user_seniority_tier}** officer.
-Competency mix target: {mix_rule}
-
-## Selection Rules
-1. Provider Priority: Prefer courses from the user's own organisation (Own Org: YES) — they get priority among selected.
-   Fill remaining slots by relevance score.
-2. Competency Mix ({mix_rule}):
-   - Domain: courses specific to the sector/ministry/policy area of the role (NOT generic soft skills).
-   - Behavioral: leadership, communication, integrity, teamwork.
-   - Functional: finance, procurement, project management, digital tools, writing, etc.
-3. Domain Diversity: Domain courses must NOT all cover the same topic or be from one provider.
-   Include at least 3-4 distinct domain sub-topics.
-4. Sector Specificity: Domain courses must align with the sector context of the role.
-   Generic management courses do NOT count as domain.
-5. Discard courses with relevancy < 40% (discard_reason: "low_relevancy").
-6. Sort selected courses: own-org domain courses first, then own-org others, then rest by relevancy DESC.
-7. Seniority Filter — CRITICAL:
-   Using the seniority framework below, assess each candidate course and ONLY select courses
-   appropriate for a **{user_seniority_tier}** officer. Discard courses that target only lower tiers
-   (discard_reason: "seniority_mismatch").
-8. Every candidate not selected must still appear in the output with decision="discarded" and the
-   single best-fitting discard_reason: "low_relevancy" | "seniority_mismatch" | "domain_mix_cap"
-   (crowded out by mix/diversity rules 2-4 despite acceptable relevancy/seniority) | "other".
-   Selected courses must use discard_reason="none".
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-SENIORITY FRAMEWORK (same rules used to tag these courses)
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Tiers (low → high):
-  Entry Level       → Probationers, LDCs, newly recruited, 0–3 yrs
-  Junior Officer    → Section Officers, Inspectors, field operational staff, 3–8 yrs
-  Mid-Level Officer → Under Secretary, Deputy Secretary, Director, 8–15 yrs
-  Senior Officer    → Joint Secretary, Additional Secretary, 15–25 yrs
-  Apex / Leadership → Secretary, DG, HoD, Cabinet-level, 25+ yrs
-
-Provider → Seniority mapping (use Course Organisation field):
-  LBSNAA / Mussoorie     → Group A generalist, Mid-Level to Apex
-  SVPNPA (Hyderabad)     → IPS/Police, Junior to Senior
-  NTIPRIT / DoT          → ITS, Entry to Mid-Level
-  ISTM                   → CSS/CSSS, Entry to Mid-Level
-  NICF                   → Accounts cadres, Entry to Mid-Level
-  NIDM                   → Disaster Mgmt, Junior to Senior
-  NIFM (Faridabad)       → Finance/Accounts, Junior to Mid-Level
-  IRITM / Railway Staff  → Railways, Entry to Mid-Level
-  NAIR / FRI             → Forest officers, Entry to Mid-Level
-  NIHFW                  → Health, Junior to Mid-Level
-  BPR&D                  → Police/CAPF, Entry to Mid-Level
-  LBSNAA / IIPA          → IAS/Admin, Mid-Level to Apex
-  Capacity Building Commission → Any seniority, general civil service
-  State academies        → State Govt, any tier
-
-Seniority inference rules:
-  • Course title with "for Secretaries", "for Directors", "Strategic Leadership" → Senior/Apex
-  • Course title with "for Probationers", "New Entrants", "Induction" → Entry Level only
-  • "foundational/introductory/basic/overview" in title = content complexity, NOT seniority signal
-    (a Joint Secretary can take a basic AI course — do NOT discard it for senior users)
-  • Universal courses (gender sensitisation, mental health, ethics, digital literacy) → all tiers
-  • Competency Level numbers (Level 1, 2, 3) = proficiency depth, NOT career seniority
-
-Seniority match rule:
-  KEEP a course if ANY of these are true:
-    a) Course is universal (applies to all levels — wellness, ethics, basic digital tools)
-    b) Course title/provider signals a seniority range that INCLUDES {user_seniority_tier}
-    c) Course is foundational on a topic the user's role requires (do NOT discard due to "basic" label)
-  DISCARD only if:
-    Course is explicitly designed for tiers strictly BELOW the user
-    e.g. "Induction Training for LDCs" for a Senior Officer — discard
-    e.g. "Basic Computer Course for New Entrants" for a Mid-Level Officer — discard
-
-For EVERY candidate course, also report:
-  - seniority_tier: the tier or tier-range the course targets, using the framework above
-    (e.g. "Entry Level", "Entry to Mid-Level", "Mid-Level to Apex", "Universal"). Never leave empty.
-  - seniority_match: true if this course's tier range includes {user_seniority_tier}, else false.
-
-Return ONLY a JSON array with one object per candidate course. No markdown."""
-
     user_part = types.Part.from_text(text=f"""
 Role Profile:
 {user_profile}
@@ -292,8 +270,10 @@ Candidate Courses (Course ID | Name | Similarity Score | Organisation | Own Org 
             "type": "OBJECT",
             "properties": {
                 "identifier":        {"type": "STRING"},
+                "course":            {"type": "STRING"},
                 "relevancy":         {"type": "INTEGER"},
                 "competency_type":   {"type": "STRING", "description": "Domain | Behavioral | Functional"},
+                "rationale":         {"type": "STRING"},
                 "seniority_tier":    {"type": "STRING", "description": "Tier/tier-range the course targets"},
                 "seniority_match":   {"type": "BOOLEAN"},
                 "decision":          {"type": "STRING", "enum": ["selected", "discarded"]},
@@ -321,7 +301,9 @@ Candidate Courses (Course ID | Name | Similarity Score | Organisation | Own Org 
         ],
         response_mime_type="application/json",
         response_schema=response_schema,
-        system_instruction=[types.Part.from_text(text=COURSE_SELECTION_SYSTEM_PROMPT)],
+        system_instruction=[types.Part.from_text(text=COURSE_SELECTION_SYSTEM_PROMPT.format(
+            user_seniority_tier=user_seniority_tier, mix_rule=mix_rule,
+        ))],
         thinking_config=types.ThinkingConfig(include_thoughts=False, thinking_budget=0),
     )
 
@@ -601,10 +583,10 @@ async def process_recommendation_task(
             is_own_org = "YES" if (organisation and org_info and organisation.lower() in org_info.lower()) else "NO"
 
             desc_raw  = getattr(meta, "description", None) if meta else None
-            desc_info = str(desc_raw).strip()[:300] if desc_raw else ""
+            desc_info = str(desc_raw).strip()[:500] if desc_raw else ""
 
             instr_raw  = getattr(meta, "instructions", None) if meta else None
-            instr_info = re.sub(r'<[^>]+>', ' ', str(instr_raw)).strip()[:300] if instr_raw else ""
+            instr_info = re.sub(r'<[^>]+>', ' ', str(instr_raw)).strip()[:400] if instr_raw else ""
 
             candidate_lines.append(
                 f"Course ID: {c['identifier']} | "

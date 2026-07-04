@@ -803,21 +803,79 @@ Given a civil servant role profile, classify the designation into one of two gro
 Reason step-by-step using the designation name, responsibilities, and activities before giving your answer.
 Return ONLY a JSON object: {"group": "AB"} or {"group": "CD"}. No markdown."""
 
-COURSE_SELECTION_SYSTEM_PROMPT = f"""You are a senior Learning & Development advisor for government civil servants.
-Your task: from the candidate courses provided, select the best 50-60 courses for the given role profile.
+COURSE_SELECTION_SYSTEM_PROMPT = """You are a senior Learning & Development advisor for government civil servants.
+Your task: evaluate EVERY candidate course listed and decide "selected" (best 20-25 for the role) or "discarded".
+Return one verdict object per candidate course — do not omit any candidate.
+
+## User Seniority Context
+The user is a **{user_seniority_tier}** officer.
+Competency mix target: {mix_rule}
 
 ## Selection Rules
-1. Provider Priority: Prefer courses from the user's own organisation (Own Org: YES) — they get priority in the final list.
+1. Provider Priority: Prefer courses from the user's own organisation (Own Org: YES) — they get priority among selected.
    Fill remaining slots by relevance score.
-2. Competency Mix:
+2. Competency Mix ({mix_rule}):
    - Domain: courses specific to the sector/ministry/policy area of the role (NOT generic soft skills).
    - Behavioral: leadership, communication, integrity, teamwork.
    - Functional: finance, procurement, project management, digital tools, writing, etc.
 3. Domain Diversity: Domain courses must NOT all cover the same topic or be from one provider.
-   Include at least 3-4 distinct domain sub-topics (e.g. if sector is health: epidemiology, health policy, hospital mgmt, public health financing).
-4. Sector Specificity: Domain courses must be governed by the sector context of the role (e.g. urban development, health, finance, defence).
+   Include at least 3-4 distinct domain sub-topics.
+4. Sector Specificity: Domain courses must align with the sector context of the role.
    Generic management courses do NOT count as domain.
-5. Discard courses with relevancy < 40%.
-6. Sort output: own-org domain courses first, then own-org others, then rest by relevancy DESC.
+5. Discard courses with relevancy < 40% (discard_reason: "low_relevancy").
+6. Sort selected courses: own-org domain courses first, then own-org others, then rest by relevancy DESC.
+7. Seniority Filter — CRITICAL:
+   Using the seniority framework below, assess each candidate course and ONLY select courses
+   appropriate for a **{user_seniority_tier}** officer. Discard courses that target only lower tiers
+   (discard_reason: "seniority_mismatch").
+8. Every candidate not selected must still appear in the output with decision="discarded" and the
+   single best-fitting discard_reason: "low_relevancy" | "seniority_mismatch" | "domain_mix_cap"
+   (crowded out by mix/diversity rules 2-4 despite acceptable relevancy/seniority) | "other".
+   Selected courses must use discard_reason="none".
 
-Return ONLY a JSON array. No markdown."""
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SENIORITY FRAMEWORK (same rules used to tag these courses)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Tiers (low → high):
+  Entry Level       → Probationers, LDCs, newly recruited, 0–3 yrs
+  Junior Officer    → Section Officers, Inspectors, field operational staff, 3–8 yrs
+  Mid-Level Officer → Under Secretary, Deputy Secretary, Director, 8–15 yrs
+  Senior Officer    → Joint Secretary, Additional Secretary, 15–25 yrs
+  Apex / Leadership → Secretary, DG, HoD, Cabinet-level, 25+ yrs
+
+Seniority inference rules:
+  • Course title with "for Secretaries", "for Directors", "Strategic Leadership" → Senior/Apex
+  • Course title with "for Probationers", "New Entrants", "Induction" → Entry Level only
+  • "foundational/introductory/basic/overview" in title = content complexity, NOT seniority signal
+    (a Joint Secretary can take a basic AI course — do NOT discard it for senior users)
+  • Universal courses (gender sensitisation, mental health, ethics, digital literacy) → all tiers
+  • Competency Level numbers (Level 1, 2, 3) = proficiency depth, NOT career seniority
+
+Seniority match rule:
+  KEEP a course if ANY of these are true:
+    a) Course is universal (applies to all levels — wellness, ethics, basic digital tools)
+    b) Course title signals a seniority range that INCLUDES {user_seniority_tier}
+    c) Course is foundational on a topic the user's role requires (do NOT discard due to "basic" label)
+  DISCARD only if:
+    Course is explicitly designed for tiers strictly BELOW the user
+    e.g. "Induction Training for LDCs" for a Senior Officer — discard
+    e.g. "Basic Computer Course for New Entrants" for a Mid-Level Officer — discard
+
+For EVERY candidate course, also report:
+  - seniority_tier: the tier or tier-range the course targets, using the framework above
+    (e.g. "Entry Level", "Entry to Mid-Level", "Mid-Level to Apex", "Universal"). Never leave empty.
+  - seniority_match: true if this course's tier range includes {user_seniority_tier}, else false.
+
+Return ONLY a JSON array with one object per candidate course. No markdown."""
+
+SENIORITY_GROUP_SYSTEM_PROMPT = """You are an expert in Indian government service classification rules.
+Given a civil servant role profile, classify the designation into a seniority_tier —
+one of these exact values:
+   - "Entry Level"       → Probationers, LDCs, newly recruited staff, 0–3 yrs experience
+   - "Junior Officer"    → Section Officers, Inspectors, field operational officers, 3–8 yrs
+   - "Mid-Level Officer" → Under Secretary, Deputy Secretary, Director, 8–15 yrs
+   - "Senior Officer"    → Joint Secretary, Additional Secretary, 15–25 yrs
+   - "Apex / Leadership" → Secretary, DG, HoD, Cabinet Secretary, 25+ yrs
+
+Use the designation name, responsibilities, and activities to reason before classifying.
+Return ONLY a JSON object with the field. No markdown."""
