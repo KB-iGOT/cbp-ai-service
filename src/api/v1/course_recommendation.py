@@ -12,6 +12,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from google import genai
 from google.genai import types
 
+from ...prompts.prompts import COURSE_SELECTION_SYSTEM_PROMPT, DESIGNNATION_GROUP_SYSTEM_PROMPT, VECTOR_QUERY_SYSTEM_PROMPT
+
 from ...models.course_recommendation import RecommendationStatus
 from ...models.user import User
 from ...schemas.course_recommendation import RecommendCourseCreate, RecommendedCourseResponse
@@ -135,25 +137,6 @@ async def generate_contextual_queries(user_profile: str) -> Dict[str, Any]:
     """
     logger.info("Generating contextual queries from user profile")
 
-    system_instruction = """You are an expert learning & development advisor for civil servants.
-Given a detailed role profile, generate three distinct search queries and a keyword list for
-retrieving training courses. All outputs must be specific, rich in domain terminology, non-generic.
-
-Return ONLY a JSON object with these exact keys:
-- keyword_query: A compact phrase (15-30 words) of role-specific skills, tools, and domain keywords.
-  Focus on technical/functional skills and sector-specific terminology.
-- description_query: A narrative paragraph (60-100 words) describing what this role does, the challenges
-  it faces, and what knowledge gaps need to be filled. Include sector and ministry context.
-- combined_query: A rich multi-angle query (80-120 words) covering domain knowledge, functional
-  competencies, behavioral competencies, sector-specific regulations/policies, and desired learning outcomes.
-  Emphasise the specific government sector (e.g. health, finance, urban development, defence).
-- search_keywords: An array of 10-15 individual domain/skill/topic words or short phrases (2-3 words max each)
-  extracted from the role. These will be used for Postgres full-text and array keyword search.
-  Include sector-specific terms, competency area names, tools, policies, and skill topics.
-  NO generic words like "management", "leadership", "communication" unless they are genuinely specific to the role.
-
-Do NOT return markdown. Return raw JSON only."""
-
     user_part = types.Part.from_text(text=f"Role Profile:\n{user_profile}")
     contents = [types.Content(role="user", parts=[user_part])]
 
@@ -178,7 +161,7 @@ Do NOT return markdown. Return raw JSON only."""
             },
             "required": ["keyword_query", "description_query", "combined_query", "search_keywords"],
         },
-        system_instruction=[types.Part.from_text(text=system_instruction)],
+        system_instruction=[types.Part.from_text(text=VECTOR_QUERY_SYSTEM_PROMPT)],
     )
 
     response = await client.aio.models.generate_content(
@@ -198,14 +181,6 @@ async def infer_designation_group(user_profile: str) -> str:
     into Group A/B (senior/gazetted officers) or Group C/D (supporting/clerical staff).
     Returns 'AB' or 'CD'.
     """
-    system_instruction = """You are an expert in Indian government service classification rules.
-Given a civil servant role profile, classify the designation into one of two groups:
-- AB: Group A or Group B — gazetted/senior officers, policymakers, managers, specialists (IAS, IPS, directors, deputy secretaries, section officers, engineers, doctors, scientists, etc.)
-- CD: Group C or Group D — supporting/clerical/operational staff (clerks, assistants, stenographers, drivers, MTS, helpers, data entry operators, technicians, constables, peons, etc.)
-
-Reason step-by-step using the designation name, responsibilities, and activities before giving your answer.
-Return ONLY a JSON object: {"group": "AB"} or {"group": "CD"}. No markdown."""
-
     user_part = types.Part.from_text(text=f"Role Profile:\n{user_profile}")
 
     config = types.GenerateContentConfig(
@@ -223,7 +198,7 @@ Return ONLY a JSON object: {"group": "AB"} or {"group": "CD"}. No markdown."""
             "properties": {"group": {"type": "STRING", "enum": ["AB", "CD"]}},
             "required": ["group"],
         },
-        system_instruction=[types.Part.from_text(text=system_instruction)],
+        system_instruction=[types.Part.from_text(text=DESIGNNATION_GROUP_SYSTEM_PROMPT)],
     )
 
     try:
@@ -264,24 +239,7 @@ async def get_filtered_courses_by_llm(
     else:
         mix_rule = "Domain: ~40%, Behavioral: ~30%, Functional: ~30%"
     # ({mix_rule})
-    system_instruction = f"""You are a senior Learning & Development advisor for government civil servants.
-Your task: from the candidate courses provided, select the best 20-25 courses for the given role profile.
-
-## Selection Rules
-1. Provider Priority: Prefer courses from the user's own organisation (Own Org: YES) — they get priority in the final list.
-   Fill remaining slots by relevance score.
-2. Competency Mix:
-   - Domain: courses specific to the sector/ministry/policy area of the role (NOT generic soft skills).
-   - Behavioral: leadership, communication, integrity, teamwork.
-   - Functional: finance, procurement, project management, digital tools, writing, etc.
-3. Domain Diversity: Domain courses must NOT all cover the same topic or be from one provider.
-   Include at least 3-4 distinct domain sub-topics (e.g. if sector is health: epidemiology, health policy, hospital mgmt, public health financing).
-4. Sector Specificity: Domain courses must be governed by the sector context of the role (e.g. urban development, health, finance, defence).
-   Generic management courses do NOT count as domain.
-5. Discard courses with relevancy < 40%.
-6. Sort output: own-org domain courses first, then own-org others, then rest by relevancy DESC.
-
-Return ONLY a JSON array. No markdown."""
+    
 
     user_part = types.Part.from_text(text=f"""
 Role Profile:
@@ -320,7 +278,7 @@ Candidate Courses (Course ID | Name | Similarity Score | Organisation | Own Org 
         ],
         response_mime_type="application/json",
         response_schema=response_schema,
-        system_instruction=[types.Part.from_text(text=system_instruction)],
+        system_instruction=[types.Part.from_text(text=COURSE_SELECTION_SYSTEM_PROMPT)],
         thinking_config=types.ThinkingConfig(include_thoughts=False, thinking_budget=0),
     )
 
@@ -332,18 +290,7 @@ Candidate Courses (Course ID | Name | Similarity Score | Organisation | Own Org 
     logger.info("LLM filtering completed")
 
     if not response.text:
-        # Diagnose: log finish_reason and any safety blocks
-        try:
-            candidate = response.candidates[0] if response.candidates else None
-            finish_reason = getattr(candidate, "finish_reason", "unknown") if candidate else "no_candidates"
-            safety_ratings = getattr(candidate, "safety_ratings", []) if candidate else []
-            raw_parts = candidate.content.parts if (candidate and candidate.content) else []
-            logger.error(
-                f"LLM filtering empty response — finish_reason: {finish_reason} | "
-                f"safety_ratings: {safety_ratings} | parts: {raw_parts}"
-            )
-        except Exception as diag_err:
-            logger.error(f"LLM filtering empty response — failed to inspect: {diag_err} | raw: {response}")
+        logger.exception(f"LLM filtering empty response — failed to inspect:")
         return "[]"
     return response.text
 
@@ -438,11 +385,36 @@ async def get_general_courses_from_gemini(user_profile) -> List[Dict[str, Any]]:
         print(f"Error fetching general courses from Gemini: {e}")
         return []
 
+def _build_competency_query(competencies: list) -> str:
+    """
+    Mechanically construct a query string from the user's competency JSONB list
+    using the same taxonomy format that course embeddings were built with:
+      "Type: {area} -> Theme: {theme} -> Sub-Theme: {sub_theme}"
+
+    This is zero-cost (no LLM call) and produces a query that lives in the same
+    vector space as combined_embedding, maximising retrieval of functional and
+    behavioral courses whose embeddings contain this exact taxonomy phrasing.
+    """
+    if not competencies:
+        return ""
+    parts = []
+    for c in competencies:
+        area  = c.get("competencyAreaName") or c.get("type") or ""
+        theme = c.get("competencyThemeName") or c.get("theme") or ""
+        sub   = c.get("competencySubThemeName") or c.get("sub_theme") or ""
+        if area or theme:
+            parts.append(f"Type: {area} -> Theme: {theme} -> Sub-Theme: {sub}")
+    if not parts:
+        return ""
+    return "Training course covering the following government competencies: " + " | ".join(parts)
+
+
 async def process_recommendation_task(
     recommendation_id: uuid.UUID,
     user_profile: str,
     organisation: str,
     designation_name: str,
+    raw_competencies: list = None,
 ):
     """
     Background task: hybrid multi-embedding vector search + LLM filtering.
@@ -481,11 +453,16 @@ async def process_recommendation_task(
             "search_keywords": search_keywords
         }]
 
-        # 3. Embed all 3 in parallel
-        kw_emb_list, desc_emb_list, comb_emb_list = await asyncio.gather(
+        # Mechanically built competency taxonomy query (zero-cost, no LLM call) — used to
+        # pre-filter and boost functional/behavioural courses in the candidate pool.
+        competency_query = _build_competency_query(raw_competencies or [])
+
+        # 3. Embed all queries in parallel
+        kw_emb_list, desc_emb_list, comb_emb_list, comp_emb_list = await asyncio.gather(
             get_embedding(keyword_query),
             get_embedding(description_query),
             get_embedding(combined_query),
+            get_embedding(competency_query),
         )
         if not kw_emb_list or not desc_emb_list or not comb_emb_list:
             raise Exception("Failed to generate one or more embeddings")
@@ -493,9 +470,10 @@ async def process_recommendation_task(
         kw_emb   = kw_emb_list[0].values
         desc_emb = desc_emb_list[0].values
         comb_emb = comb_emb_list[0].values
+        comp_emb = comp_emb_list[0].values if comp_emb_list else None
 
-        # 4. Vector search + Postgres keyword search in parallel
-        vector_results, kw_results = await asyncio.gather(
+        # 4. Vector search + Postgres keyword search + competency-typed searches in parallel
+        vector_results, kw_results, func_results, behav_results = await asyncio.gather(
             crud_recommended_course.fetch_hybrid_search_courses(
                 keyword_emb=kw_emb,
                 description_emb=desc_emb,
@@ -506,10 +484,23 @@ async def process_recommendation_task(
                 keywords=search_keywords,
                 limit=40,
             ),
+            # Pre-filtered functional courses (competencyAreaName LIKE '%functional%')
+            crud_recommended_course.fetch_competency_typed_courses(
+                combined_emb=comp_emb or comb_emb,
+                competency_type="functional",
+                limit=40,
+            ),
+            # Pre-filtered behavioral courses (competencyAreaName LIKE '%behavioural%')
+            crud_recommended_course.fetch_competency_typed_courses(
+                combined_emb=comp_emb or comb_emb,
+                competency_type="behavioural",
+                limit=40,
+            ),
         )
 
         # 5. Merge & deduplicate: vector score normalised to [0,1]; keyword hits get a
-        #    bonus score of 0.15 (max keyword_score=3 → normalise to 0-0.15).
+        #    bonus score of 0.15 (max keyword_score=3 → normalise to 0-0.15). Functional and
+        #    behavioural hits get a flat bonus of 0.10 to ensure they surface in the final pool.
         seen: Dict[str, Dict[str, Any]] = {}
         for identifier, name, score in vector_results:
             seen[identifier] = {"identifier": identifier, "name": name, "distance": float(score)}
@@ -521,10 +512,17 @@ async def process_recommendation_task(
             else:
                 seen[identifier] = {"identifier": identifier, "name": name, "distance": bonus}
 
+        for identifier, name, score in (func_results or []) + (behav_results or []):
+            if identifier in seen:
+                seen[identifier]["distance"] = max(seen[identifier]["distance"], float(score)) + 0.10
+            else:
+                seen[identifier] = {"identifier": identifier, "name": name, "distance": float(score) + 0.10}
+
         all_candidates = sorted(seen.values(), key=lambda c: c["distance"], reverse=True)
         logger.info(
             f"Merged candidates: {len(all_candidates)} total "
-            f"({len(vector_results)} vector + {len(kw_results)} keyword hits)"
+            f"({len(vector_results)} vector + {len(kw_results)} keyword + "
+            f"{len(func_results or [])} functional + {len(behav_results or [])} behavioural hits)"
         )
 
         # 6. Fetch enriched metadata for candidates
@@ -698,6 +696,7 @@ Competencies (with definitions):
             user_profile,
             role_mapping.state_center_name or "",
             role_mapping.designation_name or "",
+            role_mapping.competencies or [],
         )
 
         logger.info(f"Initiated background generation for {new_recommendation.id}")

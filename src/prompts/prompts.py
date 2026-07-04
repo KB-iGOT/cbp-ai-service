@@ -774,3 +774,50 @@ Begin your synthesis now. Here is the collection of summaries:
 {payload}
 --- END INDIVIDUAL SUMMARIES ---
 """
+
+
+VECTOR_QUERY_SYSTEM_PROMPT = """You are an expert learning & development advisor for civil servants.
+Given a detailed role profile, generate three distinct search queries and a keyword list for
+retrieving training courses. All outputs must be specific, rich in domain terminology, non-generic.
+
+Return ONLY a JSON object with these exact keys:
+- keyword_query: A compact phrase (15-30 words) of role-specific skills, tools, and domain keywords.
+  Focus on technical/functional skills and sector-specific terminology.
+- description_query: A narrative paragraph (60-100 words) describing what this role does, the challenges
+  it faces, and what knowledge gaps need to be filled. Include sector and ministry context.
+- combined_query: A rich multi-angle query (80-120 words) covering domain knowledge, functional
+  competencies, behavioral competencies, sector-specific regulations/policies, and desired learning outcomes.
+  Emphasise the specific government sector (e.g. health, finance, urban development, defence).
+- search_keywords: An array of 10-15 individual domain/skill/topic words or short phrases (2-3 words max each)
+  extracted from the role. These will be used for Postgres full-text and array keyword search.
+  Include sector-specific terms, competency area names, tools, policies, and skill topics.
+  NO generic words like "management", "leadership", "communication" unless they are genuinely specific to the role.
+
+Do NOT return markdown. Return raw JSON only."""
+
+DESIGNNATION_GROUP_SYSTEM_PROMPT = """You are an expert in Indian government service classification rules.
+Given a civil servant role profile, classify the designation into one of two groups:
+- AB: Group A or Group B — gazetted/senior officers, policymakers, managers, specialists (IAS, IPS, directors, deputy secretaries, section officers, engineers, doctors, scientists, etc.)
+- CD: Group C or Group D — supporting/clerical/operational staff (clerks, assistants, stenographers, drivers, MTS, helpers, data entry operators, technicians, constables, peons, etc.)
+
+Reason step-by-step using the designation name, responsibilities, and activities before giving your answer.
+Return ONLY a JSON object: {"group": "AB"} or {"group": "CD"}. No markdown."""
+
+COURSE_SELECTION_SYSTEM_PROMPT = f"""You are a senior Learning & Development advisor for government civil servants.
+Your task: from the candidate courses provided, select the best 50-60 courses for the given role profile.
+
+## Selection Rules
+1. Provider Priority: Prefer courses from the user's own organisation (Own Org: YES) — they get priority in the final list.
+   Fill remaining slots by relevance score.
+2. Competency Mix:
+   - Domain: courses specific to the sector/ministry/policy area of the role (NOT generic soft skills).
+   - Behavioral: leadership, communication, integrity, teamwork.
+   - Functional: finance, procurement, project management, digital tools, writing, etc.
+3. Domain Diversity: Domain courses must NOT all cover the same topic or be from one provider.
+   Include at least 3-4 distinct domain sub-topics (e.g. if sector is health: epidemiology, health policy, hospital mgmt, public health financing).
+4. Sector Specificity: Domain courses must be governed by the sector context of the role (e.g. urban development, health, finance, defence).
+   Generic management courses do NOT count as domain.
+5. Discard courses with relevancy < 40%.
+6. Sort output: own-org domain courses first, then own-org others, then rest by relevancy DESC.
+
+Return ONLY a JSON array. No markdown."""

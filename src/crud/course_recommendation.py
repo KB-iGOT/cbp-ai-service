@@ -273,6 +273,45 @@ class CRUDRecommendedCourse:
             result = await db.execute(sql_query)
             return result.all()
 
+    async def fetch_competency_typed_courses(
+        self,
+        combined_emb: List[float],
+        competency_type: str,
+        limit: int = 40,
+    ) -> List[Dict[str, Any]]:
+        """
+        Vector search on combined_embedding pre-filtered to courses whose competencies_v6
+        contains at least one entry with competencyAreaName matching competency_type.
+
+        This ensures functional and behavioral courses reach the candidate pool even when
+        the general hybrid search ranks domain courses higher.
+
+        Args:
+            combined_emb: Query vector (use competency_query embedding for best alignment).
+            competency_type: "functional" or "behavioural" (matched case-insensitively).
+            limit: Max rows to return.
+
+        Returns:
+            List of (identifier, name, score) rows.
+        """
+        sql_query = text(f"""
+            SELECT
+                identifier,
+                name,
+                (1.0 - (combined_embedding <=> '{combined_emb}')) AS score
+            FROM public.course_metadata_weightage
+            WHERE EXISTS (
+                SELECT 1
+                FROM jsonb_array_elements(competencies_v6) AS comp
+                WHERE lower(comp->>'competencyAreaName') LIKE '%{competency_type}%'
+            )
+            ORDER BY score DESC
+            LIMIT {limit};
+        """)
+        async with sessionmanager.session() as db:
+            result = await db.execute(sql_query)
+            return result.all()
+
     async def fetch_course_metadata(self, identifiers_str: str) -> Dict[str, Dict[str, Any]]:
         """Fetches competencies, duration, and organisation for a list of course identifiers."""
         competencies_query = text(f"""
