@@ -6,7 +6,6 @@ import uuid
 from typing import Any, Dict, List
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Path, Query, status
 from fastapi.responses import JSONResponse
-from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from google import genai
@@ -18,7 +17,7 @@ from ...models.course_recommendation import RecommendationStatus
 from ...models.user import User
 from ...schemas.course_recommendation import RecommendCourseCreate, RecommendedCourseResponse
 
-from ...core.database import get_db_session, sessionmanager
+from ...core.database import get_db_session
 from ...core.logger import logger
 from ...core.configs import settings
 
@@ -34,7 +33,7 @@ router = APIRouter(tags=["Course Recommendations"])
 os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = settings.GOOGLE_APPLICATION_CREDENTIALS
 client = genai.Client(
     project=settings.GOOGLE_PROJECT_ID,
-    location=settings.GOOGLE_PROJECT_LOCATION,
+    location="global",
     vertexai=True
 )
 
@@ -64,66 +63,6 @@ async def get_embedding(text: str) -> list:
     except Exception as e:
         print(f"Error generating embedding for text '{text[:50]}...': {e}")
         return []
-
-async def get_content_chunk_embedding(text_str: str) -> list:
-    """
-    Embeds text for comparison against public.content_embeddings, which is still in the
-    older settings.CONTENT_CHUNK_EMBEDDING_MODEL space (unlike course_metadata_v3, which
-    was migrated to the settings.GOOGLE_EMBEDDING_MODEL space get_embedding() uses above).
-    """
-    if not text_str.strip():
-        return []
-    try:
-        response = await client.aio.models.embed_content(
-            model=settings.CONTENT_CHUNK_EMBEDDING_MODEL,
-            contents=text_str,
-            config=types.EmbedContentConfig(task_type="RETRIEVAL_QUERY")
-        )
-        return response.embeddings[0].values
-    except Exception as e:
-        logger.warning(f"Error generating content-chunk embedding: {e}")
-        return []
-
-
-BLOCKLIST_PATTERNS = [
-    r'^resource',
-    r'^module',
-    r'^overview',
-    r'^introduction',
-    r'^links',
-    r'^list of',
-    r'^परिचय$',
-    r'^सीखने के उद्देश्य$',
-    r'^व्यवस्था$',
-]
-
-HYPR4_RELEVANCY_THRESHOLD = 60
-HYPR4_SIMILARITY_THRESHOLD = 0.0
-
-
-def is_valid_course(name: str) -> bool:
-    if not name:
-        return False
-    name_lower = name.strip().lower()
-    for pattern in BLOCKLIST_PATTERNS:
-        if re.match(pattern, name_lower):
-            return False
-    return True
-
-
-def deduplicate_courses(courses: list) -> list:
-    seen = {}
-    for c in courses:
-        org = c.get('organisation', '')
-        dur = c.get('duration', '')
-        key = (str(org), str(dur))
-        if key in seen:
-            if c['rrf_score'] > seen[key]['rrf_score']:
-                seen[key] = c
-        else:
-            seen[key] = c
-    return list(seen.values())
-
 
 async def generate_contextual_queries(user_profile: str) -> Dict[str, Any]:
     """
@@ -175,12 +114,23 @@ async def generate_contextual_queries(user_profile: str) -> Dict[str, Any]:
         raise Exception("generate_contextual_queries: LLM returned empty response")
     return json.loads(response.text)
 
-async def infer_designation_group(user_profile: str) -> str:
+async def infer_seniority_tier(user_profile: str) -> str:
     """
-    Ask the LLM to reason about the full role profile and classify the designation
-    into Group A/B (senior/gazetted officers) or Group C/D (supporting/clerical staff).
-    Returns 'AB' or 'CD'.
+    Classify the designation's seniority tier using the same 5-tier taxonomy
+    used by the course seniority tagger. Returns the seniority tier string.
     """
+    system_instruction = """You are an expert in Indian government service classification rules.
+Given a civil servant role profile, classify the designation into a seniority_tier —
+one of these exact values:
+   - "Entry Level"       → Probationers, LDCs, newly recruited staff, 0–3 yrs experience
+   - "Junior Officer"    → Section Officers, Inspectors, field operational officers, 3–8 yrs
+   - "Mid-Level Officer" → Under Secretary, Deputy Secretary, Director, 8–15 yrs
+   - "Senior Officer"    → Joint Secretary, Additional Secretary, 15–25 yrs
+   - "Apex / Leadership" → Secretary, DG, HoD, Cabinet Secretary, 25+ yrs
+
+Use the designation name, responsibilities, and activities to reason before classifying.
+Return ONLY a JSON object with the field. No markdown."""
+
     user_part = types.Part.from_text(text=f"Role Profile:\n{user_profile}")
 
     config = types.GenerateContentConfig(
@@ -195,10 +145,15 @@ async def infer_designation_group(user_profile: str) -> str:
         response_mime_type="application/json",
         response_schema={
             "type": "OBJECT",
-            "properties": {"group": {"type": "STRING", "enum": ["AB", "CD"]}},
-            "required": ["group"],
+            "properties": {
+                "seniority_tier": {
+                    "type": "STRING",
+                    "enum": ["Entry Level", "Junior Officer", "Mid-Level Officer", "Senior Officer", "Apex / Leadership"]
+                },
+            },
+            "required": ["seniority_tier"],
         },
-        system_instruction=[types.Part.from_text(text=DESIGNNATION_GROUP_SYSTEM_PROMPT)],
+        system_instruction=[types.Part.from_text(text=system_instruction)],
     )
 
     try:
@@ -208,38 +163,118 @@ async def infer_designation_group(user_profile: str) -> str:
             config=config,
         )
         if not response.text:
-            logger.warning("Designation group LLM returned empty response, defaulting to AB")
-            return "AB"
+            logger.warning("Seniority tier LLM returned empty response, defaulting to Mid-Level Officer")
+            return "Mid-Level Officer"
         result = json.loads(response.text)
-        group = result.get("group", "AB")
-        logger.info(f"LLM classified designation group as: {group}")
-        return group
+        seniority_tier = result.get("seniority_tier", "Mid-Level Officer")
+        logger.info(f"LLM classified seniority: {seniority_tier}")
+        return seniority_tier
     except Exception as e:
-        logger.warning(f"Designation group inference failed, defaulting to AB: {e}")
-        return "AB"
+        logger.warning(f"Seniority tier inference failed, defaulting to Mid-Level Officer: {e}")
+        return "Mid-Level Officer"
 
 
 async def get_filtered_courses_by_llm(
     courses_prompt: str,
     user_profile: str,
     organisation: str,
-    designation_group: str,
+    user_seniority_tier: str = "Mid-Level Officer",
 ) -> str:
     """
     LLM-based course selection and scoring with:
     - Provider priority (own-org courses preferred)
-    - Domain-mix enforcement by designation group
+    - Domain-mix enforcement
     - Sector-specific domain inclusion
     - Topic/type diversity within domain courses
-    """
-    logger.info(f"Filtering courses by LLM — designation group: {designation_group}")
+    - Seniority-gated filtering using the same framework as the course tagger
 
-    if designation_group == "AB":
-        mix_rule = "Domain: ≥50%, Behavioral: ~25%, Functional: ~25%"
-    else:
-        mix_rule = "Domain: ~40%, Behavioral: ~30%, Functional: ~30%"
-    # ({mix_rule})
-    
+    Returns a verdict for EVERY candidate course (selected or discarded, with a reason)
+    so the decision is auditable per-course instead of only returning the winners.
+    """
+    logger.info(f"Filtering courses by LLM — seniority: {user_seniority_tier}")
+
+    mix_rule = "Domain: ~45%, Behavioral: ~27%, Functional: ~28%"
+
+    system_instruction = f"""You are a senior Learning & Development advisor for government civil servants.
+Your task: evaluate EVERY candidate course listed and decide "selected" (best 20-25 for the role) or "discarded".
+Return one verdict object per candidate course — do not omit any candidate.
+
+## User Seniority Context
+The user is a **{user_seniority_tier}** officer.
+Competency mix target: {mix_rule}
+
+## Selection Rules
+1. Provider Priority: Prefer courses from the user's own organisation (Own Org: YES) — they get priority among selected.
+   Fill remaining slots by relevance score.
+2. Competency Mix ({mix_rule}):
+   - Domain: courses specific to the sector/ministry/policy area of the role (NOT generic soft skills).
+   - Behavioral: leadership, communication, integrity, teamwork.
+   - Functional: finance, procurement, project management, digital tools, writing, etc.
+3. Domain Diversity: Domain courses must NOT all cover the same topic or be from one provider.
+   Include at least 3-4 distinct domain sub-topics.
+4. Sector Specificity: Domain courses must align with the sector context of the role.
+   Generic management courses do NOT count as domain.
+5. Discard courses with relevancy < 40% (discard_reason: "low_relevancy").
+6. Sort selected courses: own-org domain courses first, then own-org others, then rest by relevancy DESC.
+7. Seniority Filter — CRITICAL:
+   Using the seniority framework below, assess each candidate course and ONLY select courses
+   appropriate for a **{user_seniority_tier}** officer. Discard courses that target only lower tiers
+   (discard_reason: "seniority_mismatch").
+8. Every candidate not selected must still appear in the output with decision="discarded" and the
+   single best-fitting discard_reason: "low_relevancy" | "seniority_mismatch" | "domain_mix_cap"
+   (crowded out by mix/diversity rules 2-4 despite acceptable relevancy/seniority) | "other".
+   Selected courses must use discard_reason="none".
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SENIORITY FRAMEWORK (same rules used to tag these courses)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Tiers (low → high):
+  Entry Level       → Probationers, LDCs, newly recruited, 0–3 yrs
+  Junior Officer    → Section Officers, Inspectors, field operational staff, 3–8 yrs
+  Mid-Level Officer → Under Secretary, Deputy Secretary, Director, 8–15 yrs
+  Senior Officer    → Joint Secretary, Additional Secretary, 15–25 yrs
+  Apex / Leadership → Secretary, DG, HoD, Cabinet-level, 25+ yrs
+
+Provider → Seniority mapping (use Course Organisation field):
+  LBSNAA / Mussoorie     → Group A generalist, Mid-Level to Apex
+  SVPNPA (Hyderabad)     → IPS/Police, Junior to Senior
+  NTIPRIT / DoT          → ITS, Entry to Mid-Level
+  ISTM                   → CSS/CSSS, Entry to Mid-Level
+  NICF                   → Accounts cadres, Entry to Mid-Level
+  NIDM                   → Disaster Mgmt, Junior to Senior
+  NIFM (Faridabad)       → Finance/Accounts, Junior to Mid-Level
+  IRITM / Railway Staff  → Railways, Entry to Mid-Level
+  NAIR / FRI             → Forest officers, Entry to Mid-Level
+  NIHFW                  → Health, Junior to Mid-Level
+  BPR&D                  → Police/CAPF, Entry to Mid-Level
+  LBSNAA / IIPA          → IAS/Admin, Mid-Level to Apex
+  Capacity Building Commission → Any seniority, general civil service
+  State academies        → State Govt, any tier
+
+Seniority inference rules:
+  • Course title with "for Secretaries", "for Directors", "Strategic Leadership" → Senior/Apex
+  • Course title with "for Probationers", "New Entrants", "Induction" → Entry Level only
+  • "foundational/introductory/basic/overview" in title = content complexity, NOT seniority signal
+    (a Joint Secretary can take a basic AI course — do NOT discard it for senior users)
+  • Universal courses (gender sensitisation, mental health, ethics, digital literacy) → all tiers
+  • Competency Level numbers (Level 1, 2, 3) = proficiency depth, NOT career seniority
+
+Seniority match rule:
+  KEEP a course if ANY of these are true:
+    a) Course is universal (applies to all levels — wellness, ethics, basic digital tools)
+    b) Course title/provider signals a seniority range that INCLUDES {user_seniority_tier}
+    c) Course is foundational on a topic the user's role requires (do NOT discard due to "basic" label)
+  DISCARD only if:
+    Course is explicitly designed for tiers strictly BELOW the user
+    e.g. "Induction Training for LDCs" for a Senior Officer — discard
+    e.g. "Basic Computer Course for New Entrants" for a Mid-Level Officer — discard
+
+For EVERY candidate course, also report:
+  - seniority_tier: the tier or tier-range the course targets, using the framework above
+    (e.g. "Entry Level", "Entry to Mid-Level", "Mid-Level to Apex", "Universal"). Never leave empty.
+  - seniority_match: true if this course's tier range includes {user_seniority_tier}, else false.
+
+Return ONLY a JSON array with one object per candidate course. No markdown."""
 
     user_part = types.Part.from_text(text=f"""
 Role Profile:
@@ -257,12 +292,20 @@ Candidate Courses (Course ID | Name | Similarity Score | Organisation | Own Org 
             "type": "OBJECT",
             "properties": {
                 "identifier":        {"type": "STRING"},
-                "course":            {"type": "STRING"},
                 "relevancy":         {"type": "INTEGER"},
                 "competency_type":   {"type": "STRING", "description": "Domain | Behavioral | Functional"},
-                "rationale":         {"type": "STRING"},
+                "seniority_tier":    {"type": "STRING", "description": "Tier/tier-range the course targets"},
+                "seniority_match":   {"type": "BOOLEAN"},
+                "decision":          {"type": "STRING", "enum": ["selected", "discarded"]},
+                "discard_reason":    {
+                    "type": "STRING",
+                    "enum": ["none", "low_relevancy", "seniority_mismatch", "domain_mix_cap", "other"],
+                },
             },
-            "required": ["identifier", "course", "relevancy", "competency_type", "rationale"],
+            "required": [
+                "identifier", "relevancy", "competency_type", "seniority_tier",
+                "seniority_match", "decision", "discard_reason",
+            ],
         },
     }
 
@@ -557,28 +600,59 @@ async def process_recommendation_task(
 
             is_own_org = "YES" if (organisation and org_info and organisation.lower() in org_info.lower()) else "NO"
 
+            desc_raw  = getattr(meta, "description", None) if meta else None
+            desc_info = str(desc_raw).strip()[:300] if desc_raw else ""
+
+            instr_raw  = getattr(meta, "instructions", None) if meta else None
+            instr_info = re.sub(r'<[^>]+>', ' ', str(instr_raw)).strip()[:300] if instr_raw else ""
+
             candidate_lines.append(
                 f"Course ID: {c['identifier']} | "
                 f"Name: {c['name']} | "
                 f"Similarity: {c['distance']:.4f} | "
                 f"Organisation: {org_info or 'N/A'} | "
                 f"Own Org: {is_own_org} | "
+                f"Description: {desc_info} | "
+                f"Learning Objectives: {instr_info} | "
                 f"{comp_names}"
             )
 
         courses_prompt = "\n".join(candidate_lines)
 
-        # 8. Determine designation group for mix ratios (LLM-reasoned)
-        # designation_group = await infer_designation_group(user_profile)
-        designation_group = None
+        # 8. Determine seniority tier (LLM-reasoned, same taxonomy as course tagger)
+        user_seniority_tier = await infer_seniority_tier(user_profile)
+        logger.info(f"Designation classified — seniority: {user_seniority_tier}")
 
         # 9. LLM filtering + general courses (parallel)
         filtered_courses_json, general_courses = await asyncio.gather(
-            get_filtered_courses_by_llm(courses_prompt, user_profile, organisation, designation_group),
+            get_filtered_courses_by_llm(courses_prompt, user_profile, organisation, user_seniority_tier),
             get_general_courses_from_gemini(user_profile),
         )
 
-        filtered_courses = json.loads(filtered_courses_json)
+        # LLM now returns a verdict for every candidate (selected or discarded + reason),
+        # not just the winners — needed to audit seniority filtering per course.
+        id_to_name = {c["identifier"]: c["name"] for c in all_candidates}
+        all_verdicts = json.loads(filtered_courses_json)
+        for v in all_verdicts:
+            v["course"] = id_to_name.get(v.get("identifier"), "")
+
+        filtered_courses = [v for v in all_verdicts if v.get("decision") == "selected"]
+        llm_filtered_snapshot = [
+            {
+                "identifier": c.get("identifier"),
+                "name": c.get("course"),
+                "relevancy": c.get("relevancy"),
+                "competency_type": c.get("competency_type"),
+                "seniority_tier": c.get("seniority_tier"),
+            }
+            for c in filtered_courses
+        ]
+
+        discard_reason_counts: Dict[str, int] = {}
+        for v in all_verdicts:
+            if v.get("decision") == "discarded":
+                reason = v.get("discard_reason") or "other"
+                discard_reason_counts[reason] = discard_reason_counts.get(reason, 0) + 1
 
         # 10. Enrich filtered courses with full metadata
         filtered_identifiers = [c["identifier"] for c in filtered_courses]
@@ -605,6 +679,76 @@ async def process_recommendation_task(
                 course["organisation"] = None
 
         final_filtered_courses = filtered_courses + general_courses
+
+        # Trace: dump course names/identifiers at every pipeline layer for debugging
+        try:
+            trace = {
+                "recommendation_id": str(recommendation_id),
+                "designation_name": designation_name,
+                "organisation": organisation,
+                "user_seniority_tier": user_seniority_tier,
+                "queries": all_queries[0],
+                "layers": {
+                    "1_vector_search": [
+                        {"identifier": identifier, "name": name, "score": float(score)}
+                        for identifier, name, score in vector_results
+                    ],
+                    "2_keyword_search": [
+                        {"identifier": identifier, "name": name, "score": float(score)}
+                        for identifier, name, score in kw_results
+                    ],
+                    "3_merged_candidates": [
+                        {"identifier": c["identifier"], "name": c["name"], "score": c["distance"]}
+                        for c in all_candidates
+                    ],
+                    "4_llm_filtered_igot": llm_filtered_snapshot,
+                    "5_general_public": [
+                        {
+                            "identifier": c.get("identifier"),
+                            "name": c.get("course"),
+                            "relevancy": c.get("relevancy"),
+                            "platform": c.get("platform"),
+                        }
+                        for c in general_courses
+                    ],
+                    "6_final_combined": [
+                        {"identifier": c.get("identifier"), "name": c.get("course"), "is_public": c.get("is_public")}
+                        for c in final_filtered_courses
+                    ],
+                },
+                "counts": {
+                    "vector_search": len(vector_results),
+                    "keyword_search": len(kw_results),
+                    "merged_candidates": len(all_candidates),
+                    "llm_filtered_igot": len(llm_filtered_snapshot),
+                    "general_public": len(general_courses),
+                    "final_combined": len(final_filtered_courses),
+                },
+                # Per-course seniority verdicts for every candidate (selected + discarded),
+                # so seniority-driven drops are auditable instead of inferred.
+                "seniority_analysis": {
+                    "user_seniority_tier": user_seniority_tier,
+                    "discarded_total": len(all_verdicts) - len(filtered_courses),
+                    "discard_reason_counts": discard_reason_counts,
+                    "courses": [
+                        {
+                            "identifier": v.get("identifier"),
+                            "name": v.get("course"),
+                            "seniority_tier": v.get("seniority_tier"),
+                            "seniority_match": v.get("seniority_match"),
+                            "decision": v.get("decision"),
+                            "discard_reason": v.get("discard_reason"),
+                        }
+                        for v in all_verdicts
+                    ],
+                },
+            }
+            trace_dir = "logs/course_recommendation_trace"
+            os.makedirs(trace_dir, exist_ok=True)
+            with open(os.path.join(trace_dir, f"{recommendation_id}.json"), "w") as f:
+                json.dump(trace, f, indent=2, ensure_ascii=False, default=str)
+        except Exception:
+            logger.warning(f"Failed to write course recommendation trace for {recommendation_id}", exc_info=True)
 
         # 11. Persist
         await crud_recommended_course.update_status_and_data(
@@ -726,7 +870,7 @@ async def get_course_recommendations(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="No course recommendations found for this role mapping. Please generate recommendations first."
             )
-        logger.info("Successfully fetched course recommendations")
+        logger.info(f"Successfully fetched course recommendations")
         return existing_recommendation
     except HTTPException:
         raise

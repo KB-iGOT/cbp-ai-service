@@ -313,9 +313,9 @@ class CRUDRecommendedCourse:
             return result.all()
 
     async def fetch_course_metadata(self, identifiers_str: str) -> Dict[str, Dict[str, Any]]:
-        """Fetches competencies, duration, and organisation for a list of course identifiers."""
+        """Fetches competencies, duration, organisation, and description for a list of course identifiers."""
         competencies_query = text(f"""
-            SELECT identifier, competencies_v6, duration, organisation
+            SELECT identifier, competencies_v6, duration, organisation, description, instructions
             FROM public.course_metadata_weightage
             WHERE identifier IN ({identifiers_str});
             """)
