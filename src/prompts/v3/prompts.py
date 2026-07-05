@@ -497,10 +497,8 @@ Selection process: For each designation, read the `theme_description` and `sub_t
 DOMAIN_FROM_WAO_PROMPT = """You are mapping DOMAIN competencies for a specific Government of India role, \
 using its Work Allocation Order (WAO) as the primary and authoritative source.
 
-WORK ALLOCATION ORDER (verbatim text of the department's document):
----
-{wao_text}
----
+The department's Work Allocation Order (WAO) is provided as the attached PDF document(s). Treat it as \
+the authoritative source and read it directly — including any scanned pages, tables and column layouts.
 
 ORGANISATION: {organization_name}
 DEPARTMENT: {department_name}

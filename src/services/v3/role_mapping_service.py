@@ -16,7 +16,6 @@ from ...prompts.v3.prompts import (
     DOMAIN_FROM_WAO_PROMPT
 )
 from ...crud.document import crud_document
-from ...services.pdf_service import pdf_service
 from ...services.storage_service import get_storage_service
 from ...core.logger import logger
 
@@ -371,54 +370,91 @@ class RoleMappingService:
         
         return "\n\n".join(parts)
     
-    async def get_documents_raw_text(
+    async def _get_wao_pdf_parts(
         self, user_id, state_center_id, department_id=None,
         document_type: str | None = "Work Allocation Order"
-    ) -> str:
-        """Read the raw (verbatim) text of the WAO document(s) from storage.
+    ) -> List[types.Part]:
+        """Read the WAO document(s) from storage as Gemini PDF Parts.
 
-        Used by the per-designation domain pass (PASS 3). Returns "" on any failure so the
-        caller falls back to the summary-based domain competencies (non-breaking).
+        The PDF bytes are sent to Gemini directly (native PDF understanding), so scanned/image
+        pages, tables and column layouts are handled — mirroring how the summary is generated
+        (Part.from_bytes(application/pdf)). Returns [] on any failure so PASS 3 falls back to the
+        summary-based domain competencies (non-breaking).
         """
         try:
             _, docs = await crud_document.get_all_documents_async(
                 user_id, state_center_id, department_id, document_type=document_type)
             if not docs:
-                return ""
+                return []
             storage = get_storage_service()
             parts = []
             for doc in docs:
                 try:
                     pdf_bytes = storage.read_file(doc.stored_path)
-                    text = pdf_service.extract_text_from_pdf(pdf_bytes)
-                    if text and text.strip():
-                        parts.append(text)
+                    if pdf_bytes:
+                        parts.append(types.Part.from_bytes(data=pdf_bytes, mime_type="application/pdf"))
                 except Exception as e:
-                    logger.warning(f"WAO raw-text read failed for '{getattr(doc, 'stored_path', '?')}': {e}")
-            return "\n\n".join(parts)
+                    logger.warning(f"WAO PDF read failed for '{getattr(doc, 'stored_path', '?')}': {e}")
+            return parts
         except Exception as e:
-            logger.warning(f"get_documents_raw_text failed: {e}")
-            return ""
+            logger.warning(f"_get_wao_pdf_parts failed: {e}")
+            return []
+
+    async def _create_wao_cache(self, pdf_parts: List[types.Part]) -> Optional[str]:
+        """Create a Gemini context cache holding the WAO PDF(s), reused across the per-designation
+        domain calls (the PDF is uploaded/charged once, not per call). Returns the cache name, or
+        None if caching is disabled (DOMAIN_FROM_WAO_CACHE_TTL_SECONDS <= 0) or unavailable (e.g.
+        the doc is below the model's minimum cacheable size) — the caller then sends the PDF inline
+        on each call (still correct, just less token-efficient)."""
+        ttl = settings.DOMAIN_FROM_WAO_CACHE_TTL_SECONDS
+        if not ttl or ttl <= 0:
+            logger.info("WAO context caching disabled (DOMAIN_FROM_WAO_CACHE_TTL_SECONDS<=0); sending PDF inline per call")
+            return None
+        try:
+            cache = await self.client.aio.caches.create(
+                model="gemini-3.1-pro-preview",
+                config=types.CreateCachedContentConfig(
+                    display_name="wao-domain",
+                    contents=[types.Content(role="user", parts=pdf_parts)],
+                    ttl=f"{ttl}s"))
+            logger.info(f"WAO context cache created ({cache.name}, ttl={ttl}s) — reused across designations")
+            return cache.name
+        except Exception as e:
+            logger.warning(f"WAO context cache unavailable ({e}); sending PDF inline per call")
+            return None
+
+    async def _delete_wao_cache(self, cache_name: str):
+        """Best-effort cache cleanup (it would otherwise expire via TTL)."""
+        try:
+            await self.client.aio.caches.delete(name=cache_name)
+        except Exception as e:
+            logger.warning(f"WAO cache delete failed for {cache_name}: {e} (will expire via TTL)")
 
     async def _generate_domain_from_wao(
-        self, organization_data: Dict[str, Any], designation: str, wing: str, wao_text: str
+        self, organization_data: Dict[str, Any], designation: str, wing: str,
+        pdf_parts: List[types.Part], cache_name: Optional[str] = None
     ) -> List[Dict[str, Any]]:
-        """PASS 3 (per designation): derive Domain competencies from the raw WAO text.
-        Returns a list of {type:'Domain', theme, sub_theme, source} (empty on failure)."""
+        """PASS 3 (per designation): derive Domain competencies from the WAO PDF. Uses the shared
+        context cache when available, else sends the PDF inline. Returns a list of
+        {type:'Domain', theme, sub_theme, source} (empty on failure)."""
         prompt = DOMAIN_FROM_WAO_PROMPT.format(
-            wao_text=wao_text,
             organization_name=organization_data.get("organization_name"),
             department_name=organization_data.get("department_name"),
             designation=designation,
             wing=wing or "N/A",
         )
+        gen_kwargs = dict(
+            temperature=0.3, top_p=0.90, max_output_tokens=32768,
+            response_mime_type="application/json", response_schema=DOMAIN_FROM_WAO_SCHEMA)
+        if cache_name:
+            contents = [types.Content(role="user", parts=[types.Part.from_text(text=prompt)])]
+            config = types.GenerateContentConfig(cached_content=cache_name, **gen_kwargs)
+        else:
+            contents = [types.Content(role="user",
+                                      parts=list(pdf_parts) + [types.Part.from_text(text=prompt)])]
+            config = types.GenerateContentConfig(**gen_kwargs)
         resp = await self.client.aio.models.generate_content(
-            model="gemini-3.1-pro-preview",
-            contents=[types.Content(role="user", parts=[types.Part.from_text(text=prompt)])],
-            config=types.GenerateContentConfig(
-                temperature=0.3, top_p=0.90, max_output_tokens=32768,
-                response_mime_type="application/json", response_schema=DOMAIN_FROM_WAO_SCHEMA),
-        )
+            model="gemini-3.1-pro-preview", contents=contents, config=config)
         data = json.loads(resp.text or "[]")
         out = []
         for d in data:
@@ -429,7 +465,8 @@ class RoleMappingService:
         return out
 
     async def _apply_wao_domain(
-        self, frac_mappings: List[Dict[str, Any]], organization_data: Dict[str, Any], wao_text: str
+        self, frac_mappings: List[Dict[str, Any]], organization_data: Dict[str, Any],
+        pdf_parts: List[types.Part], cache_name: Optional[str] = None
     ) -> List[Dict[str, Any]]:
         """Replace each mapping's Domain competencies with WAO-derived ones (Behavioural and
         Functional kept as-is). Per-designation, concurrency-limited.
@@ -449,7 +486,7 @@ class RoleMappingService:
                         organization_data,
                         mapping.get("designation_name", ""),
                         mapping.get("wing_division_section", ""),
-                        wao_text)
+                        pdf_parts, cache_name)
                 except Exception as e:
                     logger.warning(f"WAO domain pass failed for '{mapping.get('designation_name')}': {e}; keeping original domain")
                     stats["kept_original"] += 1
@@ -567,16 +604,21 @@ class RoleMappingService:
             # missing raw WAO leaves PASS 2's (summary-based) domain competencies untouched.
             if settings.DOMAIN_FROM_WAO_ENABLED and frac_mappings:
                 try:
-                    wao_text = await self.get_documents_raw_text(
+                    pdf_parts = await self._get_wao_pdf_parts(
                         user_id, state_center_id, department_id, document_type="Work Allocation Order")
-                    if wao_text and wao_text.strip():
-                        logger.info(f"STARTING PASS 3: DOMAIN FROM RAW WAO ({len(wao_text)} chars) "
+                    if pdf_parts:
+                        logger.info(f"STARTING PASS 3: DOMAIN FROM WAO PDF ({len(pdf_parts)} doc(s)) "
                                     f"for {len(frac_mappings)} designations")
-                        frac_mappings = await self._apply_wao_domain(
-                            frac_mappings, organization_data_pass2, wao_text)
+                        cache_name = await self._create_wao_cache(pdf_parts)
+                        try:
+                            frac_mappings = await self._apply_wao_domain(
+                                frac_mappings, organization_data_pass2, pdf_parts, cache_name)
+                        finally:
+                            if cache_name:
+                                await self._delete_wao_cache(cache_name)
                         logger.info("PASS 3 SUCCESS: WAO-derived domain competencies applied")
                     else:
-                        logger.info("PASS 3 skipped: no raw WAO text available; keeping summary-based domain competencies")
+                        logger.info("PASS 3 skipped: no WAO PDF available; keeping summary-based domain competencies")
                 except Exception as e:
                     logger.warning(f"PASS 3 (WAO domain) failed: {e}; keeping summary-based domain competencies")
 

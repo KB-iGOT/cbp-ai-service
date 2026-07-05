@@ -161,6 +161,12 @@ class Settings(BaseSettings):
                     "set rather than dropping below the floor or padding with invented items. "
                     "Set to 0 to disable the floor (use exactly what the WAO supports)."
     )
+    DOMAIN_FROM_WAO_CACHE_TTL_SECONDS: int = Field(
+        default=600,
+        description="TTL (seconds) for the Gemini context cache holding the WAO PDF, so the document "
+                    "is uploaded/charged once and reused across the per-designation domain calls. "
+                    "Set to 0 to disable caching (the PDF is sent inline on each call)."
+    )
 
     # Notification service settings
     ENABLE_EMAIL_NOTIFICATION: bool = Field(
