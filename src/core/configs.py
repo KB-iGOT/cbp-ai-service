@@ -146,6 +146,32 @@ class Settings(BaseSettings):
     
     DEFAULT_RELEVANCY_SCORE: int = 90
 
+    # Domain competencies from the Work Allocation Order (WAO)
+    DOMAIN_FROM_WAO_ENABLED: bool = Field(
+        default=True,
+        description="If true, derive Domain competencies per designation directly from the raw WAO "
+                    "text (uncapped, exhaustive) instead of the summary-based capped list. "
+                    "Behavioural/Functional competencies are unchanged. Falls back silently to the "
+                    "existing behaviour if the raw WAO cannot be read."
+    )
+    DOMAIN_FROM_WAO_CONCURRENCY: int = Field(
+        default=4,
+        description="Max concurrent per-designation domain-from-WAO LLM calls."
+    )
+    DOMAIN_FROM_WAO_MIN: int = Field(
+        default=6,
+        description="Minimum number of Domain competencies to keep per designation. If the WAO "
+                    "yields fewer, the shortfall is topped up (deduplicated) from the summary-based "
+                    "set rather than dropping below the floor or padding with invented items. "
+                    "Set to 0 to disable the floor (use exactly what the WAO supports)."
+    )
+    DOMAIN_FROM_WAO_CACHE_TTL_SECONDS: int = Field(
+        default=600,
+        description="TTL (seconds) for the Gemini context cache holding the WAO PDF, so the document "
+                    "is uploaded/charged once and reused across the per-designation domain calls. "
+                    "Set to 0 to disable caching (the PDF is sent inline on each call)."
+    )
+
     # Notification service settings
     ENABLE_EMAIL_NOTIFICATION: bool = Field(
         default=False,
