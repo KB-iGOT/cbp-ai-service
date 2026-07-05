@@ -600,15 +600,15 @@ Generate a structured output:
    - Summarize objectives of Programs, Schemes, missions, policies details
    - Explain detailed summary of Programs, Schemes, missions, policies details
 
-7. **Competency Framework based on Documents**
+6. **Competency Framework based on Documents**
    - Domain Competencies
    - Functional Competencies
    - Behavioural Competencies
 
-8. **Monitoring & Evaluation (if mentioned)**
+7. **Monitoring & Evaluation (if mentioned)**
    - Review cycles, reporting structures, feedback mechanisms, role of CBC/CBU or equivalent authority.
 
-9. **Core Essence**
+8. **Core Essence**
    - Explain how the document supports role clarity, accountability, competency-driven culture, and improved governance.
 
 **Part B: Detailed Lists (No Truncation)**
