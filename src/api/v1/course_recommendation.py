@@ -32,8 +32,8 @@ router = APIRouter(tags=["Course Recommendations"])
 os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = settings.GOOGLE_APPLICATION_CREDENTIALS
 client = genai.Client(
     project=settings.GOOGLE_PROJECT_ID,
-    location="global",
-    vertexai=True
+    location=settings.GOOOGLE_PROJECT_LOCATION_GLOBAL,
+    vertexai=settings.GOOGLE_GENAI_USE_VERTEXAI
 )
 
 embedding_client = genai.Client(
@@ -103,7 +103,7 @@ async def generate_contextual_queries(user_profile: str) -> Dict[str, Any]:
     )
 
     response = await client.aio.models.generate_content(
-        model="gemini-3.1-pro-preview",
+        model=settings.GEMINI_PRO_MODEL_NAME,
         contents=contents,
         config=config,
     )
@@ -141,7 +141,7 @@ async def infer_designation_group(user_profile: str) -> str:
 
     try:
         response = await client.aio.models.generate_content(
-            model="gemini-3.5-flash",
+            model=settings.GEMINI_FLASH_MODEL_NAME,
             contents=[types.Content(role="user", parts=[user_part])],
             config=config,
         )
@@ -221,7 +221,7 @@ Candidate Courses:
     )
 
     response = await client.aio.models.generate_content(
-        model="gemini-3.1-pro-preview",
+        model=settings.GEMINI_PRO_MODEL_NAME,
         contents=[types.Content(role="user", parts=[user_part])],
         config=config,
     )
@@ -295,7 +295,7 @@ async def get_general_courses_from_gemini(user_profile) -> List[Dict[str, Any]]:
         contents = [types.Content(role="user", parts=[msg1_text1])]
 
         response = await client.aio.models.generate_content(
-            model="gemini-2.5-pro",
+            model=settings.GEMINI_PRO_MODEL_NAME,
             contents=contents,
             config=generate_content_config,
         )

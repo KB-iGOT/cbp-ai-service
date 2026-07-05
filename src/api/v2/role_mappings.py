@@ -33,8 +33,8 @@ with open("data/competencies.json") as f:
 os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = settings.GOOGLE_APPLICATION_CREDENTIALS
 client = genai.Client(
     project=settings.GOOGLE_PROJECT_ID,
-    location="global",
-    vertexai=True
+    location=settings.GOOOGLE_PROJECT_LOCATION_GLOBAL,
+    vertexai=settings.GOOGLE_GENAI_USE_VERTEXAI
 )
 
 async def process_role_mapping_task(
@@ -296,7 +296,7 @@ async def generate_role_and_competencies(input_data):
         ]
 
         response = await client.aio.models.generate_content(
-            model="gemini-3.1-pro-preview",
+            model=settings.GEMINI_PRO_MODEL_NAME,
             contents=contents,
             config=generate_content_config,
         )

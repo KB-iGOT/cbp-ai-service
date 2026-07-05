@@ -39,11 +39,15 @@ class Settings(BaseSettings):
         return f"redis://{self.REDIS_HOST}:{self.REDIS_PORT}/{self.REDIS_DB}"
 
     GOOGLE_PROJECT_LOCATION: str
+    GOOOGLE_PROJECT_LOCATION_GLOBAL: str = Field(default="global", description="Default location for Gemini AI services")
     GOOGLE_APPLICATION_CREDENTIALS: str
     GOOGLE_API_KEY: str
     GOOGLE_EMBEDDING_MODEL: str = Field(default="gemini-embedding-2", description="Gemini embedding model name")
     EMBEDDING_OUTPUT_DIMENSIONALITY: int = Field(default=1536, description="Output dimensionality for Gemini embedding model")
     GOOGLE_PROJECT_ID: str
+    GOOGLE_GENAI_USE_VERTEXAI: bool = Field(default=True, description="Flag to use Vertex AI for Gemini API calls")
+    GEMINI_PRO_MODEL_NAME: str = Field(default="gemini-3.1-pro-preview", description="Gemini Pro model name for advanced tasks")
+    GEMINI_FLASH_MODEL_NAME: str = Field(default="gemini-3.5-flash", description="Gemini Flash model name for high-speed tasks")
 
     KB_BASE_URL: str
     KB_AUTH_TOKEN: str
