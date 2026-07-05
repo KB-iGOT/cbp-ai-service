@@ -37,7 +37,8 @@ client = genai.Client(
 )
 
 embedding_client = genai.Client(
-    api_key=settings.GOOGLE_API_KEY
+    api_key=settings.GOOGLE_API_KEY,
+    vertexai=False
 )
 
 # Curse Recommendation APIs
