@@ -1,3 +1,4 @@
+import time
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status
 import httpx
@@ -33,13 +34,13 @@ async def get_departments_by_state_center(
     try:
         logger.info(f"Fetching departments for state/center ID: {state_center_id}")
         
-        api_url = f"{settings.KB_BASE_URL}/api/org/v1/search"
+        api_url = f"{settings.KB_BASE_URL}/api/org/v1/search?ts={int(time.time() * 1000)}"
         
         request_body = {
             "request": {
                 "filters": {
                     "status": 1,
-                    "ministryOrStateType": sub_org_type,
+                    "ministryOrStateType": sub_org_type.value,
                     "ministryOrStateId": state_center_id
                 },
                 "sort_by": {
@@ -59,7 +60,6 @@ async def get_departments_by_state_center(
                 ]
             }
         }
-        
         async with httpx.AsyncClient(timeout=30.0) as client:
             response = await client.post(api_url, json=request_body, headers={
                     "Content-Type": "application/json",

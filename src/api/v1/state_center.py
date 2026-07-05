@@ -1,3 +1,4 @@
+import time
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status
 import httpx
@@ -37,13 +38,13 @@ async def get_all_state_centers(
         if offset < 0:
             offset = 0
         
-        api_url = f"{settings.KB_BASE_URL}/api/org/v1/search"
+        api_url = f"{settings.KB_BASE_URL}/api/org/v1/search?ts={int(time.time() * 1000)}"
         
         request_body = {
             "request": {
                 "filters": {
                     "status": 1,
-                    "sbOrgType": sub_org_type
+                    "sbOrgType": sub_org_type.value
                 },
                 "sort_by": {
                     "createdDate": "desc"
