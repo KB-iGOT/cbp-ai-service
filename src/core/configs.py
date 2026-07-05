@@ -39,12 +39,16 @@ class Settings(BaseSettings):
         return f"redis://{self.REDIS_HOST}:{self.REDIS_PORT}/{self.REDIS_DB}"
 
     GOOGLE_PROJECT_LOCATION: str
+    GOOOGLE_PROJECT_LOCATION_GLOBAL: str = Field(default="global", description="Default location for Gemini AI services")
     GOOGLE_APPLICATION_CREDENTIALS: str
     GOOGLE_API_KEY: str
     GOOGLE_EMBEDDING_MODEL: str = Field(default="gemini-embedding-2", description="Gemini embedding model name")
     EMBEDDING_OUTPUT_DIMENSIONALITY: int = Field(default=1536, description="Output dimensionality for Gemini embedding model")
     CONTENT_CHUNK_EMBEDDING_MODEL: str = Field(default="text-multilingual-embedding-002", description="Embedding model matching public.content_embeddings' (768-dim) vector space, used for HYPR4 Layer 2 chunk-level refinement")
     GOOGLE_PROJECT_ID: str
+    GOOGLE_GENAI_USE_VERTEXAI: bool = Field(default=True, description="Flag to use Vertex AI for Gemini API calls")
+    GEMINI_PRO_MODEL_NAME: str = Field(default="gemini-3.1-pro-preview", description="Gemini Pro model name for advanced tasks")
+    GEMINI_FLASH_MODEL_NAME: str = Field(default="gemini-3.5-flash", description="Gemini Flash model name for high-speed tasks")
 
     KB_BASE_URL: str
     KB_AUTH_TOKEN: str
@@ -142,6 +146,32 @@ class Settings(BaseSettings):
         return v
     
     DEFAULT_RELEVANCY_SCORE: int = 90
+
+    # Domain competencies from the Work Allocation Order (WAO)
+    DOMAIN_FROM_WAO_ENABLED: bool = Field(
+        default=True,
+        description="If true, derive Domain competencies per designation directly from the raw WAO "
+                    "text (uncapped, exhaustive) instead of the summary-based capped list. "
+                    "Behavioural/Functional competencies are unchanged. Falls back silently to the "
+                    "existing behaviour if the raw WAO cannot be read."
+    )
+    DOMAIN_FROM_WAO_CONCURRENCY: int = Field(
+        default=4,
+        description="Max concurrent per-designation domain-from-WAO LLM calls."
+    )
+    DOMAIN_FROM_WAO_MIN: int = Field(
+        default=6,
+        description="Minimum number of Domain competencies to keep per designation. If the WAO "
+                    "yields fewer, the shortfall is topped up (deduplicated) from the summary-based "
+                    "set rather than dropping below the floor or padding with invented items. "
+                    "Set to 0 to disable the floor (use exactly what the WAO supports)."
+    )
+    DOMAIN_FROM_WAO_CACHE_TTL_SECONDS: int = Field(
+        default=600,
+        description="TTL (seconds) for the Gemini context cache holding the WAO PDF, so the document "
+                    "is uploaded/charged once and reused across the per-designation domain calls. "
+                    "Set to 0 to disable caching (the PDF is sent inline on each call)."
+    )
 
     # Notification service settings
     ENABLE_EMAIL_NOTIFICATION: bool = Field(
