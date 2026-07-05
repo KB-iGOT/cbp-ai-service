@@ -91,7 +91,7 @@ class FRACRoleMapping(BaseModel):
     role_responsibilities: List[str] = Field(description="Flat list of role responsibilities as strings")
     activities: List[str] = Field(description="Flat list of activity strings")
     sort_order: int = Field(description="Hierarchy sort order, strictly increasing from 1")
-    competencies: List[FRACCompetency] = Field(description="Flat list of competency objects")
+    competencies: List[FRACCompetency] = Field(description="Flat list of competency objects.")
     source: Optional[List[str]] = Field(default=None, description="Source references")
 
 
@@ -354,7 +354,7 @@ class RoleMappingService:
         parts = []
         for idx, doc in enumerate(retrieved_docs, start=1):
             summary = (doc.summary_text or "").strip()
-            parts.append(f"<document_summary_{idx}>\n   {summary}\n</document_summary_{idx}>")
+            parts.append(f"<document_summary_{idx}>\n Document Type: {doc.document_type} \n Summary: {summary}\n</document_summary_{idx}>")
         
         return "\n\n".join(parts)
     

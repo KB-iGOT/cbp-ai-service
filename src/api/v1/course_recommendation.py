@@ -185,7 +185,7 @@ Role Profile:
 
 Own Organisation: {organisation or 'N/A'}
 
-Candidate Courses (Course ID | Name | Similarity Score | Organisation | Own Org | Competency Areas):
+Candidate Courses:
 {courses_prompt}
 """)
 
@@ -217,7 +217,7 @@ Candidate Courses (Course ID | Name | Similarity Score | Organisation | Own Org 
         response_mime_type="application/json",
         response_schema=response_schema,
         system_instruction=[types.Part.from_text(text=COURSE_SELECTION_SYSTEM_PROMPT)],
-        thinking_config=types.ThinkingConfig(include_thoughts=False, thinking_budget=0),
+        thinking_config=types.ThinkingConfig(include_thoughts=False, thinking_budget=2048),
     )
 
     response = await client.aio.models.generate_content(
@@ -228,7 +228,7 @@ Candidate Courses (Course ID | Name | Similarity Score | Organisation | Own Org 
     logger.info("LLM filtering completed")
 
     if not response.text:
-        logger.exception(f"LLM filtering empty response — failed to inspect:")
+        logger.error(f"LLM filtering empty response — failed to inspect:  {response}")
         return "[]"
     return response.text
 
@@ -482,26 +482,28 @@ async def process_recommendation_task(
             else:
                 org_info = str(_org_raw) if _org_raw else ""
 
-            comp_names = ""
-            competencies_info = getattr(meta, "competencies_v6", None)
-            if competencies_info:
-                try:
-                    comp_list = competencies_info if isinstance(competencies_info, list) else []
-                    areas = list({e.get("competencyAreaName", "") for e in comp_list if e.get("competencyAreaName")})
-                    if areas:
-                        comp_names = f"Competency Areas: {', '.join(areas[:5])}"
-                except Exception:
-                    pass
+            # comp_names = ""
+            # competencies_info = getattr(meta, "competencies_v6", None)
+            # if competencies_info:
+            #     try:
+            #         comp_list = competencies_info if isinstance(competencies_info, list) else []
+            #         areas = list({e.get("competencyAreaName", "") for e in comp_list if e.get("competencyAreaName")})
+            #         if areas:
+            #             comp_names = f"Competency Areas: {', '.join(areas[:5])}"
+            #     except Exception:
+            #         pass
 
             is_own_org = "YES" if (organisation and org_info and organisation.lower() in org_info.lower()) else "NO"
 
             candidate_lines.append(
                 f"Course ID: {c['identifier']} | "
-                f"Name: {c['name']} | "
+                f"Course Name: {c['name']} | "
+                f"Course Description: {getattr(meta, 'description', None)} | "
+                f"Course Keywords: {getattr(meta, 'keywords', None)} | "
                 f"Similarity: {c['distance']:.4f} | "
                 f"Organisation: {org_info or 'N/A'} | "
                 f"Own Org: {is_own_org} | "
-                f"{comp_names}"
+                # f"{comp_names}"
             )
 
         courses_prompt = "\n".join(candidate_lines)
