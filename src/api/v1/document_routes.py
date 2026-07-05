@@ -33,8 +33,8 @@ def get_genai_client():
         try:
             _genai_client = genai.Client(
                 project=settings.GOOGLE_PROJECT_ID,
-                location="global",
-                vertexai=True
+                location=settings.GOOOGLE_PROJECT_LOCATION_GLOBAL,
+                vertexai=settings.GOOGLE_GENAI_USE_VERTEXAI
             )
         except Exception as e:
             logger.error(f"Failed to init genai client: {e}")
@@ -272,7 +272,7 @@ async def _run_document_summary(document_id: uuid.UUID):
             )
 
             response = await client.aio.models.generate_content(
-                model="gemini-3.1-pro-preview",
+                model=settings.GEMINI_PRO_MODEL_NAME,
                 contents=contents,
                 config=generate_content_config
             )

@@ -22,7 +22,6 @@ with open("data/competencies.json") as f:
 
 # src/prompts/v2/prompts.py (add this to your existing prompts file)
 
-
 center_json_output = {
     "mappings": [{
         "designation_name": "string",
@@ -60,7 +59,6 @@ state_json_output = {
         "source": ["Work Allocation Order", "ACBP", "Additional supporting document", "AI Suggested"]
     }]
 }
-
 class Designation(BaseModel):
     sort_order: int = Field(
         description="Hierarchical position, starting from 1 (highest) and incrementing sequentially"
@@ -71,33 +69,25 @@ class Designation(BaseModel):
     wing_division_section: str = Field(
         description="Exact wing/division/section the designation belongs to, or org unit / administrative from source document"
     )
-
 class DesignationExtractionResponse(BaseModel):
     designations: List[Designation] = Field(
         description="List of extracted unique designations sorted by hierarchy"
     )
-
-
 class FRACCompetency(BaseModel):
     type: Literal["Behavioral", "Functional", "Domain"] = Field(description="Competency type: Behavioral, Functional, or Domain")
     theme: str = Field(description="Competency theme")
     sub_theme: str = Field(description="Competency sub theme")
     source: Optional[str] = Field(default=None, description="Competency source")
-
-
 class FRACRoleMapping(BaseModel):
     designation_name: str = Field(description="Official designation name")
     wing_division_section: str = Field(description="Wing/division/section the designation belongs to")
     role_responsibilities: List[str] = Field(description="Flat list of role responsibilities as strings")
     activities: List[str] = Field(description="Flat list of activity strings")
     sort_order: int = Field(description="Hierarchy sort order, strictly increasing from 1")
-    competencies: List[FRACCompetency] = Field(description="Flat list of competency objects")
+    competencies: List[FRACCompetency] = Field(description="Flat list of competency objects.")
     source: Optional[List[str]] = Field(default=None, description="Source references")
-
-
 class FRACBatchResponse(BaseModel):
     mappings: List[FRACRoleMapping] = Field(description="List of FRAC role mappings for all designations in the batch")
-
 class RoleMappingService:
     """Service for generating role mappings using Google AI"""
     
@@ -106,8 +96,8 @@ class RoleMappingService:
         try:
             self.client = genai.Client(
                 project=settings.GOOGLE_PROJECT_ID,
-                location="global",
-                vertexai=True
+                location=settings.GOOOGLE_PROJECT_LOCATION_GLOBAL,
+                vertexai=settings.GOOGLE_GENAI_USE_VERTEXAI
             )
             logger.info("Google AI service for role mapping initialized successfully")
         except Exception as e:
@@ -162,11 +152,11 @@ class RoleMappingService:
             )
             
             response = await self.client.aio.models.generate_content(
-                model="gemini-3.5-flash",
+                model=settings.GEMINI_FLASH_MODEL_NAME,
                 contents=contents,
                 config=generate_content_config,
             )
-            print(response.candidates)
+            
             text_response = response.text
             if not text_response:
                 logger.error("Designation extraction response was empty")
@@ -241,7 +231,7 @@ class RoleMappingService:
                 )
 
                 response = await self.client.aio.models.generate_content(
-                    model="gemini-3.1-pro-preview",
+                    model=settings.GEMINI_PRO_MODEL_NAME,
                     contents=contents,
                     config=generate_content_config,
                 )
@@ -354,7 +344,7 @@ class RoleMappingService:
         parts = []
         for idx, doc in enumerate(retrieved_docs, start=1):
             summary = (doc.summary_text or "").strip()
-            parts.append(f"<document_summary_{idx}>\n   {summary}\n</document_summary_{idx}>")
+            parts.append(f"<document_summary_{idx}>\n Document Type: {doc.document_type} \n Summary: {summary}\n</document_summary_{idx}>")
         
         return "\n\n".join(parts)
     
