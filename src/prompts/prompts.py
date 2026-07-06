@@ -803,7 +803,7 @@ Given a civil servant role profile, classify the designation into one of two gro
 Reason step-by-step using the designation name, responsibilities, and activities before giving your answer.
 Return ONLY a JSON object: {"group": "AB"} or {"group": "CD"}. No markdown."""
 
-COURSE_SELECTION_SYSTEM_PROMPT = f"""You are a senior Learning & Development advisor for government civil servants.
+COURSE_SELECTION_SYSTEM_PROMPT_OLD = f"""You are a senior Learning & Development advisor for government civil servants.
 Your task: from the candidate courses provided, select the best 50-60 courses for the given role profile.
 
 ## Selection Rules
