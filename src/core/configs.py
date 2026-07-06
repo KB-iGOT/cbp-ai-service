@@ -148,7 +148,7 @@ class Settings(BaseSettings):
 
     # Domain competencies from the Work Allocation Order (WAO)
     DOMAIN_FROM_WAO_ENABLED: bool = Field(
-        default=True,
+        default=False,
         description="If true, derive Domain competencies per designation directly from the raw WAO "
                     "text (uncapped, exhaustive) instead of the summary-based capped list. "
                     "Behavioural/Functional competencies are unchanged. Falls back silently to the "
