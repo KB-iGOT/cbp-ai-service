@@ -21,6 +21,7 @@ from .reports import router as reports_routes
 from .approval_requests import router as approval_requests_router
 from .designation import router as designation_router
 from .designation_approval import router as designation_approval_router
+from .coverage_analysis import router as coverage_analysis_router
 
 router = APIRouter(prefix="/v1")
 
@@ -42,5 +43,6 @@ router.include_router(reports_routes)
 router.include_router(approval_requests_router)
 router.include_router(designation_router)
 router.include_router(designation_approval_router)
+router.include_router(coverage_analysis_router)
 
 router.include_router(health_routes)
