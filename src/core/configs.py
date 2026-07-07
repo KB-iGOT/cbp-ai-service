@@ -2,6 +2,7 @@ from enum import Enum
 from typing import Union
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from google.genai import types
 
 class EnvironmentOption(str, Enum):
     LOCAL = "local"
@@ -31,7 +32,7 @@ class Settings(BaseSettings):
     REDIS_PORT: int = Field(default=6379, description="Redis port")
     REDIS_DB: int = Field(default=0, description="Redis database index")
     REDIS_DESIG_EMB_PREFIX: str = Field(default="cbp_desig_emb", description="Redis key prefix for designation embeddings cache")
-    DESIGNATION_SIMILARITY_THRESHOLD: float = Field(default=0.92, description="Minimum cosine similarity score for semantic designation match")
+    DESIGNATION_SIMILARITY_THRESHOLD: float = Field(default=0.93, description="Minimum cosine similarity score for semantic designation match")
     DESIGNATION_EMBED_BATCH_SIZE: int = Field(default=100, description="Max designations per Gemini embedding API call")
 
     @property
@@ -48,6 +49,25 @@ class Settings(BaseSettings):
     GOOGLE_GENAI_USE_VERTEXAI: bool = Field(default=True, description="Flag to use Vertex AI for Gemini API calls")
     GEMINI_PRO_MODEL_NAME: str = Field(default="gemini-3.1-pro-preview", description="Gemini Pro model name for advanced tasks")
     GEMINI_FLASH_MODEL_NAME: str = Field(default="gemini-3.5-flash", description="Gemini Flash model name for high-speed tasks")
+
+    # Gemini API client retry settings
+    GEMINI_RETRY_INITIAL_DELAY: float = Field(default=1.0, description="Initial delay (seconds) before the first retry of a failed Gemini API call")
+    GEMINI_RETRY_ATTEMPTS: int = Field(default=3, description="Max number of retry attempts for a failed Gemini API call")
+    GEMINI_RETRY_EXP_BASE: float = Field(default=2.0, description="Exponential backoff base multiplier for Gemini API call retries")
+    GEMINI_RETRY_HTTP_STATUS_CODES: list[int] = Field(default=[429, 500, 502, 503, 504], description="HTTP status codes that trigger a retry for Gemini API calls")
+
+    ROLE_MAPPING_BATCH_SIZE: int = Field(default=30, description="Number of designations per batch when processing PASS 2 role mapping generation in parallel")
+
+    @property
+    def GEMINI_HTTP_OPTIONS(self) -> types.HttpOptions:
+        return types.HttpOptions(
+            retry_options=types.HttpRetryOptions(
+                initial_delay=self.GEMINI_RETRY_INITIAL_DELAY,
+                attempts=self.GEMINI_RETRY_ATTEMPTS,
+                exp_base=self.GEMINI_RETRY_EXP_BASE,
+                http_status_codes=self.GEMINI_RETRY_HTTP_STATUS_CODES,
+            )
+        )
 
     KB_BASE_URL: str
     KB_AUTH_TOKEN: str
@@ -146,9 +166,11 @@ class Settings(BaseSettings):
     
     DEFAULT_RELEVANCY_SCORE: int = 90
 
+    COURSE_RECOMMENDATION_MIN_RELEVANCY: int = 80
+
     # Domain competencies from the Work Allocation Order (WAO)
     DOMAIN_FROM_WAO_ENABLED: bool = Field(
-        default=True,
+        default=False,
         description="If true, derive Domain competencies per designation directly from the raw WAO "
                     "text (uncapped, exhaustive) instead of the summary-based capped list. "
                     "Behavioural/Functional competencies are unchanged. Falls back silently to the "
