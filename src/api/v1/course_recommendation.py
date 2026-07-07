@@ -482,17 +482,6 @@ async def process_recommendation_task(
             else:
                 org_info = str(_org_raw) if _org_raw else ""
 
-            # comp_names = ""
-            # competencies_info = getattr(meta, "competencies_v6", None)
-            # if competencies_info:
-            #     try:
-            #         comp_list = competencies_info if isinstance(competencies_info, list) else []
-            #         areas = list({e.get("competencyAreaName", "") for e in comp_list if e.get("competencyAreaName")})
-            #         if areas:
-            #             comp_names = f"Competency Areas: {', '.join(areas[:5])}"
-            #     except Exception:
-            #         pass
-
             is_own_org = "YES" if (organisation and org_info and organisation.lower() in org_info.lower()) else "NO"
 
             candidate_lines.append(
@@ -529,20 +518,20 @@ async def process_recommendation_task(
         else:
             enriched_map = {}
 
+        
+        filtered_courses = [course for course in filtered_courses if course["identifier"] in enriched_map]
+
         for course in filtered_courses:
             course["is_public"] = False
             meta = enriched_map.get(course["identifier"])
             if meta:
+                course["course"] = meta.name
                 course["competencies"] = meta.competencies_v6
                 course["duration"] = meta.duration
                 _org = meta.organisation
                 course["organisation"] = (
                     ", ".join(str(o) for o in _org if o) if isinstance(_org, list) else (_org or None)
                 )
-            else:
-                course["competencies"] = None
-                course["duration"] = None
-                course["organisation"] = None
 
         final_filtered_courses = filtered_courses + general_courses
 
