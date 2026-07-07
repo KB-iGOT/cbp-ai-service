@@ -200,10 +200,9 @@ Candidate Courses:
                 "identifier":        {"type": "STRING"},
                 "course":            {"type": "STRING"},
                 "relevancy":         {"type": "INTEGER"},
-                "competency_type":   {"type": "STRING", "description": "Domain | Behavioral | Functional"},
                 "rationale":         {"type": "STRING"},
             },
-            "required": ["identifier", "course", "relevancy", "competency_type", "rationale"],
+            "required": ["identifier", "course", "relevancy", "rationale"],
         },
     }
 
@@ -534,6 +533,11 @@ async def process_recommendation_task(
                 )
 
         final_filtered_courses = filtered_courses + general_courses
+        final_filtered_courses = [
+            course for course in final_filtered_courses
+            if course.get("relevancy", 0) >= settings.COURSE_RECOMMENDATION_MIN_RELEVANCY
+        ]
+        final_filtered_courses.sort(key=lambda course: course.get("relevancy", 0), reverse=True)
 
         # 11. Persist
         await crud_recommended_course.update_status_and_data(
@@ -546,7 +550,8 @@ async def process_recommendation_task(
 
         logger.info(
             f"Course Recommendation task completed for {recommendation_id}: "
-            f"{len(filtered_courses)} iGOT + {len(general_courses)} public courses"
+            f"{len(final_filtered_courses)} courses with relevancy >= 80 "
+            f"(from {len(filtered_courses)} iGOT + {len(general_courses)} public candidates)"
         )
 
     except Exception as e:
