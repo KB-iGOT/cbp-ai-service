@@ -35,7 +35,8 @@ os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = settings.GOOGLE_APPLICATION_CREDE
 client = genai.Client(
     project=settings.GOOGLE_PROJECT_ID,
     location=settings.GOOOGLE_PROJECT_LOCATION_GLOBAL,
-    vertexai=settings.GOOGLE_GENAI_USE_VERTEXAI
+    vertexai=settings.GOOGLE_GENAI_USE_VERTEXAI,
+    http_options=settings.GEMINI_HTTP_OPTIONS
 )
 
 async def process_role_mapping_task(
@@ -251,7 +252,7 @@ async def generate_role_and_competencies(input_data):
         #     raise Exception("No document data found for this state/center")
 
         
-        print(f"Generating role mapping for :: {input_data['designation']}")
+        logger.info(f"Generating role and competencies for designation: {input_data.get('designation')}")
         
         output_json_format = {
             "designation_name": "[Designation Name]",
@@ -301,16 +302,16 @@ async def generate_role_and_competencies(input_data):
             contents=contents,
             config=generate_content_config,
         )
-        print("ADD Designation gemini metadata usage:: ", response.usage_metadata)
+        
         text_response = response.text
         if not text_response:
-            print("Gemini response was empty or not in text format.")
+            logger.warning(f"Empty response from Gemini for designation: {input_data.get('designation')}")
             return []
         parsed_response = json.loads(text_response)
         return parsed_response
     except Exception as e:
-        print(f"Error generating role and responsibilities from Gemini: {e}")
-        raise HTTPException(status_code=500, detail=f"Gemini error: {str(e)}")
+        logger.exception(f"Background task failed for designation: {input_data.get('designation')}")
+        raise
 
 @router.post("/role-mapping/add-designation", response_model=RoleMappingWithoutCBP, status_code=status.HTTP_201_CREATED)
 async def add_designation_to_role_mapping(
@@ -327,16 +328,16 @@ async def add_designation_to_role_mapping(
         Details of the newly created role mapping with copied data
     """
     try:
-        logger.info(f"Addig new designation generation for state_center_id: {request.state_center_id}, department_id: {request.department_id}")
+        logger.info(f"Add Designation request received for user {current_user.user_id}, state_center_id {request.state_center_id}, department_id {request.department_id}, designation_name {request.designation_name}")
         
         # Get source role mapping
         role_mapping = await crud_role_mapping.get_all_mapping(db, request.state_center_id, current_user.user_id, request.department_id)
         
         if not role_mapping:
-            logger.error(f"Role mapping not found")
+            logger.warning(f"Role mapping not found for user {current_user.user_id}, state_center_id {request.state_center_id}, department_id {request.department_id}")
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="Role mapping not found"
+                detail="Role mapping not found for the specified state/center and department."
             )
         
         # 🔹 Run LLM calls in parallel (sort_order assigned atomically on insert)
@@ -411,8 +412,8 @@ async def add_designation_to_role_mapping(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error updating role mapping: {str(e)}")
+        logger.exception(f"Failed to add designation to role mapping")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to update role mapping"
+            detail="Failed to add designation to role mapping"
         )
