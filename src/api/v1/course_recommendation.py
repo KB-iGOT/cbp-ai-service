@@ -10,6 +10,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from google import genai
 from google.genai import types
 
+from ...prompts.prompts import COURSE_SELECTION_SYSTEM_PROMPT, DESIGNNATION_GROUP_SYSTEM_PROMPT, VECTOR_QUERY_SYSTEM_PROMPT
+
 from ...models.course_recommendation import RecommendationStatus
 from ...models.user import User
 from ...schemas.course_recommendation import RecommendCourseCreate, RecommendedCourseResponse
@@ -30,12 +32,15 @@ router = APIRouter(tags=["Course Recommendations"])
 os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = settings.GOOGLE_APPLICATION_CREDENTIALS
 client = genai.Client(
     project=settings.GOOGLE_PROJECT_ID,
-    location="global",
-    vertexai=True
+    location=settings.GOOOGLE_PROJECT_LOCATION_GLOBAL,
+    vertexai=settings.GOOGLE_GENAI_USE_VERTEXAI,
+    http_options=settings.GEMINI_HTTP_OPTIONS
 )
 
 embedding_client = genai.Client(
-    api_key=settings.GOOGLE_API_KEY
+    api_key=settings.GOOGLE_API_KEY,
+    vertexai=False,
+    http_options=settings.GEMINI_HTTP_OPTIONS
 )
 
 # Curse Recommendation APIs
@@ -58,138 +63,174 @@ async def get_embedding(text: str) -> list:
         
         return response.embeddings
     except Exception as e:
-        print(f"Error generating embedding for text '{text[:50]}...': {e}")
+        logger.exception(f"Error generating embedding for text '{text[:50]}...': {e}")
         return []
 
-async def generate_vector_query(query):
-    logger.info(f"Generating vector query for this profile :: {query[:50]}")
-    user_part = types.Part.from_text(text=f"""
-    You are provided with the following information:
-    {query}
+async def generate_contextual_queries(user_profile: str) -> Dict[str, Any]:
+    """
+    Generate three contextually rich search queries + a keyword list from the user profile:
+    - keyword_query     : compact phrase for keyword_embedding vector search
+    - description_query : narrative paragraph for description_embedding vector search
+    - combined_query    : multi-angle rich query for combined_embedding vector search
+    - search_keywords   : list of 10-15 domain/skill terms for Postgres keyword search
 
-    Return and generate a query based on the provided data that helps to fetch relevant courses from the vector database.""")
-    system_instruction = f"You are an expert vector query generator. Your task is to generate a query based on the provided data that helps to fetch relevant courses from the vector database."
+    All outputs are sector/domain-aware and non-generic.
+    """
+    logger.info("Generating contextual queries from user profile")
 
-    # New prompt for the LLM
-    # user_part = types.Part.from_text(text=f"""
-    # You are provided with detailed information about a professional role. Synthesize this information into a single, rich, descriptive paragraph. 
-    # This paragraph should capture the essence of the role's function, responsibilities, and required skill set. This will be used to find relevant training courses by converting it into a vector embedding.
-    
-    # Here's the user information:
-    # {query}                                                                      
-    # """)
- 
-    # system_instruction = "You are an expert at synthesizing professional role descriptions into a concise, rich profile for skills mapping and course recommendation."
-    
-    model = "gemini-3.1-pro-preview"
-    contents = [
-        types.Content(
-            role="user",
-            parts=[
-                user_part
-            ]
-        ),
-    ]
+    user_part = types.Part.from_text(text=f"Role Profile:\n{user_profile}")
+    contents = [types.Content(role="user", parts=[user_part])]
 
-    generate_content_config = types.GenerateContentConfig(
-        temperature=1,
-        top_p=1,
-        seed=0,
-        max_output_tokens=65535,
-        safety_settings=[types.SafetySetting(
-            category="HARM_CATEGORY_HATE_SPEECH",
-            threshold="OFF"
-        ), types.SafetySetting(
-            category="HARM_CATEGORY_DANGEROUS_CONTENT",
-            threshold="OFF"
-        ), types.SafetySetting(
-            category="HARM_CATEGORY_SEXUALLY_EXPLICIT",
-            threshold="OFF"
-        ), types.SafetySetting(
-            category="HARM_CATEGORY_HARASSMENT",
-            threshold="OFF"
-        )],
-        system_instruction=[types.Part.from_text(text=system_instruction)],
-        thinking_config=types.ThinkingConfig(
-            thinking_budget=-1,
-        ),
+    config = types.GenerateContentConfig(
+        temperature=0.4,
+        top_p=0.95,
+        # max_output_tokens=2048,
+        safety_settings=[
+            types.SafetySetting(category="HARM_CATEGORY_HATE_SPEECH", threshold="OFF"),
+            types.SafetySetting(category="HARM_CATEGORY_DANGEROUS_CONTENT", threshold="OFF"),
+            types.SafetySetting(category="HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold="OFF"),
+            types.SafetySetting(category="HARM_CATEGORY_HARASSMENT", threshold="OFF"),
+        ],
+        response_mime_type="application/json",
+        response_schema={
+            "type": "OBJECT",
+            "properties": {
+                "keyword_query":     {"type": "STRING"},
+                "description_query": {"type": "STRING"},
+                "combined_query":    {"type": "STRING"},
+                "search_keywords":   {"type": "ARRAY", "items": {"type": "STRING"}},
+            },
+            "required": ["keyword_query", "description_query", "combined_query", "search_keywords"],
+        },
+        system_instruction=[types.Part.from_text(text=VECTOR_QUERY_SYSTEM_PROMPT)],
     )
 
     response = await client.aio.models.generate_content(
-        model=model,
+        model=settings.GEMINI_PRO_MODEL_NAME,
         contents=contents,
-        config=generate_content_config,
+        config=config,
     )
-    logger.info(f"Vector query generated successfully.")
-    return response.text
+    logger.info("Contextual queries generated successfully")
+    if not response.text:
+        logger.error(f"LLM returned empty response for contextual queries: {response}")
+        raise Exception("generate_contextual_queries: LLM returned empty response")
+    return json.loads(response.text)
 
-async def get_filtered_courses_by_llm(query, user_profile):
-    
-    logger.info("Filtering fetched courses by LLM")
-    
-    text1 = types.Part.from_text(text=f"""
-    Analyze the following list of courses and provide a relevancy percentage for each, indicating how relevant you believe it is to the given to the given role. The role is described by the following:
-    {user_profile}
-
-    For each course, provide a 1-2 lines rationale explaining your assigned relevancy percentage. 
-
-    ## SORT
-    Sort the output in descending order of Relevancy.
-
-    ## INPUT
-    Here are the courses:
-    {query}
-    """)
-    si_text1 = f"""
-    You are an expert in analyzing professional development needs and recommending relevant training. 
-    Your task is to assess the relevancy of various courses to a specific role and learning objective within a government administration context.
-    You are responsible for the competencies of civil servants.
+async def infer_designation_group(user_profile: str) -> str:
     """
-    
-    model = "gemini-3.5-flash"
-    contents = [
-        types.Content(
-            role="user",
-            parts=[
-                text1
-            ]
-        )
-    ]
+    Ask the LLM to reason about the full role profile and classify the designation
+    into Group A/B (senior/gazetted officers) or Group C/D (supporting/clerical staff).
+    Returns 'AB' or 'CD'.
+    """
+    user_part = types.Part.from_text(text=f"Role Profile:\n{user_profile}")
 
-    generate_content_config = types.GenerateContentConfig(
+    config = types.GenerateContentConfig(
+        temperature=0,
+        max_output_tokens=256,
+        safety_settings=[
+            types.SafetySetting(category="HARM_CATEGORY_HATE_SPEECH", threshold="OFF"),
+            types.SafetySetting(category="HARM_CATEGORY_DANGEROUS_CONTENT", threshold="OFF"),
+            types.SafetySetting(category="HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold="OFF"),
+            types.SafetySetting(category="HARM_CATEGORY_HARASSMENT", threshold="OFF"),
+        ],
+        response_mime_type="application/json",
+        response_schema={
+            "type": "OBJECT",
+            "properties": {"group": {"type": "STRING", "enum": ["AB", "CD"]}},
+            "required": ["group"],
+        },
+        system_instruction=[types.Part.from_text(text=DESIGNNATION_GROUP_SYSTEM_PROMPT)],
+    )
+
+    try:
+        response = await client.aio.models.generate_content(
+            model=settings.GEMINI_FLASH_MODEL_NAME,
+            contents=[types.Content(role="user", parts=[user_part])],
+            config=config,
+        )
+        if not response.text:
+            logger.warning("Designation group LLM returned empty response, defaulting to AB")
+            return "AB"
+        result = json.loads(response.text)
+        group = result.get("group", "AB")
+        logger.info(f"LLM classified designation group as: {group}")
+        return group
+    except Exception as e:
+        logger.warning(f"Designation group inference failed, defaulting to AB: {e}")
+        return "AB"
+
+
+async def get_filtered_courses_by_llm(
+    courses_prompt: str,
+    user_profile: str,
+    organisation: str,
+    designation_group: str,
+) -> str:
+    """
+    LLM-based course selection and scoring with:
+    - Provider priority (own-org courses preferred)
+    - Domain-mix enforcement by designation group
+    - Sector-specific domain inclusion
+    - Topic/type diversity within domain courses
+    """
+    logger.info("Filtering candidate courses through LLM")
+
+    if designation_group == "AB":
+        mix_rule = "Domain: ≥50%, Behavioral: ~25%, Functional: ~25%"
+    else:
+        mix_rule = "Domain: ~40%, Behavioral: ~30%, Functional: ~30%"
+    # ({mix_rule})
+    
+
+    user_part = types.Part.from_text(text=f"""
+Role Profile:
+{user_profile}
+
+Own Organisation: {organisation or 'N/A'}
+
+Candidate Courses:
+{courses_prompt}
+""")
+
+    response_schema = {
+        "type": "ARRAY",
+        "items": {
+            "type": "OBJECT",
+            "properties": {
+                "identifier":        {"type": "STRING"},
+                "course":            {"type": "STRING"},
+                "relevancy":         {"type": "INTEGER"},
+                "competency_type":   {"type": "STRING", "description": "Domain | Behavioral | Functional"},
+                "rationale":         {"type": "STRING"},
+            },
+            "required": ["identifier", "course", "relevancy", "competency_type", "rationale"],
+        },
+    }
+
+    config = types.GenerateContentConfig(
         temperature=0,
         top_p=1,
-        seed=0,
-        max_output_tokens=65535,
-        safety_settings=[types.SafetySetting(
-            category="HARM_CATEGORY_HATE_SPEECH",
-            threshold="OFF"
-        ), types.SafetySetting(
-            category="HARM_CATEGORY_DANGEROUS_CONTENT",
-            threshold="OFF"
-        ), types.SafetySetting(
-            category="HARM_CATEGORY_SEXUALLY_EXPLICIT",
-            threshold="OFF"
-        ), types.SafetySetting(
-            category="HARM_CATEGORY_HARASSMENT",
-            threshold="OFF"
-        )],
+        # max_output_tokens=8192,
+        safety_settings=[
+            types.SafetySetting(category="HARM_CATEGORY_HATE_SPEECH", threshold="OFF"),
+            types.SafetySetting(category="HARM_CATEGORY_DANGEROUS_CONTENT", threshold="OFF"),
+            types.SafetySetting(category="HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold="OFF"),
+            types.SafetySetting(category="HARM_CATEGORY_HARASSMENT", threshold="OFF"),
+        ],
         response_mime_type="application/json",
-        response_schema={ "type":"ARRAY", "items":{ "type":"OBJECT", "properties":{ "identifier":{ "type":"STRING", "description":"The ID of the course." }, "course":{ "type":"STRING", "description":"The name of the course." }, "relevancy":{ "type":"INTEGER", "description":"A percentage indicating the relevancy of the course, from 0 to 100." }, "rationale":{ "type":"STRING", "description":"The reasoning behind the relevancy score of the course." } }, "required":[ "course", "relevancy", "rationale" ] }, "description":"A list of courses with their relevancy and rationale for a specific context." },
-        system_instruction=[types.Part.from_text(text=si_text1)],
-        thinking_config=types.ThinkingConfig(
-            include_thoughts=False,
-            thinking_budget=-1,
-        ),
+        response_schema=response_schema,
+        system_instruction=[types.Part.from_text(text=COURSE_SELECTION_SYSTEM_PROMPT)],
+        thinking_config=types.ThinkingConfig(include_thoughts=False, thinking_budget=2048),
     )
 
     response = await client.aio.models.generate_content(
-        model=model,
-        contents=contents,
-        config=generate_content_config,
+        model=settings.GEMINI_PRO_MODEL_NAME,
+        contents=[types.Content(role="user", parts=[user_part])],
+        config=config,
     )
-    
-    logger.info("Filtered courses successfully")
+    if not response.text:
+        logger.error(f"LLM filtering empty response — failed to inspect:  {response}")
+        return "[]"
     return response.text
 
 async def get_general_courses_from_gemini(user_profile) -> List[Dict[str, Any]]:
@@ -255,7 +296,7 @@ async def get_general_courses_from_gemini(user_profile) -> List[Dict[str, Any]]:
         contents = [types.Content(role="user", parts=[msg1_text1])]
 
         response = await client.aio.models.generate_content(
-            model="gemini-2.5-pro",
+            model=settings.GEMINI_PRO_MODEL_NAME,
             contents=contents,
             config=generate_content_config,
         )
@@ -283,90 +324,237 @@ async def get_general_courses_from_gemini(user_profile) -> List[Dict[str, Any]]:
         print(f"Error fetching general courses from Gemini: {e}")
         return []
 
-async def process_recommendation_task(recommendation_id: uuid.UUID, user_profile: str):
+def _build_competency_query(competencies: list) -> str:
     """
-    Background task to perform LLM calls and Vector Search.
-    Manages its own DB session.
+    Mechanically construct a query string from the user's competency JSONB list
+    using the same taxonomy format that course embeddings were built with:
+      "Type: {area} -> Theme: {theme} -> Sub-Theme: {sub_theme}"
+
+    This is zero-cost (no LLM call) and produces a query that lives in the same
+    vector space as combined_embedding, maximising retrieval of functional and
+    behavioral courses whose embeddings contain this exact taxonomy phrasing.
     """
-    logger.info(f"Background task started for recommendation_id: {recommendation_id}")
-    
+    if not competencies:
+        return ""
+    parts = []
+    for c in competencies:
+        area  = c.get("competencyAreaName") or c.get("type") or ""
+        theme = c.get("competencyThemeName") or c.get("theme") or ""
+        sub   = c.get("competencySubThemeName") or c.get("sub_theme") or ""
+        if area or theme:
+            parts.append(f"Type: {area} -> Theme: {theme} -> Sub-Theme: {sub}")
+    if not parts:
+        return ""
+    return "Training course covering the following government competencies: " + " | ".join(parts)
+
+
+async def process_recommendation_task(
+    recommendation_id: uuid.UUID,
+    user_profile: str,
+    organisation: str,
+    designation_name: str,
+    raw_competencies: list = None,
+):
+    """
+    Background task: hybrid multi-embedding vector search + LLM filtering.
+
+    Steps:
+      1. Verify record exists
+      2. Generate 3 contextual queries (keyword, description, combined)
+      3. Embed all 3 queries in parallel
+      4. Hybrid weighted search: keywords 40%, description 20%, combined 40%
+      5. Deduplicate and enrich candidates with metadata
+      6. Build enriched prompt with org/competency context
+      7. LLM selects final courses with domain-mix + provider priority rules
+      8. Enrich selected courses and persist
+    """
+    logger.info(f"Starting course recommendation background task for {recommendation_id}")
+
     try:
-        # 1. Retrieve the record to update
+        # 1. Verify record exists
         rec_record = await crud_recommended_course.get_by_id(recommendation_id)
         if not rec_record:
-            logger.error(f"Record {recommendation_id} not found in background task")
+            logger.error(f"Recommendation record not found for ID: {recommendation_id}. Aborting task.")
             return
 
-        # 2. Generate Vector Query
-        query_text = await generate_vector_query(user_profile)
+        # 2. Generate 3 contextual queries + domain search keywords (single LLM call)
+        queries = await generate_contextual_queries(user_profile)
+        keyword_query     = queries.get("keyword_query", "")
+        description_query = queries.get("description_query", "")
+        combined_query    = queries.get("combined_query", "")
+        search_keywords   = queries.get("search_keywords", [])
         
-        # 3. Generate Embedding
-        embedding_list = await get_embedding(query_text)
-        if not embedding_list:
-            raise Exception("Failed to generate embeddings")
-        embedding_values = embedding_list[0].values
+        all_queries = [{
+            "keyword_query": keyword_query,
+            "description_query": description_query,
+            "combined_query": combined_query,
+            "search_keywords": search_keywords
+        }]
 
-        # 4. Vector DB Search (Sync DB call)
-        result = await crud_recommended_course.fetch_vector_search_courses(embedding_values)
-        courses = []
-        for name, identifier, distance in result:
-            courses.append({
-                "name": name,
-                "identifier": identifier,
-                "distance": distance
-            })
+        # Mechanically built competency taxonomy query (zero-cost, no LLM call) — used to
+        # pre-filter and boost functional/behavioural courses in the candidate pool.
+        competency_query = _build_competency_query(raw_competencies or [])
 
-        # 5. Prepare LLM inputs
-        relevant_courses_prompt = [f"Course Name: {c['name']}, Course ID: {c['identifier']}" for c in courses]
-        relevant_courses_prompt = "\n".join(relevant_courses_prompt)
-        # 6. Run Concurrent LLM Tasks
-        tasks = [get_filtered_courses_by_llm(relevant_courses_prompt, user_profile), get_general_courses_from_gemini(user_profile)]
-        filtered_courses_json, general_courses = await asyncio.gather(*tasks)
-        
-        # 7. Process Results
-        filtered_courses = json.loads(filtered_courses_json)
-        
-        # 8. Enrich Data (Fetch competencies)
-        filtered_identifiers = [course['identifier'] for course in filtered_courses]
-        if filtered_identifiers:
-            identifiers_str = ", ".join(f"'{id}'" for id in filtered_identifiers)
-            competencies_result = await crud_recommended_course.fetch_course_metadata(identifiers_str)
-            competencies_map = {row.identifier: row for row in competencies_result}
+        # 3. Embed all queries in parallel
+        kw_emb_list, desc_emb_list, comb_emb_list, comp_emb_list = await asyncio.gather(
+            get_embedding(keyword_query),
+            get_embedding(description_query),
+            get_embedding(combined_query),
+            get_embedding(competency_query),
+        )
+        if not kw_emb_list or not desc_emb_list or not comb_emb_list:
+            raise Exception("Failed to generate one or more embeddings")
+
+        kw_emb   = kw_emb_list[0].values
+        desc_emb = desc_emb_list[0].values
+        comb_emb = comb_emb_list[0].values
+        comp_emb = comp_emb_list[0].values if comp_emb_list else None
+
+        # 4. Vector search + Postgres keyword search + competency-typed searches in parallel
+        vector_results, kw_results, func_results, behav_results = await asyncio.gather(
+            crud_recommended_course.fetch_hybrid_search_courses(
+                keyword_emb=kw_emb,
+                description_emb=desc_emb,
+                combined_emb=comb_emb,
+                limit=100,
+            ),
+            crud_recommended_course.fetch_keyword_search_courses(
+                keywords=search_keywords,
+                limit=40,
+            ),
+            # Pre-filtered functional courses (competencyAreaName LIKE '%functional%')
+            crud_recommended_course.fetch_competency_typed_courses(
+                combined_emb=comp_emb or comb_emb,
+                competency_type="functional",
+                limit=40,
+            ),
+            # Pre-filtered behavioral courses (competencyAreaName LIKE '%behavioural%')
+            crud_recommended_course.fetch_competency_typed_courses(
+                combined_emb=comp_emb or comb_emb,
+                competency_type="behavioural",
+                limit=40,
+            ),
+        )
+
+        # 5. Merge & deduplicate: vector score normalised to [0,1]; keyword hits get a
+        #    bonus score of 0.15 (max keyword_score=3 → normalise to 0-0.15). Functional and
+        #    behavioural hits get a flat bonus of 0.10 to ensure they surface in the final pool.
+        seen: Dict[str, Dict[str, Any]] = {}
+        for identifier, name, score in vector_results:
+            seen[identifier] = {"identifier": identifier, "name": name, "distance": float(score)}
+
+        for identifier, name, kw_score in kw_results:
+            bonus = min(float(kw_score) / 3.0, 1.0) * 0.15
+            if identifier in seen:
+                seen[identifier]["distance"] = seen[identifier]["distance"] + bonus
+            else:
+                seen[identifier] = {"identifier": identifier, "name": name, "distance": bonus}
+
+        for identifier, name, score in (func_results or []) + (behav_results or []):
+            if identifier in seen:
+                seen[identifier]["distance"] = max(seen[identifier]["distance"], float(score)) + 0.10
+            else:
+                seen[identifier] = {"identifier": identifier, "name": name, "distance": float(score) + 0.10}
+
+        all_candidates = sorted(seen.values(), key=lambda c: c["distance"], reverse=True)
+        logger.info(
+            f"Merged candidates: {len(all_candidates)} total "
+            f"({len(vector_results)} vector + {len(kw_results)} keyword + "
+            f"{len(func_results or [])} functional + {len(behav_results or [])} behavioural hits)"
+        )
+
+        # 6. Fetch enriched metadata for candidates
+        all_identifiers = [c["identifier"] for c in all_candidates]
+        if all_identifiers:
+            identifiers_str = ", ".join(f"'{id}'" for id in all_identifiers)
+            metadata_rows = await crud_recommended_course.fetch_course_metadata(identifiers_str)
+            metadata_map = {row.identifier: row for row in metadata_rows}
         else:
-            competencies_map = {}
+            metadata_map = {}
+
+        # 7. Build LLM prompt with org/competency context
+        candidate_lines = []
+        for c in all_candidates:
+            meta = metadata_map.get(c["identifier"])
+            _org_raw = getattr(meta, "organisation", None)
+            if isinstance(_org_raw, list):
+                org_info = ", ".join(str(o) for o in _org_raw if o)
+            else:
+                org_info = str(_org_raw) if _org_raw else ""
+
+            is_own_org = "YES" if (organisation and org_info and organisation.lower() in org_info.lower()) else "NO"
+
+            candidate_lines.append(
+                f"Course ID: {c['identifier']} | "
+                f"Course Name: {c['name']} | "
+                f"Course Description: {getattr(meta, 'description', None)} | "
+                f"Course Keywords: {getattr(meta, 'keywords', None)} | "
+                f"Similarity: {c['distance']:.4f} | "
+                f"Organisation: {org_info or 'N/A'} | "
+                f"Own Org: {is_own_org} | "
+                # f"{comp_names}"
+            )
+
+        courses_prompt = "\n".join(candidate_lines)
+
+        # 8. Determine designation group for mix ratios (LLM-reasoned)
+        # designation_group = await infer_designation_group(user_profile)
+        designation_group = None
+
+        # 9. LLM filtering + general courses (parallel)
+        filtered_courses_json, general_courses = await asyncio.gather(
+            get_filtered_courses_by_llm(courses_prompt, user_profile, organisation, designation_group),
+            get_general_courses_from_gemini(user_profile),
+        )
+
+        filtered_courses = json.loads(filtered_courses_json)
+
+        # 10. Enrich filtered courses with full metadata
+        filtered_identifiers = [c["identifier"] for c in filtered_courses]
+        if filtered_identifiers:
+            f_identifiers_str = ", ".join(f"'{id}'" for id in filtered_identifiers)
+            enriched_rows = await crud_recommended_course.fetch_course_metadata(f_identifiers_str)
+            enriched_map = {row.identifier: row for row in enriched_rows}
+        else:
+            enriched_map = {}
+
+        
+        filtered_courses = [course for course in filtered_courses if course["identifier"] in enriched_map]
 
         for course in filtered_courses:
             course["is_public"] = False
-            if course['identifier'] in competencies_map:
-                data = competencies_map.get(course['identifier'])
-                course['competencies'] = data.competencies_v6
-                course['duration'] = data.duration
-                course['organisation'] = data.organisation
-            else:
-                course['competencies'] = None
-                course['duration'] = None
-                course['organisation'] = None
-        
+            meta = enriched_map.get(course["identifier"])
+            if meta:
+                course["course"] = meta.name
+                course["competencies"] = meta.competencies_v6
+                course["duration"] = meta.duration
+                _org = meta.organisation
+                course["organisation"] = (
+                    ", ".join(str(o) for o in _org if o) if isinstance(_org, list) else (_org or None)
+                )
+
         final_filtered_courses = filtered_courses + general_courses
 
-        # 9. Update DB Record to COMPLETED
+        # 11. Persist
         await crud_recommended_course.update_status_and_data(
             recommendation_id,
-            query_text,
-            embedding_values,
-            courses,
+            json.dumps(all_queries, ensure_ascii=False),
+            kw_emb,
+            all_candidates,
             final_filtered_courses,
         )
-        
-        logger.info(f"Course Recommendation Background task completed successfully for {recommendation_id}")
+
+        logger.info(
+            f"Course Recommendation task completed for {recommendation_id}: "
+            f"{len(filtered_courses)} iGOT + {len(general_courses)} public courses"
+        )
 
     except Exception as e:
-        logger.exception("Course Recommmendation Background task failed for {recommendation_id}:")
-        # Update record to FAILED
+        logger.exception(f"Course Recommendation background task failed for {recommendation_id}:")
         try:
             await crud_recommended_course.update_status_to_failed(recommendation_id, str(e))
-        except Exception as db_e:
-            logger.exception("CRITICAL: Failed to update status to FAILED:")
+        except Exception:
+            logger.exception(f"Failed to update course recommendation record to FAILED for {recommendation_id}")
 
 @router.post("/course-recommendations/generate", response_model=RecommendedCourseResponse, status_code=status.HTTP_202_ACCEPTED)
 async def generate_course_recommendations(
@@ -378,20 +566,20 @@ async def generate_course_recommendations(
     """Generate Course Recommedation by role mapping ID"""
     try:
         role_mapping_id = request.role_mapping_id
-        logger.info(f"Generating course recommendations for role mapping: {role_mapping_id} by user: {current_user.user_id}")
+        logger.info(f"Generate course recommendations request received for role mapping: {role_mapping_id} by user: {current_user.user_id}")
         
         # Get role mapping
         role_mapping = await crud_role_mapping.get_by_id_and_user(db, role_mapping_id, current_user.user_id)
         if not role_mapping:
-            logger.warning(f"Role mapping with ID {role_mapping_id} not found")
+            logger.warning(f"Role mapping not found for ID: {role_mapping_id}")
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="Role mapping not found"
+                detail="Role mapping not found."
             )
         
         existing_recommendation = await crud_recommended_course.get_by_role_mapping_id(db, role_mapping_id, current_user.user_id)
         if existing_recommendation:
-            print(f"Found existing recommendation for Role mapping ID: {role_mapping_id}")
+            logger.info(f"Found existing recommendation for Role mapping ID: {role_mapping_id}")
             current_status = existing_recommendation.status
             
             if current_status == RecommendationStatus.IN_PROGRESS:
@@ -406,19 +594,23 @@ async def generate_course_recommendations(
                 )
             
             if current_status == RecommendationStatus.FAILED:
-                logger.info("Found failed records. Cleaning up to retry...")
+                logger.info("Previous recommendation failed. Deleting existing record and initiating a new recommendation.")
                 # Delete all records matching the filter to ensure a clean slate
                 await db.delete(existing_recommendation)
                 await db.commit()
         
+        competencies_json = json.dumps(role_mapping.competencies, indent=2) if role_mapping.competencies else "[]"
         user_profile = f"""
-        Ministry/State Name: {role_mapping.state_center_name}
-        Department Name: {role_mapping.department_name if role_mapping.department_name else 'N/A'}
-        Designation Name: {role_mapping.designation_name}
-        Roles & Responsibilities: {role_mapping.role_responsibilities}
-        Activities: {role_mapping.activities}
-        Competencies: {json.dumps(role_mapping.competencies, indent=2)}
-        """
+Ministry/State/Organisation: {role_mapping.state_center_name}
+Department Name: {role_mapping.department_name if role_mapping.department_name else 'N/A'}
+Sector: {role_mapping.sector_name if role_mapping.sector_name else 'N/A'}
+Designation Name: {role_mapping.designation_name}
+Wing/Division/Section: {role_mapping.wing_division_section if role_mapping.wing_division_section else 'N/A'}
+Roles & Responsibilities: {role_mapping.role_responsibilities}
+Key Activities: {role_mapping.activities}
+Competencies (with definitions):
+{competencies_json}
+"""
 
         new_recommendation = await crud_recommended_course.create(
             db,
@@ -428,20 +620,23 @@ async def generate_course_recommendations(
         )
 
         background_tasks.add_task(
-            process_recommendation_task, 
-            new_recommendation.id, 
-            user_profile
+            process_recommendation_task,
+            new_recommendation.id,
+            user_profile,
+            role_mapping.state_center_name or "",
+            role_mapping.designation_name or "",
+            role_mapping.competencies or [],
         )
 
-        logger.info(f"Initiated background generation for {new_recommendation.id}")
+        logger.info(f"Course recommendation generation initiated for role mapping: {role_mapping_id}")
         return new_recommendation
     except HTTPException:
         raise
     except Exception as e:
-        logger.exception("Error initiating course recommendation:")
+        logger.exception("Error in generate course recommendations endpoint:")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to initiating course recommendations: {str(e)}"
+            detail="Failed to generate course recommendations. Please try again later."
         )
 
 @router.get("/course-recommendations", response_model=RecommendedCourseResponse)

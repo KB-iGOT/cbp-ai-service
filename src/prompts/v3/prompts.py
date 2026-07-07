@@ -416,7 +416,7 @@ You will be provided with the following inputs:
 2.1. **Minimum Coverage Requirements**
 - **Behavioral:** MINIMUM 4, MAXIMUM 6 competencies per designation.
 - **Functional:** MINIMUM 4, MAXIMUM 6 competencies per designation.
-- **Domain:** MINIMUM 6, MAXIMUM 10 competencies per designation.
+- **Domain:** MINIMUM 8, MAXIMUM 10 competencies per designation.
 - Do not exceed these ceilings. Prioritise the most critical competencies for the designation’s actual role rather than mapping exhaustively.
 
 2.2. **Behavioral & Functional Competencies**
@@ -491,6 +491,32 @@ Selection process: For each designation, read the `theme_description` and `sub_t
 [END OF INPUT DATA]
 """
 
+# Per-designation DOMAIN-from-WAO prompt (PASS 3 in role_mapping_service). Reads the verbatim
+# WAO for ONE designation and returns every domain competency implied by its allocated work
+# (uncapped, bounded output per call). Behavioural/Functional are unchanged (still KCM-based).
+DOMAIN_FROM_WAO_PROMPT = """You are mapping DOMAIN competencies for a specific Government of India role, \
+using its Work Allocation Order (WAO) as the primary and authoritative source.
+
+The department's Work Allocation Order (WAO) is provided as the attached PDF document(s). Treat it as \
+the authoritative source and read it directly — including any scanned pages, tables and column layouts.
+
+ORGANISATION: {organization_name}
+DEPARTMENT: {department_name}
+DESIGNATION: {designation}
+WING / DIVISION / SECTION: {wing}
+
+TASK:
+- Read the WAO and locate THIS designation's allocated roles, responsibilities and activities.
+- Map EVERY distinct domain competency implied by that allocated work: each function, scheme, \
+programme, mission, statute, regulation, rule, duty and power becomes a SEPARATE domain competency.
+- Be EXHAUSTIVE. Do NOT cap, trim, summarise, or limit to a fixed number - a role with broad \
+allocations should produce many competencies. Only include competencies genuinely grounded in the \
+WAO for this role; do not invent unrelated ones.
+- Use the standardised taxonomy label: "[Theme] - [Sub-theme/Specific Area]".
+
+Output ONLY a JSON array of objects, each: {{"theme": "...", "sub_theme": "..."}}."""
+
+
 ROLE_MAPPING_PROMPT_STATE ="""
 You are an expert in Mission Karmayogi and competency role mapping (FRAC - Framework of Roles, Activities, and Competencies mapping) for Government of India officials.
 
@@ -545,7 +571,7 @@ You will be provided with the following inputs:
 2.1. **Minimum Coverage Requirements**
 - **Behavioral:** MINIMUM 4, MAXIMUM 6 competencies per designation.
 - **Functional:** MINIMUM 4, MAXIMUM 6 competencies per designation.
-- **Domain:** MINIMUM 6, MAXIMUM 10 competencies per designation.
+- **Domain:** MINIMUM 8, MAXIMUM 10 competencies per designation.
 - Do not exceed these ceilings. Prioritise the most critical competencies for the designation’s actual role rather than mapping exhaustively.
 
 2.2. **Behavioral & Functional Competencies**
