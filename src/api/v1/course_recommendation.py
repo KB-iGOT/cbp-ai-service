@@ -33,12 +33,14 @@ os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = settings.GOOGLE_APPLICATION_CREDE
 client = genai.Client(
     project=settings.GOOGLE_PROJECT_ID,
     location=settings.GOOOGLE_PROJECT_LOCATION_GLOBAL,
-    vertexai=settings.GOOGLE_GENAI_USE_VERTEXAI
+    vertexai=settings.GOOGLE_GENAI_USE_VERTEXAI,
+    http_options=settings.GEMINI_HTTP_OPTIONS
 )
 
 embedding_client = genai.Client(
     api_key=settings.GOOGLE_API_KEY,
-    vertexai=False
+    vertexai=False,
+    http_options=settings.GEMINI_HTTP_OPTIONS
 )
 
 # Curse Recommendation APIs
@@ -61,7 +63,7 @@ async def get_embedding(text: str) -> list:
         
         return response.embeddings
     except Exception as e:
-        print(f"Error generating embedding for text '{text[:50]}...': {e}")
+        logger.exception(f"Error generating embedding for text '{text[:50]}...': {e}")
         return []
 
 async def generate_contextual_queries(user_profile: str) -> Dict[str, Any]:
@@ -110,7 +112,7 @@ async def generate_contextual_queries(user_profile: str) -> Dict[str, Any]:
     )
     logger.info("Contextual queries generated successfully")
     if not response.text:
-        print(response.text)
+        logger.error(f"LLM returned empty response for contextual queries: {response}")
         raise Exception("generate_contextual_queries: LLM returned empty response")
     return json.loads(response.text)
 
@@ -171,7 +173,7 @@ async def get_filtered_courses_by_llm(
     - Sector-specific domain inclusion
     - Topic/type diversity within domain courses
     """
-    logger.info(f"Filtering courses by LLM — designation group: {designation_group}")
+    logger.info("Filtering candidate courses through LLM")
 
     if designation_group == "AB":
         mix_rule = "Domain: ≥50%, Behavioral: ~25%, Functional: ~25%"
@@ -226,8 +228,6 @@ Candidate Courses:
         contents=[types.Content(role="user", parts=[user_part])],
         config=config,
     )
-    logger.info("LLM filtering completed")
-
     if not response.text:
         logger.error(f"LLM filtering empty response — failed to inspect:  {response}")
         return "[]"
@@ -368,13 +368,13 @@ async def process_recommendation_task(
       7. LLM selects final courses with domain-mix + provider priority rules
       8. Enrich selected courses and persist
     """
-    logger.info(f"Background task started for recommendation_id: {recommendation_id}")
+    logger.info(f"Starting course recommendation background task for {recommendation_id}")
 
     try:
         # 1. Verify record exists
         rec_record = await crud_recommended_course.get_by_id(recommendation_id)
         if not rec_record:
-            logger.error(f"Record {recommendation_id} not found in background task")
+            logger.error(f"Recommendation record not found for ID: {recommendation_id}. Aborting task.")
             return
 
         # 2. Generate 3 contextual queries + domain search keywords (single LLM call)
@@ -383,7 +383,6 @@ async def process_recommendation_task(
         description_query = queries.get("description_query", "")
         combined_query    = queries.get("combined_query", "")
         search_keywords   = queries.get("search_keywords", [])
-        logger.info(f"Queries generated — keyword: {keyword_query[:60]}... | pg_keywords: {search_keywords}")
         
         all_queries = [{
             "keyword_query": keyword_query,
@@ -566,7 +565,7 @@ async def process_recommendation_task(
         try:
             await crud_recommended_course.update_status_to_failed(recommendation_id, str(e))
         except Exception:
-            logger.exception("CRITICAL: Failed to update status to FAILED:")
+            logger.exception(f"Failed to update course recommendation record to FAILED for {recommendation_id}")
 
 @router.post("/course-recommendations/generate", response_model=RecommendedCourseResponse, status_code=status.HTTP_202_ACCEPTED)
 async def generate_course_recommendations(
@@ -578,20 +577,20 @@ async def generate_course_recommendations(
     """Generate Course Recommedation by role mapping ID"""
     try:
         role_mapping_id = request.role_mapping_id
-        logger.info(f"Generating course recommendations for role mapping: {role_mapping_id} by user: {current_user.user_id}")
+        logger.info(f"Generate course recommendations request received for role mapping: {role_mapping_id} by user: {current_user.user_id}")
         
         # Get role mapping
         role_mapping = await crud_role_mapping.get_by_id_and_user(db, role_mapping_id, current_user.user_id)
         if not role_mapping:
-            logger.warning(f"Role mapping with ID {role_mapping_id} not found")
+            logger.warning(f"Role mapping not found for ID: {role_mapping_id}")
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="Role mapping not found"
+                detail="Role mapping not found."
             )
         
         existing_recommendation = await crud_recommended_course.get_by_role_mapping_id(db, role_mapping_id, current_user.user_id)
         if existing_recommendation:
-            print(f"Found existing recommendation for Role mapping ID: {role_mapping_id}")
+            logger.info(f"Found existing recommendation for Role mapping ID: {role_mapping_id}")
             current_status = existing_recommendation.status
             
             if current_status == RecommendationStatus.IN_PROGRESS:
@@ -606,7 +605,7 @@ async def generate_course_recommendations(
                 )
             
             if current_status == RecommendationStatus.FAILED:
-                logger.info("Found failed records. Cleaning up to retry...")
+                logger.info("Previous recommendation failed. Deleting existing record and initiating a new recommendation.")
                 # Delete all records matching the filter to ensure a clean slate
                 await db.delete(existing_recommendation)
                 await db.commit()
@@ -640,15 +639,15 @@ Competencies (with definitions):
             role_mapping.competencies or [],
         )
 
-        logger.info(f"Initiated background generation for {new_recommendation.id}")
+        logger.info(f"Course recommendation generation initiated for role mapping: {role_mapping_id}")
         return new_recommendation
     except HTTPException:
         raise
     except Exception as e:
-        logger.exception("Error initiating course recommendation:")
+        logger.exception("Error in generate course recommendations endpoint:")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to initiating course recommendations: {str(e)}"
+            detail="Failed to generate course recommendations. Please try again later."
         )
 
 @router.get("/course-recommendations", response_model=RecommendedCourseResponse)

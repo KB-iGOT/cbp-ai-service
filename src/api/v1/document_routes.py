@@ -34,7 +34,8 @@ def get_genai_client():
             _genai_client = genai.Client(
                 project=settings.GOOGLE_PROJECT_ID,
                 location=settings.GOOOGLE_PROJECT_LOCATION_GLOBAL,
-                vertexai=settings.GOOGLE_GENAI_USE_VERTEXAI
+                vertexai=settings.GOOGLE_GENAI_USE_VERTEXAI,
+                http_options=settings.GEMINI_HTTP_OPTIONS
             )
         except Exception as e:
             logger.error(f"Failed to init genai client: {e}")
@@ -241,6 +242,7 @@ async def _run_document_summary(document_id: uuid.UUID):
         try:
             pdf_bytes = storage_service.read_file(doc.stored_path)
         except FileNotFoundError:
+            logger.error(f"File missing in storage for document {document_id}")
             update_records = {
                 'summary_status': "FAILED",
                 'summary_error': "File missing in storage"
@@ -276,6 +278,7 @@ async def _run_document_summary(document_id: uuid.UUID):
                 contents=contents,
                 config=generate_content_config
             )
+            
             summary_text = response.text
             if not summary_text:
                 raise RuntimeError("Empty summary returned by model")
@@ -287,14 +290,14 @@ async def _run_document_summary(document_id: uuid.UUID):
             await crud_document.update(document_id, update_records)
             logger.info(f"Document summary process completed for {document_id}")
         except Exception as e:
-            logger.exception("Summary generation failed")
+            logger.exception(f"Document summary generation failed for {document_id}")
             update_records = {
                 'summary_status': "FAILED",
                 'summary_error': str(e)
             }
             await crud_document.update(document_id, update_records)
     except Exception as e:
-        logger.exception("document summary failed")
+        logger.exception(f"Document summary process failed for {document_id}")
 
 @router.post("/{file_id}/summary", response_model=SummaryTriggerResponse, status_code=status.HTTP_202_ACCEPTED)
 async def trigger_summary(
@@ -326,10 +329,10 @@ async def trigger_summary(
         background_tasks.add_task(_run_document_summary, doc.file_id)
         return SummaryTriggerResponse(file_id=doc.file_id, request_id=request_id, summary_status="IN_PROGRESS")
     except Exception as e:
-        logger.error(f"Error while triggering summary: {str(e)}")
+        logger.exception(f"Error while triggering document summary:")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to trigger summary"
+            detail="Failed to trigger document summary"
         )
 
 @router.delete("/{file_id}", response_model=DocumentDeleteResponse, status_code=status.HTTP_200_OK)
