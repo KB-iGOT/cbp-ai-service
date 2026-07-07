@@ -12,6 +12,7 @@ from ...core.configs import settings
 from ...prompts.v2.prompts import ROLE_MAPPING_PROMPT_V2, ROLE_MAPPING_PROMPT_V5_STATE
 from ...crud.document import crud_document
 from ...core.logger import logger
+from ...core import tracing
 
 with open("data/competencies.json") as f:
     COMPETENCY_MAPPING = json.load(f)
@@ -209,6 +210,29 @@ class RoleMappingService:
         return docs_content
 
     async def generate_role_mapping(
+        self,
+        user_id: uuid.UUID,
+        org_type: OrgType,
+        state_center_id: str,
+        state_center_name: str,
+        department_name: Optional[str] = None,
+        department_id: Optional[str] = None,
+        instruction: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Langfuse-traced wrapper (no-op unless enabled): groups this generation's LLM calls under
+        one trace, keyed by user_id + session_id=<state_center_id>:<department_id>."""
+        with tracing.trace(
+            name=f"role-mapping-v2: {department_name or state_center_name}",
+            user_id=str(user_id),
+            session_id=f"{user_id}:{state_center_id}:{department_id or '-'}",
+            tags=[getattr(org_type, 'value', str(org_type)), "role-mapping", "v2"],
+            state_center_id=state_center_id, department_id=department_id):
+            return await self._generate_role_mapping_impl(
+                user_id=user_id, org_type=org_type, state_center_id=state_center_id,
+                state_center_name=state_center_name, department_name=department_name,
+                department_id=department_id, instruction=instruction)
+
+    async def _generate_role_mapping_impl(
         self,
         user_id: uuid.UUID,
         org_type: OrgType,

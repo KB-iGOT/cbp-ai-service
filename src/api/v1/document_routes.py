@@ -10,6 +10,7 @@ from ...models.document import Document
 from ...models.user import User
 
 from ...core.configs import settings
+from ...core import tracing
 from ...api.dependencies import get_current_active_user
 from ...core.database import get_db_session
 
@@ -230,6 +231,10 @@ async def _run_document_summary(document_id: uuid.UUID):
         if not doc:
             logger.warning(f"Document {document_id} disappeared before processing")
             return
+        tracing.set_identity(
+            user_id=getattr(doc, "uploader_id", None),
+            session_id=f"{getattr(doc, 'uploader_id', '-')}:{getattr(doc, 'state_center_id', '-')}:{getattr(doc, 'department_id', None) or '-'}",
+            tags=["pdf-summary"])
         if doc.summary_status in ("COMPLETED", "IN_PROGRESS"):
             logger.info(f"Skipping summary generation for {document_id}, status={doc.summary_status}")
             return
