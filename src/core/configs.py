@@ -166,6 +166,8 @@ class Settings(BaseSettings):
     
     DEFAULT_RELEVANCY_SCORE: int = 90
 
+    COURSE_RECOMMENDATION_MIN_RELEVANCY: int = 80
+
     # Domain competencies from the Work Allocation Order (WAO)
     DOMAIN_FROM_WAO_ENABLED: bool = Field(
         default=False,
