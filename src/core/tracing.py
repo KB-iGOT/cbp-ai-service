@@ -251,10 +251,16 @@ def record_gemini_usage(response: Any, *, output: Any = None) -> None:
             def g(attr):
                 v = getattr(um, attr, None)
                 return int(v) if isinstance(v, int) else 0
+            candidates = g("candidates_token_count")
+            thoughts = g("thoughts_token_count")
+            # Gemini bills thinking/thoughts tokens at the OUTPUT rate, so they must be
+            # included in "output" for Langfuse to cost them (a custom "thinking" key is
+            # NOT priced by the model rate table). We keep "thinking" too, purely for
+            # visibility — Langfuse prices only input/output, so it is not double-counted.
             usage = {
                 "input": g("prompt_token_count"),
-                "output": g("candidates_token_count"),
-                "thinking": g("thoughts_token_count"),
+                "output": candidates + thoughts,
+                "thinking": thoughts,
                 "cached": g("cached_content_token_count"),
                 "total": g("total_token_count"),
             }
