@@ -131,58 +131,52 @@ class RoleMappingService:
         Returns:
             Dict containing extracted designations with metadata
         """
-        try:
-            logger.info(f"PASS 1: Extracting designations for {organization_data.get('organization_name')}")
-                    
-            contents = [
-                types.Content(
-                    role="user",
-                    parts=[types.Part.from_text(
-                        text="""
-                        Here is the input Data:
-                        Ministry/State Name: {ORGANIZATION_NAME}
-                        Department/Organisation Name: {DEPARTMENT_NAME}
+        logger.info(f"PASS 1: Extracting designations for {organization_data.get('organization_name')}")
+                
+        contents = [
+            types.Content(
+                role="user",
+                parts=[types.Part.from_text(
+                    text="""
+                    Here is the input Data:
+                    Ministry/State Name: {ORGANIZATION_NAME}
+                    Department/Organisation Name: {DEPARTMENT_NAME}
 
-                        Primary reference document Summaries:
-                        {DOCUMENT_SUMMARIES}
+                    Primary reference document Summaries:
+                    {DOCUMENT_SUMMARIES}
 
-                        Extract ALL unique designations from the provided input data and organize them hierarchically based on the system prompt.
-                        """.format(
-                                ORGANIZATION_NAME=organization_data.get('organization_name'),
-                                DEPARTMENT_NAME=organization_data.get('department_name'),
-                                DOCUMENT_SUMMARIES=organization_data.get('docs_summary', 'N/A')
-                            )
-                    )]
-                )
-            ]
-            
-            generate_content_config = types.GenerateContentConfig(
-                system_instruction=DESIGNATION_EXTRACTION_PROMPT,
-                temperature=0.1,   # Very low — factual extraction, no creativity
-                top_p=0.85, # Restrict to high-probability tokens
-                response_mime_type="application/json",
-                response_schema=DesignationExtractionResponse.model_json_schema()
+                    Extract ALL unique designations from the provided input data and organize them hierarchically based on the system prompt.
+                    """.format(
+                            ORGANIZATION_NAME=organization_data.get('organization_name'),
+                            DEPARTMENT_NAME=organization_data.get('department_name'),
+                            DOCUMENT_SUMMARIES=organization_data.get('docs_summary', 'N/A')
+                        )
+                )]
             )
-            
-            response = await self.client.aio.models.generate_content(
-                model=settings.GEMINI_FLASH_MODEL_NAME,
-                contents=contents,
-                config=generate_content_config,
-            )
-            
-            text_response = response.text
-            if not text_response:
-                logger.error("Empty response from Gemini during designation extraction")
-                raise Exception("Empty response from Gemini during designation extraction")
-            
-            extraction_response = DesignationExtractionResponse.model_validate_json(text_response)
-            return {
-                "designations": [d.model_dump() for d in extraction_response.designations]
-            }
-            
-        except Exception as e:
-            logger.exception("Designation extraction failed")  
-            raise Exception(f"Designation extraction failed: {str(e)}") from e
+        ]
+        
+        generate_content_config = types.GenerateContentConfig(
+            system_instruction=DESIGNATION_EXTRACTION_PROMPT,
+            temperature=0.1,   # Very low — factual extraction, no creativity
+            top_p=0.85, # Restrict to high-probability tokens
+            response_mime_type="application/json",
+            response_schema=DesignationExtractionResponse.model_json_schema()
+        )
+        
+        response = await self.client.aio.models.generate_content(
+            model=settings.GEMINI_FLASH_MODEL_NAME,
+            contents=contents,
+            config=generate_content_config,
+        )
+        
+        text_response = response.text
+        if not text_response:
+            raise Exception(f"Empty response from Gemini during designation extraction: {response}") 
+        
+        extraction_response = DesignationExtractionResponse.model_validate_json(text_response)
+        return {
+            "designations": [d.model_dump() for d in extraction_response.designations]
+        }
     
     async def _generate_frac_for_batch(
         self,
@@ -546,8 +540,7 @@ class RoleMappingService:
 
             designations = extraction_result.get('designations', [])
             if not designations:
-                logger.warning("PASS 1: No designations extracted; aborting role mapping generation")
-                return []
+                raise Exception("No designations extracted in PASS 1; cannot proceed to PASS 2")
             
             logger.info(f"PASS 1 SUCCESS: {len(designations)} designations extracted")
 
@@ -605,7 +598,6 @@ class RoleMappingService:
 
             return frac_mappings
         except Exception as e:
-            logger.exception("Error in two-pass role mapping generation")
             raise
 
 # Create a singleton instance

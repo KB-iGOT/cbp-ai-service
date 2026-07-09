@@ -172,6 +172,46 @@ class matchedDesignationsRequest(BaseModel):
     department_id: Optional[str] = Field(None, description="Optional department ID to narrow the scope")
 
 
+class RoleMappingReorderListItem(BaseModel):
+    """Lightweight schema for the reorder list view"""
+    id: uuid.UUID = Field(..., description="Role mapping ID")
+    designation_name: str = Field(..., description="Name of the designation")
+    wing_division_section: str = Field(..., description="Wing/Division/Section name")
+    sort_order: Optional[int] = Field(None, description="Sort order for hierarchical arrangement")
+
+    class Config:
+        from_attributes = True
+
+
+class RoleMappingSearchFilters(BaseModel):
+    """Nested filters for role mapping search"""
+    state_center_id: str = Field(None, description="ID of the associated state/center")
+    department_id: Optional[str] = Field(None, description="ID of the associated department")
+
+
+class RoleMappingSearchRequest(BaseModel):
+    """Schema for role mapping search request"""
+    query: Optional[str] = Field(None, description="Search by designation name")
+    limit: int = Field(20, ge=1, le=100, description="Number of records to return")
+    offset: int = Field(0, ge=0, description="Number of records to skip")
+    load_cbp_plans: bool = Field(False, description="Include CBP plans in the response")
+    filters: Optional[RoleMappingSearchFilters] = Field(None, description="Additional filters")
+    sort_by: Optional[Dict[str, str]] = Field(
+        None,
+        description="Sort field and direction, e.g. {\"createdOn\": \"desc\"}. "
+                    "Defaults to sort_order ascending. Supported fields: "
+                    "createdOn, updatedOn, designationName, sortOrder."
+    )
+
+
+class RoleMappingSearchResponse(BaseModel):
+    """Response schema for role mapping search"""
+    total: int = Field(..., description="Total number of role mappings matching the query/filters")
+    total_matched: int = Field(..., description="Total designations matched with an iGOT designation (igot_designation_id populated)")
+    total_unmatched: int = Field(..., description="Total designations not yet matched with an iGOT designation")
+    data: List[RoleMappingResponse] = Field(default_factory=list, description="Page of matching role mappings")
+
+
 class DesignationmatchedResult(BaseModel):
     """Response schema for designation matched result"""
     total_designations: int = Field(..., description="Total unique designations from role mappings")
