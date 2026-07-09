@@ -183,10 +183,28 @@ class RoleMappingReorderListItem(BaseModel):
         from_attributes = True
 
 
+class MatchStatus(str, Enum):
+    matched = "matched"
+    unmatched = "unmatched"
+
+
 class RoleMappingSearchFilters(BaseModel):
     """Nested filters for role mapping search"""
     state_center_id: str = Field(None, description="ID of the associated state/center")
     department_id: Optional[str] = Field(None, description="ID of the associated department")
+    match_status: Optional[MatchStatus] = Field(
+        None,
+        description="Filter data by iGOT match status: 'matched' or 'unmatched'. "
+                    "Omit to return both. Does not affect total/total_matched/total_unmatched counts."
+    )
+
+    @model_validator(mode='before')
+    @classmethod
+    def blank_match_status_to_none(cls, data):
+        """Treat an empty string match_status (e.g. '') as omitted."""
+        if isinstance(data, dict) and data.get('match_status') == '':
+            data['match_status'] = None
+        return data
 
 
 class RoleMappingSearchRequest(BaseModel):
