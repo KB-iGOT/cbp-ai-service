@@ -547,6 +547,9 @@ async def search_role_mappings(
 
     - `query`: optional substring search on designation_name
     - `filters.state_center_id` / `filters.department_id`: optional scoping filters
+    - `filters.match_status`: "matched" or "unmatched" to filter `data` by iGOT
+      match status. Omit to return both. Never affects the total/total_matched/
+      total_unmatched counts — those always reflect the full filtered set.
     - `load_cbp_plans`: whether to include CBP plan data in the response
     - `sort_by`: e.g. {"createdOn": "desc"}. Defaults to sort_order ascending.
       Supported fields: createdOn, updatedOn, designationName, sortOrder.
@@ -557,7 +560,8 @@ async def search_role_mappings(
         filters = request.filters or RoleMappingSearchFilters()
         logger.info(
             f"Searching role mappings for user {current_user.user_id}, "
-            f"query={request.query!r}, state_center_id={filters.state_center_id}, department_id={filters.department_id}"
+            f"query={request.query!r}, state_center_id={filters.state_center_id}, department_id={filters.department_id}, "
+            f"match_status={filters.match_status}"
         )
 
         role_mappings, total, total_matched, total_unmatched = await crud_role_mapping.search(
@@ -569,7 +573,8 @@ async def search_role_mappings(
             limit=request.limit,
             offset=request.offset,
             load_cbp_plans=request.load_cbp_plans,
-            sort_by=request.sort_by
+            sort_by=request.sort_by,
+            match_status=filters.match_status.value if filters.match_status else None
         )
 
         return RoleMappingSearchResponse(

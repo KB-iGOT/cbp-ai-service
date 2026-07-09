@@ -174,7 +174,8 @@ class CRUDRoleMapping:
         limit: int = 20,
         offset: int = 0,
         load_cbp_plans: bool = False,
-        sort_by: Optional[dict] = None
+        sort_by: Optional[dict] = None,
+        match_status: Optional[str] = None
     ):
         """
         Search COMPLETED role mappings for the current user by designation name,
@@ -183,9 +184,14 @@ class CRUDRoleMapping:
         sort_by: e.g. {"createdOn": "desc"}. Falls back to sort_order ascending
         when omitted or the field isn't in SORTABLE_FIELDS.
 
+        match_status: "matched" | "unmatched" | None. Filters only the returned
+        page of `data` — the total/total_matched/total_unmatched counts always
+        reflect the full filtered set regardless of this filter, so tab badges
+        stay stable when switching tabs.
+
         Returns a tuple of (rows, total, total_matched, total_unmatched) where
         total/total_matched/total_unmatched are computed over the entire filtered
-        result set (independent of limit/offset).
+        result set (independent of limit/offset/match_status).
         """
         conditions = [
             RoleMapping.user_id == user_id,
@@ -201,7 +207,8 @@ class CRUDRoleMapping:
         if query:
             conditions.append(RoleMapping.designation_name.ilike(f"%{query}%"))
 
-        # Aggregate counts over the entire filtered set (not just the current page)
+        # Aggregate counts over the entire filtered set (not just the current page,
+        # and NOT affected by match_status — counts must stay stable across tabs)
         count_stmt = select(
             func.count(RoleMapping.id),
             func.count(RoleMapping.id).filter(RoleMapping.igot_designation_id.isnot(None)),
@@ -209,6 +216,12 @@ class CRUDRoleMapping:
         ).where(and_(*conditions))
         count_result = await db.execute(count_stmt)
         total, total_matched, total_unmatched = count_result.one()
+
+        page_conditions = list(conditions)
+        if match_status == "matched":
+            page_conditions.append(RoleMapping.igot_designation_id.isnot(None))
+        elif match_status == "unmatched":
+            page_conditions.append(RoleMapping.igot_designation_id.is_(None))
 
         order_column = RoleMapping.sort_order
         order_direction = asc
@@ -220,7 +233,7 @@ class CRUDRoleMapping:
 
         stmt = (
             select(RoleMapping)
-            .where(and_(*conditions))
+            .where(and_(*page_conditions))
             .order_by(order_direction(order_column))
             .limit(limit)
             .offset(offset)
