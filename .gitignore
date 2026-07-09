@@ -212,3 +212,10 @@ __marimo__/
 curl
 
 .vscode/
+
+*.csv
+
+scripts/
+
+
+.claude/

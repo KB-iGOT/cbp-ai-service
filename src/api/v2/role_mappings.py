@@ -16,6 +16,7 @@ from ...models.user import User
 from ...prompts.v2.prompts import DESIGNATION_ROLE_MAPPING_PROMPT
 from ...schemas.role_mapping import AddDesignationToRoleMappingRequest, OrgType, RoleMappingBackgroundResponse, RoleMappingResponse, RoleMappingUpdate, RoleMappingWithoutCBP
 from ...services.v2.role_mapping_service import role_mapping_service
+from ...services.v3.role_mapping_service import role_mapping_service as role_mapping_service_v3
 
 from ...core.database import get_db_session
 from ...core.logger import logger
@@ -33,8 +34,9 @@ with open("data/competencies.json") as f:
 os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = settings.GOOGLE_APPLICATION_CREDENTIALS
 client = genai.Client(
     project=settings.GOOGLE_PROJECT_ID,
-    location="us-central1",
-    vertexai=True
+    location=settings.GOOOGLE_PROJECT_LOCATION_GLOBAL,
+    vertexai=settings.GOOGLE_GENAI_USE_VERTEXAI,
+    http_options=settings.GEMINI_HTTP_OPTIONS
 )
 
 async def process_role_mapping_task(
@@ -250,7 +252,7 @@ async def generate_role_and_competencies(input_data):
         #     raise Exception("No document data found for this state/center")
 
         
-        print(f"Generating role mapping for :: {input_data['designation']}")
+        logger.info(f"Generating role and competencies for designation: {input_data.get('designation')}")
         
         output_json_format = {
             "designation_name": "[Designation Name]",
@@ -296,20 +298,20 @@ async def generate_role_and_competencies(input_data):
         ]
 
         response = await client.aio.models.generate_content(
-            model="gemini-2.5-pro",
+            model=settings.GEMINI_PRO_MODEL_NAME,
             contents=contents,
             config=generate_content_config,
         )
-        print("ADD Designation gemini metadata usage:: ", response.usage_metadata)
+        
         text_response = response.text
         if not text_response:
-            print("Gemini response was empty or not in text format.")
+            logger.warning(f"Empty response from Gemini for designation: {input_data.get('designation')}")
             return []
         parsed_response = json.loads(text_response)
         return parsed_response
     except Exception as e:
-        print(f"Error generating role and responsibilities from Gemini: {e}")
-        raise HTTPException(status_code=500, detail=f"Gemini error: {str(e)}")
+        logger.exception(f"Background task failed for designation: {input_data.get('designation')}")
+        raise
 
 @router.post("/role-mapping/add-designation", response_model=RoleMappingWithoutCBP, status_code=status.HTTP_201_CREATED)
 async def add_designation_to_role_mapping(
@@ -326,16 +328,16 @@ async def add_designation_to_role_mapping(
         Details of the newly created role mapping with copied data
     """
     try:
-        logger.info(f"Addig new designation generation for state_center_id: {request.state_center_id}, department_id: {request.department_id}")
+        logger.info(f"Add Designation request received for user {current_user.user_id}, state_center_id {request.state_center_id}, department_id {request.department_id}, designation_name {request.designation_name}")
         
         # Get source role mapping
         role_mapping = await crud_role_mapping.get_all_mapping(db, request.state_center_id, current_user.user_id, request.department_id)
         
         if not role_mapping:
-            logger.error(f"Role mapping not found")
+            logger.warning(f"Role mapping not found for user {current_user.user_id}, state_center_id {request.state_center_id}, department_id {request.department_id}")
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="Role mapping not found"
+                detail="Role mapping not found for the specified state/center and department."
             )
         
         # 🔹 Run LLM calls in parallel (sort_order assigned atomically on insert)
@@ -367,6 +369,38 @@ async def add_designation_to_role_mapping(
             "instruction": request.instruction if request.instruction else "N/A"
         }) for name in designation_names]
         designations_to_insert = await asyncio.gather(*tasks)
+
+        # Derive Domain competencies for the manually-added designation(s) from the raw WAO —
+        # the SAME PASS 3 logic as bulk generation (reuses the WAO PDF + context cache + min floor).
+        # Only the Domain slice is replaced; Behavioural/Functional are untouched. Fully guarded:
+        # a missing/unreadable WAO or any error keeps the summary-based domain, so neither the flow
+        # nor the response contract is affected.
+        if settings.DOMAIN_FROM_WAO_ENABLED and designations_to_insert:
+            try:
+                pdf_parts = await role_mapping_service_v3._get_wao_pdf_parts(
+                    current_user.user_id, request.state_center_id, request.department_id,
+                    document_type="Work Allocation Order")
+                if pdf_parts:
+                    cache_name = (await role_mapping_service_v3._create_wao_cache(pdf_parts)
+                                  if len(designations_to_insert) > 1 else None)
+                    try:
+                        wrapped = [{"designation_name": m.designation_name,
+                                    "wing_division_section": m.wing_division_section,
+                                    "competencies": m.competencies or []}
+                                   for m in designations_to_insert]
+                        await role_mapping_service_v3._apply_wao_domain(
+                            wrapped,
+                            {"organization_name": request.state_center_name,
+                             "department_name": request.department_name},
+                            pdf_parts, cache_name)
+                        for m, w in zip(designations_to_insert, wrapped):
+                            m.competencies = w["competencies"]
+                    finally:
+                        if cache_name:
+                            await role_mapping_service_v3._delete_wao_cache(cache_name)
+            except Exception as e:
+                logger.warning(f"WAO domain enrichment skipped for add-designation: {e}; keeping summary-based domain")
+
         # Assign sort_order atomically to prevent duplicates under parallel calls
         new_mapping = await crud_role_mapping.create_with_next_sort_order(
             designations_to_insert,
@@ -378,8 +412,8 @@ async def add_designation_to_role_mapping(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error updating role mapping: {str(e)}")
+        logger.exception(f"Failed to add designation to role mapping")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to update role mapping"
+            detail="Failed to add designation to role mapping"
         )

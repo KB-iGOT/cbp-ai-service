@@ -578,20 +578,21 @@ Generate a structured output:
 1. **Objectives & Alignment**
    - Summarize objectives of the plan/order/document.
    - Explain its alignment with Mission Karmayogi, competency-driven governance, or overall administrative reform.
-   - Explain detailed summary of mission/schemes and programs and all
+   - Explain a detailed summary of all missions, schemes, and programs mentioned in the document.
 
 2. **Roles & Activities of Designations**
-   - Summarize the roles, activities, and responsibilities of each designation mentioned in the document.
+   - Provide a comprehensive and detailed summary of the roles, activities, and responsibilities of each **formally listed** designation in the document.
+   - Do not provide a brief or condensed summary
 
 3. **Organizational Structure**
    - Provide an overview of wings, divisions, sections, or departments.
    - Describe their purpose and contribution in the larger organizational framework.
 
-4. **Designation Groups to be Covered**
+4. **Designation Groups Reference** *(for classification guidance only — do not fabricate entries; only classify designations that are formally listed in the document)*
    - Leadership Level (Secretary, Additional Secretary, etc.)
    - Senior Level (Joint Secretary, Director, etc.)
    - Middle Level (Deputy Secretary, Under Secretary, etc.)
-   - Supervisory Level (Section Officer, Assistant Section Officer, ANMs, Anganwadi Supervisors etc.)
+   - Supervisory Level (Section Officer, Assistant Section Officer, ANMs, Anganwadi Supervisors, etc.)
    - Support Staff Level (Secretariat Assistants, Private Secretary, PA, Stenographers, MTS, clerical posts, Anganwadi Workers, ASHAs)
 
 5. **Programs, Schemes, Missions, Policies Details to be Covered**
@@ -616,18 +617,72 @@ Generate a structured output:
    - Present the output as a **structured table** with the following columns:
      | S.No | Designation (Full Name) | Wing / Division / Section |
    - Provide all designations in full, without truncation.
-   - If the document mentions designations with wings/divisions/sections, capture them separately 
+   - ⚠️ **VERBATIM COPY RULE (HIGHEST PRIORITY):** Both the Designation name and the Wing/Division/Section value MUST be copied **character-for-character exactly as they appear in the document**. Do NOT paraphrase, rename, expand, translate, or substitute any part of a designation title or wing name with similar-sounding words from your general knowledge.
+     - If the document heading says **"Joint Director (Planning & Training)"** → Designation = "Joint Director", Wing = "Planning & Training". NEVER write "Decentralized Planning & Convergence" or "Capacity Building & Training" or any other variant.
+     - If the document heading says **"Joint Director (ICDS & Nutrition)"** → Wing = "ICDS & Nutrition". Not "Nutrition & Child Development" or any other variant.
+     - If the document heading says **"Joint Director (Administration/Establishment)"** → Wing = "Administration/Establishment". Preserve the slash exactly.
+     - The rule is: **if you cannot find the exact text in the document, do not write it.**
+   - **STRICT RULES for what counts as a designation — apply a two-step gate before including any entry:**
+
+     **STEP 1 — Source check (must pass ALL of the following):**
+     - The designation must appear in a **structured source**: an official table, staffing chart, organogram, work allocation order roster, or a dedicated designation list/appendix.
+     - It must appear as a **row item or column header** in that structure — not as a word inside a sentence.
+     - Ask yourself: *"Is this designation sitting in a table/list cell, or is it embedded inside a sentence?"* If embedded in a sentence → REJECT.
+
+     **STEP 2 — Content check (must pass ALL of the following):**
+     - It must be a **job title / post name**, not a person's name, not a programme name, not an organisational unit name.
+     - Do **NOT** include proper names of individuals (e.g., "Shri Rajesh Kumar", "Dr. Meena Singh"). If a name appears alongside a designation (e.g., "Shri Rajesh Kumar, Joint Secretary"), extract only "Joint Secretary" — discard the person's name entirely.
+     - Do **NOT** treat job descriptions, role explanations, or activity summaries as designations.
+
+     **Hard REJECT list — these contexts NEVER qualify, regardless of source:**
+     - Any designation found only inside a paragraph, bullet point, or sentence (e.g., "The Secretary will oversee…", "coordinated by the Director…", "under the guidance of the Joint Secretary…").
+     - Designations inferred from context (e.g., "the nodal officer", "the concerned authority", "the reviewing officer") without an explicit post name in a formal list.
+     - Role references used as pronouns or shorthand in explanatory text.
+     - **Reporting-relationship lists** — bullet lists or notes that say "the following officials shall report to [X]" or "[X] reports to [Y]" — these describe hierarchy, NOT formal designation listings. Even if a job title appears in such a list alongside a person's name (e.g., "• Shri Omveer, Manager - Cloud Operations and Infrastructure"), **REJECT the designation entirely** — it is mentioned only in a reporting/accountability context, not as a formally listed post.
+     - Any bullet list introduced by phrases like "shall report to", "reports to", "is accountable to", "under the supervision of", "the following officials", or similar reporting-hierarchy language — every designation in that list must be rejected.
+     - **"Copy to" / distribution lists** — any section labelled "Copy to:", "Copies to:", "Forwarded to:", or similar distribution routing at the end of a letter or office order. Designations listed here (e.g., "CEO", "Joint Secretary (Training)", "Deputy Secretary (iGOT)") are document recipients only, NOT formally listed posts. Reject every designation appearing in a distribution list.
+     - **Signature blocks** — the designation printed below the signature of the issuing authority (e.g., "Additional Chief Executive Officer, Karmayogi Bharat SPV" appearing under a signature). This identifies the signatory, not a formally listed post. Reject it entirely.
+     - **Approval/issuance lines** — sentences of the form "This is issued with the approval of [Designation]" or "Issued by [Designation]" — these reference the approving authority, not a formally listed post.
+     - **Coordination/routing references** — sentences stating that certain verticals "shall continue to report through [Designation]" or "are routed through [Designation]" for coordination purposes. The designation named in such routing instructions is a coordination channel, not a formally listed post.
+
+     **Calibration examples:**
+     - ✅ INCLUDE: A table row that reads `| Under Secretary | CS-II |` in a Work Allocation Order staffing chart.
+     - ✅ INCLUDE: An organogram box that contains "Director (Finance)".
+     - ✅ INCLUDE: A section header "A. Chief Operating Officer (COO)" in an Office Order that allocates work to that post — the section header itself constitutes a formal listing of the post.
+     - ❌ REJECT: A sentence reading "The Under Secretary shall coordinate with field offices."
+     - ❌ REJECT: A paragraph mentioning "as directed by the Joint Secretary" — this is narrative reference, not a formal listing.
+     - ❌ REJECT: A competency section that says "Directors need leadership skills" — not a formal designation listing.
+     - ❌ REJECT: A note reading "The following officials shall report to the Chief Product Officer: • Shri Omveer, Manager - Cloud Operations and Infrastructure • Shri Abhishek Ranjan, Manager - Data Analytics & MIS" — this is a reporting-relationship list, not a formal designation listing. Reject ALL designations appearing in it.
+     - ❌ REJECT: Any bullet point of the form "Shri [Name], [Job Title]" or "[Job Title], post his joining" found under a reporting-hierarchy note — these are person-to-role assignments, not formal post listings.
+     - ❌ REJECT: "Copy to: 1. CEO, Karmayogi Bharat SPV 2. Joint Secretary (Training), DoPT 3. Deputy Secretary (iGOT), DoPT" — every entry here is a distribution recipient, not a formally listed designation.
+     - ❌ REJECT: "Additional Chief Executive Officer, Karmayogi Bharat SPV" appearing below a signature — this is the signatory's title, not a formally listed post.
+     - ❌ REJECT: "This is issued with the approval of the Chief Executive Officer" — approval-line reference only.
+     - ❌ REJECT: "verticals shall continue to report through the Additional Chief Executive Officer" — coordination routing reference, not a formal post listing.
+   - If the document mentions designations with wings/divisions/sections, capture them separately
       For example, if the document mentions "Under Secretary (CS-II)" and "Under Secretary (EHRMS)", capture them as separate designations with their respective wings/divisions/sections
       they should appear as two distinct rows:
       | 1 | Under Secretary | CS-II |
       | 2 | Under Secretary | EHRMS |
-   - If there are dedicated sections/divisions/wings tables for specific designations, capture them separately. For example, if there is a divisions table for "Director" (Ex Divisions "CS-II", "EO", etc), capture them as separate designations with their respective wings/divisions/sections (Ex : "Director CS-II", "Director EO")
-       For example:
+   - If there are dedicated sections/divisions/wings tables for specific designations, capture them separately. For example, if there is a divisions table for "Director" with divisions "CS-II", "EO", etc., capture each as a separate row:
        | 1 | Director | CS-II |
        | 2 | Director | EO |
+   - **Multiple Wings/Divisions/Sections per designation — split into separate rows:** If a designation is associated with multiple Wings/Divisions/Sections (whether listed in a table, a "Command/Posting" field, or similar), create a **separate row for each Wing/Division/Section**. For example, if "Commandant" is posted to "Battalion Headquarters", "Air Wing", "Water Wing Units", and "Specialized Base Hospitals", produce four rows:
+       | N | Commandant | Battalion Headquarters |
+       | N | Commandant | Air Wing |
+       | N | Commandant | Water Wing Units |
+       | N | Commandant | Specialized Base Hospitals |
+   - **Compound designation splitting rule:** If a single entry lists two or more job titles joined by " / " or " and " (e.g., "Deputy Directors / Assistant Directors", "Accounts Officer / Finance Officer"), treat each as a **separate designation** and list each one as its own row with the same Wing/Division/Section value. Do NOT keep the combined string as a single designation.
+     For example, "Deputy Directors / Assistant Directors" → two rows:
+     | N | Deputy Directors | N/A |
+     | N | Assistant Directors | N/A |
+     And "Accounts Officer / Finance Officer" → two rows:
+     | N | Accounts Officer | N/A |
+     | N | Finance Officer | N/A |
+   - **Wing/Division/Section fidelity rule for parenthetical designations:** When a designation heading includes a parenthetical suffix identifying the wing (e.g., "Joint Director (ICDS & Nutrition)", "Joint Director (Child Protection)", "Joint Director (Women Empowerment)"), extract the base title ("Joint Director") as the Designation and the parenthetical content ("ICDS & Nutrition", "Child Protection", "Women Empowerment") as the Wing/Division/Section. Use **only** the actual parenthetical text from the document — do NOT substitute, invent, or replace it with content from a different department or context.
    - Ensure uniqueness (no duplicates).
-   - If a designation has no associated Wing/Division/Section, leave that column as "N/A".
+   - If a designation has no associated Wing/Division/Section **explicitly stated in the document**, leave that column as **"N/A"**. ⚠️ **CRITICAL ANTI-HALLUCINATION RULE**: Do NOT infer or derive the Wing/Division/Section from the designation title itself (e.g., do NOT write "Finance" for "Chief Financial Officer", "Technology" for "Chief Technology Officer", "Human Resources" for "Chief Human Resources Officer"). Only populate this column with text that physically appears in the document as a wing/division/section label. If no such label exists in the document, the value MUST be "N/A".
    - Sort the table logically by Designation name, then by Wing/Division/Section.
+   - If no formally listed designations are found anywhere in the document, output: `No formal designation list found in the document.`
 
 2. **List of Wings / Divisions / Sections**
    - Capture names, structure, and detailed responsibilities.
@@ -647,14 +702,26 @@ Generate a structured output:
    - Map each course to designations/roles/sectors.
    - Specify level (L1/L2/L3) and delivery mode (online/offline/blended), if mentioned.
 
-**Part C: Mapping Table (if sufficient data available)**
-Create a structured mapping of Designation ↔ Roles & Responsibilities ↔ Competencies ↔ Training Courses.
+**Part C: Mapping Table (MANDATORY — include ALL designations from Part B)**
+⚠️ **CRITICAL COVERAGE RULE: The number of rows in Part C MUST exactly equal the number of designations listed in Part B. If Part B has 157 designations, Part C MUST have 157 rows — one per designation, no exceptions, no omissions, no truncation.**
+
+- Use **only** designations from the Part B designation table — do not introduce any new designations here.
+- For **every** designation in Part B, produce one row in this mapping table:
+
+| S.No | Designation | Wing / Division / Section | Roles & Responsibilities | Competencies (Domain / Functional / Behavioural) | Training Courses (if available) |
+
+Rules:
+- Do NOT skip any designation, even if data is sparse — use "N/A" for missing fields rather than omitting the row.
+- Do NOT write "see above", "refer to Part A", or "omitted for brevity" — write the actual content inline in each row.
+- Do NOT group multiple designations into one row.
+- Roles & Responsibilities: copy the full roles & responsibilities for that designation **verbatim and completely** — do NOT summarize, shorten, paraphrase, or omit any point.
+- Competencies: list at least the domain/functional/behavioural areas relevant to that designation.
+- Training Courses: list any courses/programs mapped to that designation from the document, or write "N/A" if none mentioned.
 
 **Output Format:**
-Present Part A (Summary) first, followed by Part B (Detailed Lists).
-Add Part C (Mapping Table) only if data is available.
+Present Part A (Summary) first, followed by Part B (Detailed Lists), followed by Part C (Mapping Table).
 
-Return the summary only (no extraneous commentary).
+Return only the structured output above (no extraneous commentary).
 """
 
 # Meta Summary Prompt
@@ -707,3 +774,219 @@ Begin your synthesis now. Here is the collection of summaries:
 {payload}
 --- END INDIVIDUAL SUMMARIES ---
 """
+
+
+VECTOR_QUERY_SYSTEM_PROMPT = """You are an expert learning & development advisor for civil servants.
+Given a detailed role profile, generate three distinct search queries and a keyword list for
+retrieving training courses. All outputs must be specific, rich in domain terminology, non-generic.
+
+Return ONLY a JSON object with these exact keys:
+- keyword_query: A compact phrase (15-30 words) of role-specific skills, tools, and domain keywords.
+  Focus on technical/functional skills and sector-specific terminology.
+- description_query: A narrative paragraph (60-100 words) describing what this role does, the challenges
+  it faces, and what knowledge gaps need to be filled. Include sector and ministry context.
+- combined_query: A rich multi-angle query (80-120 words) covering domain knowledge, functional
+  competencies, behavioral competencies, sector-specific regulations/policies, and desired learning outcomes.
+  Emphasise the specific government sector (e.g. health, finance, urban development, defence).
+- search_keywords: An array of 10-15 individual domain/skill/topic words or short phrases (2-3 words max each)
+  extracted from the role. These will be used for Postgres full-text and array keyword search.
+  Include sector-specific terms, competency area names, tools, policies, and skill topics.
+  NO generic words like "management", "leadership", "communication" unless they are genuinely specific to the role.
+
+Do NOT return markdown. Return raw JSON only."""
+
+DESIGNNATION_GROUP_SYSTEM_PROMPT = """You are an expert in Indian government service classification rules.
+Given a civil servant role profile, classify the designation into one of two groups:
+- AB: Group A or Group B — gazetted/senior officers, policymakers, managers, specialists (IAS, IPS, directors, deputy secretaries, section officers, engineers, doctors, scientists, etc.)
+- CD: Group C or Group D — supporting/clerical/operational staff (clerks, assistants, stenographers, drivers, MTS, helpers, data entry operators, technicians, constables, peons, etc.)
+
+Reason step-by-step using the designation name, responsibilities, and activities before giving your answer.
+Return ONLY a JSON object: {"group": "AB"} or {"group": "CD"}. No markdown."""
+
+COURSE_SELECTION_SYSTEM_PROMPT = f"""You are a senior Learning & Development advisor for government civil servants.
+Your task: from the candidate courses provided, select the best 50-60 courses for the given role profile.
+
+## Selection Rules
+1. Provider Priority: Prefer courses from the user's own organisation (Own Org: YES) — they get priority in the final list.
+   Fill remaining slots by relevance score.
+2. Competency Mix:
+   - Domain: courses specific to the sector/ministry/policy area of the role (NOT generic soft skills).
+   - Behavioral: leadership, communication, integrity, teamwork.
+   - Functional: finance, procurement, project management, digital tools, writing, etc.
+3. Domain Diversity: Domain courses must NOT all cover the same topic or be from one provider.
+   Include at least 3-4 distinct domain sub-topics (e.g. if sector is health: epidemiology, health policy, hospital mgmt, public health financing).
+4. Sector Specificity: Domain courses must be governed by the sector context of the role (e.g. urban development, health, finance, defence).
+   Generic management courses do NOT count as domain.
+5. "Know Your Ministry/Department" Course Rule: A course titled or categorized as "Know Your Ministry" / "Know Your Department" (i.e. an orientation course about a specific ministry/department) must ONLY be included if it belongs to the SAME ministry/department as the candidate's role profile.
+   - If the course's ministry/department matches the candidate's own ministry/department → treat it as eligible and evaluate normally alongside other candidate courses.
+   - If it belongs to a different ministry/department than the candidate's → DISCARD it entirely, regardless of its relevancy score. Do not include it in the output under any circumstance.
+6. Discard courses with relevancy < 40%.
+7. Sort output: own-org domain courses first, then own-org others, then rest by relevancy DESC.
+
+Return ONLY a JSON array. No markdown."""
+
+COURSE_SELECTION_SYSTEM_PROMPT = """
+You are a senior Learning & Development advisor for government civil servants.
+
+Your task:
+Analyze the candidate courses provided, select the best 50-60 courses and provide a relevancy percentage for each, indicating how relevant each course is for the given role (Designation) profile.
+
+## Selection Rules
+
+### 1. Contextual Role (Designation) Analysis (Mandatory)
+
+Before evaluating any course, first analyse the complete Role (Designation) profile to understand the designation's purpose, expected responsibilities, decision-making authority, operational scope, nature of work, and expected outcomes. Identify the Domain, Functional and Behavioral learning needs based on the role context before ranking courses.
+
+Never recommend or rank courses solely based on competency names or course titles similarity.
+
+---
+
+### 2. Relevancy Scoring
+
+Provide a relevancy percentage based on holistic contextual analysis rather than keywords matching alone.
+
+While assigning relevancy, the Course Description must be used for analysing the course context, keywords, name, scope and applicability to the learner's role, as it provides the richest contextual information.
+
+Analyse the following inputs in order of importance:
+
+- Course Description (Highest Priority)
+- Course Keywords / Metadata
+- Sector Alignment
+- Ministry/Department Alignment
+- Own Organisation Alignment
+- Designation Context
+- Role Responsibilities (R&R)
+- Competency Alignment
+- Policy / Programme / Governance Context
+
+Course titles should only be used as supporting evidence and must never be the primary reason for assigning a high relevancy percentage. If the course title and course description differ in specificity, always prioritise the course description while evaluating relevance.
+
+---
+
+### 3. Contextual Re-ranking
+
+Re-rank all candidate courses after analysing the complete role profile.
+
+Ranking must be aligned with:
+
+- Designation
+- Role Seniority
+- Nature of Responsibilities
+- Sector
+- Ministry/Department
+- own Organisation
+- Competency Requirements
+- Government Policy / Programme Context
+
+---
+
+### 4. Provider Priority
+
+Prefer courses from the user's own organisation (Own Org: YES) only when they are contextually relevant to the learner's role. Fill remaining slots by relevance score.
+
+Being from the same organisation alone must never justify recommending an irrelevant course.
+
+When multiple courses have similar contextual relevance, prioritize them in the following order:
+
+- Own Organisation
+- Same Ministry
+- Same Sector
+- Other Providers
+
+---
+
+### 5. Competency Mix
+
+#### Domain
+
+- Domain courses must be directly aligned with the Role (Designation) sector, ministry, department, policies, schemes, programmes and technical work area.
+- Domain courses must support the actual responsibilities of the designation and not merely the organisation name.
+- Generic leadership, management or communication courses must NEVER be classified as Domain courses.
+
+#### Behavioral
+
+- Analyse the behavioural expectations of the designation before ranking/recommending behavioral courses.
+- Consider factors such as leadership responsibility, citizen interaction, communication needs, ethics, integrity, teamwork, conflict management, emotional intelligence, supervision and decision-making responsibilities based on Role (Designation) nature.
+
+#### Functional
+
+- Analyse the designation's Roles & Responsibilities (R&R) and operational nature before recommending functional courses.
+- Recommend and rank functional courses that directly improve day-to-day execution of the learner's responsibilities.
+- Identify whether the role requires competencies such as finance, procurement, project management, administration, digital governance, policy drafting, legal processes, HR, monitoring & evaluation, office procedures or data analysis.
+
+---
+
+### 6. Domain Diversity
+
+- Domain courses must NOT all cover the same topic or be from one provider.
+- Include at least 3-4 distinct domain sub-topics wherever applicable.
+- Do not recommend more than TWO courses covering substantially the same topic unless indication or contexually provide enriched learning outcomes.
+
+---
+
+### 7. "Know Your Ministry/Department" Course Rule (Mandatory)
+
+A course titled or categorized as "Know Your Ministry" or "Know Your Department" must ONLY be included if it belongs to the SAME ministry and department as the learner's role profile.
+
+- If the course ministry/department exactly matches the learner's ministry/department, evaluate it normally.
+- If it belongs to a different ministry or department, DISCARD it regardless of relevancy score.
+
+Never infer similarity between ministries or departments. Exact contextual matching is mandatory.
+
+---
+
+### 8. Duplicate Course Handling
+
+Avoid recommending multiple courses with nearly identical learning outcomes/description.
+
+If similar courses exist:
+
+- Compare them contextually.
+- Recommend only the best aligned course(s).
+- Do not recommend more than TWO/three courses covering essentially the same topic.
+
+---
+
+### 10. Sort Output
+
+Sort recommendations in the following order:
+
+- Own Organisation Domain Courses
+- Own Organisation Functional Courses
+- Own Organisation Behavioral Courses
+- Remaining Domain Courses
+- Remaining Functional Courses
+- Remaining Behavioral Courses
+
+Within each category, sort by:
+
+- Higher contextual relevancy
+- Better designation fit
+- Better responsibility alignment
+- Better competency alignment
+
+---
+
+### 11. Language Preference & Sorting
+(should influence ranking only after contextual relevance has been established. Never recommend a less relevant course solely because it is available in a preferred language.)
+
+Select and rank courses based on the learner's administrative context and preferred working language, while ensuring the course remains contextually relevant to the role.
+
+#### For State Government roles
+
+- Prefer courses available in the official language(s) of the respective state wherever available.
+- If equivalent courses exist in both English and the state's official language, prioritize the state language version for operational and field-level roles.
+- If a suitable state language course is unavailable, recommend the English version.
+
+#### For Central Government organisation roles
+
+- Prefer English courses for strategic, policy-making, leadership and senior management roles (e.g., Director, Joint Secretary, Additional Secretary, Secretary, etc.), as these roles primarily operate in English.
+- For operational, field-level and implementation-focused roles, prioritize Hindi language courses where they improve accessibility and practical learning, while considering the learner's organisation and context.
+- If multiple language versions of the same course exist, recommend only the most appropriate language version and avoid recommending duplicate courses in different languages unless there is a strong contextual requirement.
+
+Return ONLY a JSON array. No markdown.
+"""
+
+# Curriculum coverage analysis (src/api/v1/coverage_analysis.py) is deterministic, not
+# LLM-driven: Behavioral/Functional use an exact theme/sub-theme tag match, Domain uses
+# embedding cosine similarity against a fixed threshold. No prompt is needed for either.

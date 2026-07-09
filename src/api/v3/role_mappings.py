@@ -19,6 +19,8 @@ from ...core.logger import logger
 from ...core.configs import settings
 
 from ...crud.role_mapping import crud_role_mapping
+from ...services.designation_matcher_service import designation_matcher_service
+from ...core.database import sessionmanager
 from ...api.dependencies import get_current_active_user
 
 
@@ -52,12 +54,12 @@ async def process_role_mapping_task(
     4. On Failure: Updates placeholder status to FAILED.
     """
     try:
-        logger.info(f"Task Started: Processing for placeholder {placeholder_id}")
-        
+        logger.info(f"Role mapping processing started for placeholder {placeholder_id}")
+
         # 1. Fetch the Placeholder Row
         placeholder_row = await crud_role_mapping.get_by_id(placeholder_id)
         if not placeholder_row:
-            logger.error(f"Placeholder row {placeholder_id} not found. Task Aborted.")
+            logger.error(f"Role mapping processing aborted: placeholder {placeholder_id} not found")
             return
 
         # 2. Generate Data (Blocking Call)
@@ -72,9 +74,11 @@ async def process_role_mapping_task(
                 instruction=instruction
             )
         except Exception as e:
+            logger.exception(f"Role mapping processing failed to generate data for placeholder {placeholder_id}")
             generated_data_list = None
 
         if not generated_data_list:
+            logger.error(f"Role mapping processing failed: LLM returned empty data for placeholder {placeholder_id}")
             update_records = {
                 'status': ProcessingStatus.FAILED,
                 'error_message': "AI Service returned no role mappings."
@@ -118,13 +122,44 @@ async def process_role_mapping_task(
                 sort_order=data.get('sort_order')
             )
             new_mappings.append(new_mapping)
-
+            
         await crud_role_mapping.create(new_mappings)
-        logger.info(f"Task Completed. Updated placeholder {placeholder_id} and added {len(new_mappings)} new rows.")
-    except Exception as e:  
+
+        # 5. Auto-match all completed designations against iGOT master
+        try:
+            async with sessionmanager.session() as db:
+                all_completed = await crud_role_mapping.get_all_completed_mapping(
+                    db, state_center_id, user_id, department_id
+                )
+            records_to_match = [rm for rm in (all_completed or []) if not rm.igot_designation_id]
+            if records_to_match:
+                designation_names = list({rm.designation_name for rm in records_to_match})
+                async with sessionmanager.session() as db:
+                    all_match_results = await designation_matcher_service.match(db, designation_names)
+                match_dict = {m["input_designation"].lower(): m for m in all_match_results}
+
+                bulk_updates = []
+                for rm in records_to_match:
+                    match_data = match_dict.get(rm.designation_name.lower())
+                    if match_data:
+                        bulk_updates.append({
+                            "role_mapping_id": rm.id,
+                            "igot_designation_name": match_data.get("designation"),
+                            "igot_designation_id": match_data.get("id"),
+                        })
+
+                if bulk_updates:
+                    async with sessionmanager.session() as db:
+                        updated = await crud_role_mapping.bulk_update_designation_matching(db, bulk_updates)
+                    logger.info(f"Role mapping processing auto-matched {updated}/{len(records_to_match)} designations for placeholder {placeholder_id}")
+        except Exception as match_err:
+            logger.exception(f"Role mapping processing auto designation match failed (non-critical) for placeholder {placeholder_id}")
+
+        logger.info(f"Role mapping processing completed for placeholder {placeholder_id}, added {len(new_mappings)} new rows")
+    except Exception as e:
         error_msg = str(e)
-        logger.error(f"Role Mapping Task Failed: {error_msg}")
-        
+        logger.exception(f"Role mapping processing failed for placeholder {placeholder_id}")
+
         # 5. Update Status to FAILED on the placeholder
         try:
             # Re-query needed if rollback occurred
@@ -134,7 +169,7 @@ async def process_role_mapping_task(
             }
             await crud_role_mapping.update(placeholder_id, update_records)
         except Exception as inner_e:
-            logger.error(f"Failed to update error status for role mapping {placeholder_id} job: {inner_e}")
+            logger.error(f"Role mapping processing failed to update FAILED status for placeholder {placeholder_id}: {inner_e}")
 
 # Role Mapping APIs
 @router.post("/role-mapping/generate", response_model=RoleMappingBackgroundResponse, status_code=status.HTTP_202_ACCEPTED)
@@ -154,7 +189,7 @@ async def generate_role_mapping(
     Uses AI to analyze ACBP plan and work allocation data to generate designations, roles, activities, and competencies.
     """
     try:
-        logger.info(f"Starting role mapping generation for state_center_id: {state_center_id}, department_id: {department_id}")
+        logger.info(f"Received role mapping generation request for user {current_user.user_id}, state_center_id {state_center_id}, department_id {department_id}")
 
         # Check if role mapping already exists
         existing_role_mapping = await crud_role_mapping.get_all_mapping(db, state_center_id, current_user.user_id, department_id)
@@ -166,11 +201,11 @@ async def generate_role_mapping(
                 return RoleMappingBackgroundResponse(
                     is_existing=False,
                     status=ProcessingStatus.IN_PROGRESS, 
-                    message="Generation is already IN PROGRESS for this State/Center."
+                    message="Role mapping generation is already in progress. Please check back later."
                 )
             
             if current_status == ProcessingStatus.COMPLETED:
-                logger.info(f"Role mapping already exists")
+                logger.info("Role mapping already completed, returning existing data.")
                 existing_role_mapping = await crud_role_mapping.get_all_completed_mapping(db, state_center_id, current_user.user_id, department_id)
                 return JSONResponse(
                     status_code=status.HTTP_201_CREATED,
@@ -183,7 +218,7 @@ async def generate_role_mapping(
                 )
             
             if current_status == ProcessingStatus.FAILED:
-                logger.info("Found failed records. Cleaning up to retry...")
+                logger.info("Previous role mapping generation failed, retrying...")
                 # Delete all records matching the filter to ensure a clean slate
                 await crud_role_mapping.delete_existing_mappings(db, state_center_id, current_user.user_id, department_id)
         
@@ -231,8 +266,8 @@ async def generate_role_mapping(
         raise
     except Exception as e:
         await db.rollback()
-        logger.error(f"Error initiating role mapping: {str(e)}")
+        logger.exception("Role mapping processing failed to initiate")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to initiate role mapping: {str(e)}"
+            detail="Failed to initiate role mapping generation. Please try again later."
         )
