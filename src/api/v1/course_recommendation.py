@@ -347,11 +347,29 @@ def _build_competency_query(competencies: list) -> str:
     return "Training course covering the following government competencies: " + " | ".join(parts)
 
 
+def _build_competency_query_by_type(competencies: list, competency_type: str) -> str:
+    """
+    Same as _build_competency_query, but restricted to competency entries whose
+    competencyAreaName matches competency_type ("functional" or "behavioural").
+
+    Keeping functional and behavioural queries separate (instead of one query built
+    from all competencies) avoids blending the two vector spaces together, so each
+    fetch_competency_typed_courses call is scored against its own matching competencies.
+    """
+    if not competencies:
+        return ""
+    filtered = [
+        c for c in competencies
+        if competency_type in (c.get("competencyAreaName") or c.get("type") or "").lower()
+    ]
+    return _build_competency_query(filtered)
+
+
 async def process_recommendation_task(
     recommendation_id: uuid.UUID,
     user_profile: str,
-    organisation: str,
-    designation_name: str,
+    ministry_state_name: str,
+    department_name: str,
     raw_competencies: list = None,
 ):
     """
@@ -372,9 +390,9 @@ async def process_recommendation_task(
     try:
         # 1. Verify record exists
         rec_record = await crud_recommended_course.get_by_id(recommendation_id)
+        
         if not rec_record:
-            logger.error(f"Recommendation record not found for ID: {recommendation_id}. Aborting task.")
-            return
+            raise Exception(f"Recommendation record not found for ID: {recommendation_id}. Aborting task.")
 
         # 2. Generate 3 contextual queries + domain search keywords (single LLM call)
         queries = await generate_contextual_queries(user_profile)
@@ -390,16 +408,19 @@ async def process_recommendation_task(
             "search_keywords": search_keywords
         }]
 
-        # Mechanically built competency taxonomy query (zero-cost, no LLM call) — used to
-        # pre-filter and boost functional/behavioural courses in the candidate pool.
-        competency_query = _build_competency_query(raw_competencies or [])
-
+        # Mechanically built competency taxonomy queries (zero-cost, no LLM call) — kept
+        # separate per type so the functional and behavioural searches are never blended
+        # into a single combined vector.
+        functional_competency_query  = _build_competency_query_by_type(raw_competencies or [], "functional")
+        behavioural_competency_query = _build_competency_query_by_type(raw_competencies or [], "behavioral")
+        
         # 3. Embed all queries in parallel
-        kw_emb_list, desc_emb_list, comb_emb_list, comp_emb_list = await asyncio.gather(
+        kw_emb_list, desc_emb_list, comb_emb_list, func_comp_emb_list, behav_comp_emb_list = await asyncio.gather(
             get_embedding(keyword_query),
             get_embedding(description_query),
             get_embedding(combined_query),
-            get_embedding(competency_query),
+            get_embedding(functional_competency_query),
+            get_embedding(behavioural_competency_query),
         )
         if not kw_emb_list or not desc_emb_list or not comb_emb_list:
             raise Exception("Failed to generate one or more embeddings")
@@ -407,7 +428,8 @@ async def process_recommendation_task(
         kw_emb   = kw_emb_list[0].values
         desc_emb = desc_emb_list[0].values
         comb_emb = comb_emb_list[0].values
-        comp_emb = comp_emb_list[0].values if comp_emb_list else None
+        func_comp_emb  = func_comp_emb_list[0].values if func_comp_emb_list else None
+        behav_comp_emb = behav_comp_emb_list[0].values if behav_comp_emb_list else None
 
         # 4. Vector search + Postgres keyword search + competency-typed searches in parallel
         vector_results, kw_results, func_results, behav_results = await asyncio.gather(
@@ -421,15 +443,17 @@ async def process_recommendation_task(
                 keywords=search_keywords,
                 limit=40,
             ),
-            # Pre-filtered functional courses (competencyAreaName LIKE '%functional%')
+            # Pre-filtered functional courses (competencyAreaName LIKE '%functional%'),
+            # scored against the functional-only competency embedding.
             crud_recommended_course.fetch_competency_typed_courses(
-                combined_emb=comp_emb or comb_emb,
+                combined_emb=func_comp_emb or comb_emb,
                 competency_type="functional",
                 limit=40,
             ),
-            # Pre-filtered behavioral courses (competencyAreaName LIKE '%behavioural%')
+            # Pre-filtered behavioral courses (competencyAreaName LIKE '%behavioural%'),
+            # scored against the behavioural-only competency embedding.
             crud_recommended_course.fetch_competency_typed_courses(
-                combined_emb=comp_emb or comb_emb,
+                combined_emb=behav_comp_emb or comb_emb,
                 competency_type="behavioural",
                 limit=40,
             ),
@@ -480,8 +504,10 @@ async def process_recommendation_task(
                 org_info = ", ".join(str(o) for o in _org_raw if o)
             else:
                 org_info = str(_org_raw) if _org_raw else ""
-
-            is_own_org = "YES" if (organisation and org_info and organisation.lower() in org_info.lower()) else "NO"
+            c["competencies"] = getattr(meta, "competencies_v6", None)
+            is_own_org = "YES" if (ministry_state_name and org_info and ministry_state_name.lower() in org_info.lower()) else "NO"
+            if is_own_org == "NO" and department_name and org_info and department_name.lower() in org_info.lower():
+                is_own_org = "YES"
 
             candidate_lines.append(
                 f"Course ID: {c['identifier']} | "
@@ -502,7 +528,7 @@ async def process_recommendation_task(
 
         # 9. LLM filtering + general courses (parallel)
         filtered_courses_json, general_courses = await asyncio.gather(
-            get_filtered_courses_by_llm(courses_prompt, user_profile, organisation, designation_group),
+            get_filtered_courses_by_llm(courses_prompt, user_profile, department_name or ministry_state_name, designation_group),
             get_general_courses_from_gemini(user_profile),
         )
 
@@ -517,9 +543,12 @@ async def process_recommendation_task(
         else:
             enriched_map = {}
 
-        
+        logger.info(
+            f"LLM filtered {len(filtered_courses)} courses from {len(all_candidates)} candidates "
+            f"and {len(general_courses)} general courses"
+        )
         filtered_courses = [course for course in filtered_courses if course["identifier"] in enriched_map]
-
+        logger.info(f"After enrichment, {len(filtered_courses)} courses remain with valid metadata")
         for course in filtered_courses:
             course["is_public"] = False
             meta = enriched_map.get(course["identifier"])
@@ -599,10 +628,7 @@ async def generate_course_recommendations(
                 )
             
             if current_status == RecommendationStatus.FAILED:
-                logger.info("Previous recommendation failed. Deleting existing record and initiating a new recommendation.")
-                # Delete all records matching the filter to ensure a clean slate
-                await db.delete(existing_recommendation)
-                await db.commit()
+                return existing_recommendation
         
         competencies_json = json.dumps(role_mapping.competencies, indent=2) if role_mapping.competencies else "[]"
         user_profile = f"""
@@ -629,7 +655,7 @@ Competencies (with definitions):
             new_recommendation.id,
             user_profile,
             role_mapping.state_center_name or "",
-            role_mapping.designation_name or "",
+            role_mapping.department_name or "",
             role_mapping.competencies or [],
         )
 
