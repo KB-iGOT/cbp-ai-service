@@ -15,7 +15,7 @@ from ...models.role_mapping import ProcessingStatus, RoleMapping
 from ...models.user import User
 
 from ...prompts.prompts import DESIGNATION_ROLE_MAPPING_PROMPT
-from ...schemas.role_mapping import AddDesignationToRoleMappingRequest, DesignationmatchedResult, ReorderDesignationsRequest, RoleMappingBackgroundResponse, RoleMappingResponse, RoleMappingUpdate, RoleMappingWithoutCBP, matchedDesignationsRequest, MatchedDesignationDetail
+from ...schemas.role_mapping import AddDesignationToRoleMappingRequest, DesignationmatchedResult, ReorderDesignationsRequest, RoleMappingBackgroundResponse, RoleMappingReorderListItem, RoleMappingResponse, RoleMappingSearchFilters, RoleMappingSearchRequest, RoleMappingSearchResponse, RoleMappingUpdate, RoleMappingWithoutCBP, matchedDesignationsRequest, MatchedDesignationDetail
 from ...services.role_mapping_service import role_mapping_service
 from ...services.designation_service import designation_service
 from ...services.designation_matcher_service import designation_matcher_service
@@ -536,7 +536,64 @@ async def add_designation_to_role_mapping(
             detail="Failed to update role mapping"
         )
 
-@router.put("/role-mapping/reorder", response_model=List[RoleMappingWithoutCBP])
+@router.post("/role-mapping/search", response_model=RoleMappingSearchResponse)
+async def search_role_mappings(
+    request: RoleMappingSearchRequest,
+    db: AsyncSession = Depends(get_db_session),
+    current_user: User = Depends(get_current_active_user)
+):
+    """
+    Search role mappings by designation name with pagination.
+
+    - `query`: optional substring search on designation_name
+    - `filters.state_center_id` / `filters.department_id`: optional scoping filters
+    - `filters.match_status`: "matched" or "unmatched" to filter `data` by iGOT
+      match status. Omit to return both. Never affects the total/total_matched/
+      total_unmatched counts — those always reflect the full filtered set.
+    - `load_cbp_plans`: whether to include CBP plan data in the response
+    - `sort_by`: e.g. {"createdOn": "desc"}. Defaults to sort_order ascending.
+      Supported fields: createdOn, updatedOn, designationName, sortOrder.
+    - `total_matched` / `total_unmatched` reflect iGOT designation matching status
+      (igot_designation_id populated vs empty) across the entire filtered result set
+    """
+    try:
+        filters = request.filters or RoleMappingSearchFilters()
+        logger.info(
+            f"Searching role mappings for user {current_user.user_id}, "
+            f"query={request.query!r}, state_center_id={filters.state_center_id}, department_id={filters.department_id}, "
+            f"match_status={filters.match_status}"
+        )
+
+        role_mappings, total, total_matched, total_unmatched = await crud_role_mapping.search(
+            db,
+            user_id=current_user.user_id,
+            query=request.query,
+            state_center_id=filters.state_center_id,
+            department_id=filters.department_id,
+            limit=request.limit,
+            offset=request.offset,
+            load_cbp_plans=request.load_cbp_plans,
+            sort_by=request.sort_by,
+            match_status=filters.match_status.value if filters.match_status else None
+        )
+
+        return RoleMappingSearchResponse(
+            total=total,
+            total_matched=total_matched,
+            total_unmatched=total_unmatched,
+            data=role_mappings
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error searching role mappings: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to search role mappings"
+        )
+
+@router.put("/role-mapping/reorder")
 async def reorder_designations(
     request: ReorderDesignationsRequest,
     db: AsyncSession = Depends(get_db_session),
@@ -586,14 +643,10 @@ async def reorder_designations(
             )
 
         logger.info(f"Successfully reordered {updated_count} designations")
-
-        # Return updated role mappings in the new order
-        role_mappings = await crud_role_mapping.get_all_completed_mapping(
-            db, request.state_center_id, current_user.user_id, request.department_id
+        return JSONResponse(
+            status_code=status.HTTP_200_OK,
+            content={"message": f"Successfully reordered {updated_count} designations"}
         )
-
-        return role_mappings
-
     except HTTPException:
         raise
     except Exception as e:
@@ -601,6 +654,47 @@ async def reorder_designations(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to reorder designations"
+        )
+
+@router.get("/role-mapping/reorder/list", response_model=List[RoleMappingReorderListItem])
+async def get_reorder_list(
+    state_center_id: str = Query(..., description="ID of the associated state/center"),
+    department_id: Optional[str] = Query(None, description="ID of the associated department"),
+    db: AsyncSession = Depends(get_db_session),
+    current_user: User = Depends(get_current_active_user)
+):
+    """
+    Lightweight list for the drag-and-drop reorder UI.
+
+    Returns only id, designation_name, wing_division_section, and sort_order
+    for COMPLETED role mappings — no role/activity/competency or CBP plan data.
+    """
+    try:
+        logger.info(f"Fetching reorder list for state_center_id: {state_center_id}, department_id: {department_id}")
+
+        in_progress_record = await crud_role_mapping.get_in_progress_mapping(
+            db, state_center_id, current_user.user_id, department_id
+        )
+
+        if in_progress_record:
+            raise HTTPException(
+                status_code=status.HTTP_412_PRECONDITION_FAILED,
+                detail="Cannot reorder designations while AI generation is IN PROGRESS."
+            )
+
+        role_mappings = await crud_role_mapping.get_reorder_list(
+            db, state_center_id, current_user.user_id, department_id
+        )
+
+        return role_mappings
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching reorder list: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to fetch reorder list"
         )
 
 @router.get("/role-mapping/{role_mapping_id}", response_model=RoleMappingWithoutCBP)

@@ -1,6 +1,6 @@
 import uuid
 from typing import List, Optional
-from sqlalchemy import and_, delete, desc, func, update
+from sqlalchemy import and_, asc, delete, desc, func, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload, noload, contains_eager
@@ -14,7 +14,16 @@ class CRUDRoleMapping:
     """
     CRUD methods for the RoleMapping model.
     """
-    
+
+    # Allowlist mapping client-facing sort keys to actual columns.
+    # Prevents unsafe dynamic attribute access via getattr(RoleMapping, sort_by).
+    SORTABLE_FIELDS = {
+        "createdOn": RoleMapping.created_at,
+        "updatedOn": RoleMapping.updated_at,
+        "designationName": RoleMapping.designation_name,
+        "sortOrder": RoleMapping.sort_order,
+    }
+
     async def _get_by_id_in_session(self, db: AsyncSession, role_mapping_id: uuid.UUID) -> Optional[RoleMapping]:
         """Internal method to retrieve a record using an injected session."""
         stmt = select(RoleMapping).filter(RoleMapping.id == role_mapping_id)
@@ -155,9 +164,142 @@ class CRUDRoleMapping:
         
         return role_mappings
 
+    async def search(
+        self,
+        db: AsyncSession,
+        user_id: uuid.UUID,
+        query: Optional[str] = None,
+        state_center_id: Optional[str] = None,
+        department_id: Optional[str] = None,
+        limit: int = 20,
+        offset: int = 0,
+        load_cbp_plans: bool = False,
+        sort_by: Optional[dict] = None,
+        match_status: Optional[str] = None
+    ):
+        """
+        Search COMPLETED role mappings for the current user by designation name,
+        with optional state/center and department filters.
+
+        sort_by: e.g. {"createdOn": "desc"}. Falls back to sort_order ascending
+        when omitted or the field isn't in SORTABLE_FIELDS.
+
+        match_status: "matched" | "unmatched" | None. Filters only the returned
+        page of `data` — the total/total_matched/total_unmatched counts always
+        reflect the full filtered set regardless of this filter, so tab badges
+        stay stable when switching tabs.
+
+        Returns a tuple of (rows, total, total_matched, total_unmatched) where
+        total/total_matched/total_unmatched are computed over the entire filtered
+        result set (independent of limit/offset/match_status).
+        """
+        conditions = [
+            RoleMapping.user_id == user_id,
+            RoleMapping.status == ProcessingStatus.COMPLETED
+        ]
+
+        if state_center_id:
+            conditions.append(RoleMapping.state_center_id == state_center_id)
+        if department_id:
+            conditions.append(RoleMapping.department_id == department_id)
+        else:
+            conditions.append(RoleMapping.department_id.is_(None))
+        if query:
+            conditions.append(RoleMapping.designation_name.ilike(f"%{query}%"))
+
+        # Aggregate counts over the entire filtered set (not just the current page,
+        # and NOT affected by match_status — counts must stay stable across tabs)
+        count_stmt = select(
+            func.count(RoleMapping.id),
+            func.count(RoleMapping.id).filter(RoleMapping.igot_designation_id.isnot(None)),
+            func.count(RoleMapping.id).filter(RoleMapping.igot_designation_id.is_(None))
+        ).where(and_(*conditions))
+        count_result = await db.execute(count_stmt)
+        total, total_matched, total_unmatched = count_result.one()
+
+        page_conditions = list(conditions)
+        if match_status == "matched":
+            page_conditions.append(RoleMapping.igot_designation_id.isnot(None))
+        elif match_status == "unmatched":
+            page_conditions.append(RoleMapping.igot_designation_id.is_(None))
+
+        order_column = RoleMapping.sort_order
+        order_direction = asc
+        if sort_by:
+            field, direction = next(iter(sort_by.items()))
+            if field in self.SORTABLE_FIELDS:
+                order_column = self.SORTABLE_FIELDS[field]
+                order_direction = desc if str(direction).lower() == "desc" else asc
+
+        stmt = (
+            select(RoleMapping)
+            .where(and_(*page_conditions))
+            .order_by(order_direction(order_column))
+            .limit(limit)
+            .offset(offset)
+        )
+        if load_cbp_plans:
+            stmt = stmt.options(selectinload(RoleMapping.cbp_plans))
+        else:
+            stmt = stmt.options(noload(RoleMapping.cbp_plans))
+
+        stmt = stmt.outerjoin(
+            DesignationApproval,
+            and_(
+                DesignationApproval.rolemapping_id == RoleMapping.id,
+                DesignationApproval.status == 'pending'
+            )
+        ).options(contains_eager(RoleMapping.designation_approvals))
+
+        result = await db.execute(stmt)
+        role_mappings = result.unique().scalars().all()
+        if not load_cbp_plans:
+            for mapping in role_mappings:
+                object.__setattr__(mapping, 'cbp_plans', [])
+
+        return role_mappings, total, total_matched, total_unmatched
+
+    async def get_reorder_list(
+        self,
+        db: AsyncSession,
+        state_center_id: str,
+        user_id: uuid.UUID,
+        department_id: Optional[str] = None
+    ) -> List[RoleMapping]:
+        """
+        Retrieves a lightweight list (id, designation_name, wing_division_section,
+        sort_order) of COMPLETED role mappings, ordered by sort_order.
+        Used to populate the drag-and-drop reorder UI without loading
+        role/activity/competency/CBP plan data.
+        """
+        conditions = [
+            RoleMapping.state_center_id == state_center_id,
+            RoleMapping.user_id == user_id,
+            RoleMapping.status == ProcessingStatus.COMPLETED
+        ]
+
+        if department_id:
+            conditions.append(RoleMapping.department_id == department_id)
+        else:
+            conditions.append(RoleMapping.department_id.is_(None))
+
+        stmt = (
+            select(
+                RoleMapping.id,
+                RoleMapping.designation_name,
+                RoleMapping.wing_division_section,
+                RoleMapping.sort_order
+            )
+            .where(and_(*conditions))
+            .order_by(RoleMapping.sort_order)
+        )
+
+        result = await db.execute(stmt)
+        return result.all()
+
     async def update(
-        self, 
-        role_mapping_id: uuid.UUID, 
+        self,
+        role_mapping_id: uuid.UUID,
         update_records
     ) -> RoleMapping:
         

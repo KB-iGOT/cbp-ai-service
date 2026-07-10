@@ -212,7 +212,7 @@ Must include references to **schemes, governance, state-level practices, and glo
 - Generate: 
     - **Behavioral competencies :** A MINIMUM of 4 competencies.
     - **Functional:** A MINIMUM of 4 competencies 
-    - **Domain:** A MINIMUM of 6 competencies 
+    - **Domain:** A MINIMUM of 8 competencies 
 
 ---
 
