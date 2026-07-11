@@ -47,7 +47,7 @@ async def get_departments_by_state_center(
                 "sort_by": {
                     "createdDate": "desc"
                 },
-                "query": query if query else "",
+                "query": query.strip() if query else "",
                 "limit": limit,
                 "offset": offset,
                 "fields": [
