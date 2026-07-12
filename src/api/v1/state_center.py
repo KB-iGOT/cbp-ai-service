@@ -45,10 +45,7 @@ async def get_all_state_centers(
                 "filters": {
                     "status": 1,
                     "sbOrgType": sub_org_type.value
-                },
-                "sort_by": {
-                    "createdDate": "desc"
-                },
+                },                
                 "query": query.strip() if query else "",
                 "limit": limit,
                 "offset": offset,
