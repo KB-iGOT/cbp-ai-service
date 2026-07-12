@@ -44,9 +44,6 @@ async def get_departments_by_state_center(
                     "ministryOrStateType": sub_org_type.value,
                     "ministryOrStateId": state_center_id
                 },
-                "sort_by": {
-                    "createdDate": "desc"
-                },
                 "query": query.strip() if query else "",
                 "limit": limit,
                 "offset": offset,
