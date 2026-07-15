@@ -261,7 +261,7 @@ async def generate_role_and_competencies(input_data):
             "activities": "[List of Activities]",
             "competencies": [
                 {
-                    "type": "[Behavioral/Functional/Domain]",
+                    "type": "[Behavioural/Functional/Domain]",
                     "theme": "[Competency Theme]",
                     "sub_theme": "[Competency Sub-theme]",
                 }
@@ -285,7 +285,7 @@ async def generate_role_and_competencies(input_data):
             #     types.SafetySetting(category="HARM_CATEGORY_HATE_SPEECH", threshold="OFF")
             # ],
             response_mime_type="application/json",
-            response_schema={"type":"OBJECT","properties":{"designation_name":{"type":"STRING","description":"The official designation or job title for the role."},"wing_division_section":{"type":"STRING","description":"The organizational unit (wing, division, or section) where the role is situated."},"role_responsibilities":{"type":"ARRAY","items":{"type":"STRING"},"description":"A list of 5-8 concise, action-oriented role responsibilities."},"activities":{"type":"ARRAY","items":{"type":"STRING"},"description":"A list of 5–8 activities or tasks aligned to the role responsibilities."},"competencies":{"type":"ARRAY","items":{"type":"OBJECT","properties":{"type":{"type":"STRING","enum":["Behavioral","Functional","Domain"],"description":"The category of competency as per Karmayogi framework."},"theme":{"type":"STRING","description":"The parent theme of the competency (must come from dataset)."},"sub_theme":{"type":"STRING","description":"The sub-theme of the competency (must come from dataset)."}},"required":["type","theme","sub_theme"]},"description":"A list of competencies relevant to the role. Must include at least one Behavioral, one Functional, and one Domain competency."}},"required":["designation_name","wing_division_section","role_responsibilities","activities","competencies"]},
+            response_schema={"type":"OBJECT","properties":{"designation_name":{"type":"STRING","description":"The official designation or job title for the role."},"wing_division_section":{"type":"STRING","description":"The organizational unit (wing, division, or section) where the role is situated."},"role_responsibilities":{"type":"ARRAY","items":{"type":"STRING"},"description":"A list of 5-8 concise, action-oriented role responsibilities."},"activities":{"type":"ARRAY","items":{"type":"STRING"},"description":"A list of 5–8 activities or tasks aligned to the role responsibilities."},"competencies":{"type":"ARRAY","items":{"type":"OBJECT","properties":{"type":{"type":"STRING","enum":["Behavioural","Functional","Domain"],"description":"The category of competency as per Karmayogi framework."},"theme":{"type":"STRING","description":"The parent theme of the competency (must come from dataset)."},"sub_theme":{"type":"STRING","description":"The sub-theme of the competency (must come from dataset)."}},"required":["type","theme","sub_theme"]},"description":"A list of competencies relevant to the role. Must include at least one Behavioural, one Functional, and one Domain competency."}},"required":["designation_name","wing_division_section","role_responsibilities","activities","competencies"]},
         )
 
         contents = [   
@@ -369,7 +369,7 @@ async def add_designation_to_role_mapping(
             "instruction": request.instruction if request.instruction else "N/A"
         }) for name in designation_names]
         designations_to_insert = await asyncio.gather(*tasks)
-
+        
         # Derive Domain competencies for the manually-added designation(s) from the raw WAO —
         # the SAME PASS 3 logic as bulk generation (reuses the WAO PDF + context cache + min floor).
         # Only the Domain slice is replaced; Behavioural/Functional are untouched. Fully guarded:
@@ -400,6 +400,14 @@ async def add_designation_to_role_mapping(
                             await role_mapping_service_v3._delete_wao_cache(cache_name)
             except Exception as e:
                 logger.warning(f"WAO domain enrichment skipped for add-designation: {e}; keeping summary-based domain")
+
+        # Cross-verify Behavioural/Functional competencies against the KCM dataset, correcting
+        # any theme/sub_theme/type drift from the LLM (reuses the v3 reconciliation logic).
+        if designations_to_insert:
+            wrapped = [{"competencies": m.competencies or []} for m in designations_to_insert]
+            wrapped = role_mapping_service_v3.reconcile_role_mappings_with_kcm(wrapped)
+            for m, w in zip(designations_to_insert, wrapped):
+                m.competencies = w["competencies"]
 
         # Assign sort_order atomically to prevent duplicates under parallel calls
         new_mapping = await crud_role_mapping.create_with_next_sort_order(

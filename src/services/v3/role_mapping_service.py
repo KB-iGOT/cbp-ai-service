@@ -43,7 +43,7 @@ center_json_output = {
         "sort_order": "integer",
         "competencies": [
             {
-                "type": "Behavioral | Functional | Domain",
+                "type": "Behavioural | Functional | Domain",
                 "theme": "string",
                 "sub_theme": "string",
                 "source": "KCM or AI Suggested"
@@ -62,7 +62,7 @@ state_json_output = {
         "sort_order": "integer",
         "competencies": [
             {
-                "type": "Behavioral | Functional | Domain",
+                "type": "Behavioural | Functional | Domain",
                 "theme": "string",
                 "sub_theme": "string",
                 "source": "KCM or AI Suggested"
@@ -86,7 +86,7 @@ class DesignationExtractionResponse(BaseModel):
         description="List of extracted unique designations sorted by hierarchy"
     )
 class FRACCompetency(BaseModel):
-    type: Literal["Behavioral", "Functional", "Domain"] = Field(description="Competency type: Behavioral, Functional, or Domain")
+    type: Literal["Behavioural", "Functional", "Domain"] = Field(description="Competency type: Behavioural, Functional, or Domain")
     theme: str = Field(description="Competency theme")
     sub_theme: str = Field(description="Competency sub theme")
     source: Optional[str] = Field(default=None, description="Competency source")
@@ -131,58 +131,52 @@ class RoleMappingService:
         Returns:
             Dict containing extracted designations with metadata
         """
-        try:
-            logger.info(f"PASS 1: Extracting designations for {organization_data.get('organization_name')}")
-                    
-            contents = [
-                types.Content(
-                    role="user",
-                    parts=[types.Part.from_text(
-                        text="""
-                        Here is the input Data:
-                        Ministry/State Name: {ORGANIZATION_NAME}
-                        Department/Organisation Name: {DEPARTMENT_NAME}
+        logger.info(f"PASS 1: Extracting designations for {organization_data.get('organization_name')}")
+                
+        contents = [
+            types.Content(
+                role="user",
+                parts=[types.Part.from_text(
+                    text="""
+                    Here is the input Data:
+                    Ministry/State Name: {ORGANIZATION_NAME}
+                    Department/Organisation Name: {DEPARTMENT_NAME}
 
-                        Primary reference document Summaries:
-                        {DOCUMENT_SUMMARIES}
+                    Primary reference document Summaries:
+                    {DOCUMENT_SUMMARIES}
 
-                        Extract ALL unique designations from the provided input data and organize them hierarchically based on the system prompt.
-                        """.format(
-                                ORGANIZATION_NAME=organization_data.get('organization_name'),
-                                DEPARTMENT_NAME=organization_data.get('department_name'),
-                                DOCUMENT_SUMMARIES=organization_data.get('docs_summary', 'N/A')
-                            )
-                    )]
-                )
-            ]
-            
-            generate_content_config = types.GenerateContentConfig(
-                system_instruction=DESIGNATION_EXTRACTION_PROMPT,
-                temperature=0.1,   # Very low — factual extraction, no creativity
-                top_p=0.85, # Restrict to high-probability tokens
-                response_mime_type="application/json",
-                response_schema=DesignationExtractionResponse.model_json_schema()
+                    Extract ALL unique designations from the provided input data and organize them hierarchically based on the system prompt.
+                    """.format(
+                            ORGANIZATION_NAME=organization_data.get('organization_name'),
+                            DEPARTMENT_NAME=organization_data.get('department_name'),
+                            DOCUMENT_SUMMARIES=organization_data.get('docs_summary', 'N/A')
+                        )
+                )]
             )
-            
-            response = await self.client.aio.models.generate_content(
-                model=settings.GEMINI_FLASH_MODEL_NAME,
-                contents=contents,
-                config=generate_content_config,
-            )
-            
-            text_response = response.text
-            if not text_response:
-                logger.error("Empty response from Gemini during designation extraction")
-                raise Exception("Empty response from Gemini during designation extraction")
-            
-            extraction_response = DesignationExtractionResponse.model_validate_json(text_response)
-            return {
-                "designations": [d.model_dump() for d in extraction_response.designations]
-            }
-            
-        except Exception as e:
-            logger.exception("Designation extraction failed")  
-            raise Exception(f"Designation extraction failed: {str(e)}") from e
+        ]
+        
+        generate_content_config = types.GenerateContentConfig(
+            system_instruction=DESIGNATION_EXTRACTION_PROMPT,
+            temperature=0.1,   # Very low — factual extraction, no creativity
+            top_p=0.85, # Restrict to high-probability tokens
+            response_mime_type="application/json",
+            response_schema=DesignationExtractionResponse.model_json_schema()
+        )
+        
+        response = await self.client.aio.models.generate_content(
+            model=settings.GEMINI_FLASH_MODEL_NAME,
+            contents=contents,
+            config=generate_content_config,
+        )
+        
+        text_response = response.text
+        if not text_response:
+            raise Exception(f"Empty response from Gemini during designation extraction: {response}") 
+        
+        extraction_response = DesignationExtractionResponse.model_validate_json(text_response)
+        return {
+            "designations": [d.model_dump() for d in extraction_response.designations]
+        }
     
     async def _generate_frac_for_batch(
         self,
@@ -492,6 +486,133 @@ class RoleMappingService:
                     f"(floor={floor})")
         return frac_mappings
 
+    @staticmethod
+    def _normalize(text: Optional[str]) -> str:
+        """Lowercase/trim for tolerant comparison"""
+        return (text or "").strip().lower()
+
+    def _reconcile_competency_against_kcm(
+        self, competency: Dict[str, Any]
+    ) -> Optional[Dict[str, Any]]:
+        """Cross-verify one Behavioural/Functional competency against the KCM dataset
+        (data/competencies.json), correcting LLM drift instead of trusting it blindly.
+
+        Rules (in priority order):
+        - type + theme + sub_theme all match a KCM row       -> keep as-is
+        - theme + sub_theme match, type differs               -> LLM swapped type; fix type only
+        - type + sub_theme match, theme differs                -> LLM swapped theme; fix theme
+        - only sub_theme matches (type and theme differ)      -> fix both type and theme from KCM
+        - theme and sub_theme values are swapped with each other (no sub_theme match, but a KCM
+          row's theme==comp's sub_theme AND that row's sub_theme==comp's theme) -> swap back, fix type
+        - sub_theme matches no KCM row at all                  -> drop (unrecoverable, return None)
+        """
+        comp_type = competency.get("type")
+        comp_theme = competency.get("theme")
+        comp_sub_theme = competency.get("sub_theme")
+
+        norm_type = self._normalize(comp_type)
+        norm_theme = self._normalize(comp_theme)
+        norm_sub_theme = self._normalize(comp_sub_theme)
+
+        sub_theme_matches = [
+            row for row in COMPETENCY_MAPPING
+            if self._normalize(row.get("sub_theme")) == norm_sub_theme
+        ]
+        if not sub_theme_matches:
+            # No row has this value as its sub_theme — check whether the LLM swapped theme and
+            # sub_theme with each other (this competency's sub_theme value is actually a KCM
+            # *theme*, and what the LLM put in the theme field is actually the matching sub_theme).
+            swapped_matches = [
+                row for row in COMPETENCY_MAPPING
+                if self._normalize(row.get("theme")) == norm_sub_theme
+                and self._normalize(row.get("sub_theme")) == norm_theme
+            ]
+            if swapped_matches:
+                row = swapped_matches[0]
+                corrected = {**competency, "type": row.get("type"),
+                             "theme": row.get("theme"), "sub_theme": row.get("sub_theme")}
+                logger.info(
+                    f"KCM reconcile: theme/sub_theme were swapped ('{comp_theme}' <-> '{comp_sub_theme}'); "
+                    f"restored to theme='{row.get('theme')}', sub_theme='{row.get('sub_theme')}', "
+                    f"type='{row.get('type')}'")
+                return corrected
+
+            logger.warning(
+                f"KCM reconcile: dropping competency with no sub_theme match in KCM dataset: {competency}")
+            return None
+
+        # Exact match on all three fields -> nothing to do
+        for row in sub_theme_matches:
+            if self._normalize(row.get("type")) == norm_type and self._normalize(row.get("theme")) == norm_theme:
+                return competency
+
+        # type + sub_theme match -> only theme is wrong (or swapped with sub_theme)
+        for row in sub_theme_matches:
+            if self._normalize(row.get("type")) == norm_type:
+                corrected = {**competency, "theme": row.get("theme")}
+                logger.info(
+                    f"KCM reconcile: fixed theme '{comp_theme}' -> '{row.get('theme')}' "
+                    f"for sub_theme '{comp_sub_theme}'")
+                return corrected
+
+        # theme + sub_theme match -> only type is wrong (e.g. theme/sub_theme swapped by LLM)
+        for row in sub_theme_matches:
+            if self._normalize(row.get("theme")) == norm_theme:
+                corrected = {**competency, "type": row.get("type")}
+                logger.info(
+                    f"KCM reconcile: fixed type '{comp_type}' -> '{row.get('type')}' "
+                    f"for theme/sub_theme '{comp_theme}'/'{comp_sub_theme}'")
+                return corrected
+
+        # Only sub_theme matches -> take the type and theme straight from KCM
+        row = sub_theme_matches[0]
+        corrected = {**competency, "type": row.get("type"), "theme": row.get("theme")}
+        logger.info(
+            f"KCM reconcile: fixed type+theme for sub_theme '{comp_sub_theme}' -> "
+            f"type='{row.get('type')}', theme='{row.get('theme')}'")
+        return corrected
+
+    def reconcile_role_mappings_with_kcm(
+        self, frac_mappings: List[Dict[str, Any]]
+    ) -> List[Dict[str, Any]]:
+        """Cross-verify every generated role mapping's competencies against the KCM dataset
+        (data/competencies.json), correcting mismatches per _reconcile_competency_against_kcm.
+
+        Domain competencies are skipped (not part of the KCM Behavioural/Functional master)
+        and passed through unchanged.
+        """
+        stats = {"kept": 0, "fixed": 0, "dropped": 0, "domain_skipped": 0}
+        for mapping in frac_mappings:
+            competencies = mapping.get("competencies") or []
+            reconciled: List[Dict[str, Any]] = []
+            for competency in competencies:
+                if self._normalize(competency.get("type")) not in ("behavioural", "functional"):
+                    reconciled.append(competency)
+                    stats["domain_skipped"] += 1
+                    continue
+                fixed = self._reconcile_competency_against_kcm(competency)
+                if fixed is None:
+                    stats["dropped"] += 1
+                    continue
+                if fixed is competency:
+                    stats["kept"] += 1
+                else:
+                    stats["fixed"] += 1
+                reconciled.append(fixed)
+            mapping["competencies"] = reconciled
+        logger.info(
+            f"KCM reconciliation summary: kept={stats['kept']} fixed={stats['fixed']} "
+            f"dropped={stats['dropped']} domain_skipped={stats['domain_skipped']}")
+
+        # DB persists the US spelling "Behavioral" even though the KCM dataset and all
+        # reconciliation above use "Behavioural" — normalize only at this final boundary.
+        for mapping in frac_mappings:
+            for competency in mapping.get("competencies") or []:
+                if self._normalize(competency.get("type")) == "behavioural":
+                    competency["type"] = "Behavioral"
+
+        return frac_mappings
+
     async def generate_role_mapping(
         self,
         user_id: uuid.UUID,
@@ -546,8 +667,7 @@ class RoleMappingService:
 
             designations = extraction_result.get('designations', [])
             if not designations:
-                logger.warning("PASS 1: No designations extracted; aborting role mapping generation")
-                return []
+                raise Exception("No designations extracted in PASS 1; cannot proceed to PASS 2")
             
             logger.info(f"PASS 1 SUCCESS: {len(designations)} designations extracted")
 
@@ -599,13 +719,18 @@ class RoleMappingService:
                 except Exception as e:
                     logger.warning(f"PASS 3 (WAO domain) failed: {e}; keeping summary-based domain competencies")
 
+            # ============ PASS 4: KCM RECONCILIATION (Behavioural/Functional only) ============
+            # Cross-verify every Behavioural/Functional competency against data/competencies.json,
+            # correcting LLM drift (swapped theme/sub_theme, wrong type) instead of trusting it
+            # blindly. Domain competencies are left untouched (not part of the KCM master).
+            frac_mappings = self.reconcile_role_mappings_with_kcm(frac_mappings)
+
             logger.info("TWO-PASS ROLE MAPPING COMPLETE")
             logger.info(f"Designations Extracted: {len(designations)}")
             logger.info(f"FRAC Mappings Generated: {len(frac_mappings)}")
 
             return frac_mappings
         except Exception as e:
-            logger.exception("Error in two-pass role mapping generation")
             raise
 
 # Create a singleton instance

@@ -58,33 +58,20 @@ async def process_role_mapping_task(
 
         # 1. Fetch the Placeholder Row
         placeholder_row = await crud_role_mapping.get_by_id(placeholder_id)
+        
         if not placeholder_row:
-            logger.error(f"Role mapping processing aborted: placeholder {placeholder_id} not found")
-            return
+            raise Exception(f"Placeholder row not found for ID: {placeholder_id}. Aborting task.")
 
         # 2. Generate Data (Blocking Call)
-        try:
-            generated_data_list = await role_mapping_service.generate_role_mapping(
-                user_id=user_id,
-                org_type=org_type,
-                state_center_id=state_center_id,
-                state_center_name=state_center_name,
-                department_name=department_name,
-                department_id=department_id,
-                instruction=instruction
-            )
-        except Exception as e:
-            logger.exception(f"Role mapping processing failed to generate data for placeholder {placeholder_id}")
-            generated_data_list = None
-
-        if not generated_data_list:
-            logger.error(f"Role mapping processing failed: LLM returned empty data for placeholder {placeholder_id}")
-            update_records = {
-                'status': ProcessingStatus.FAILED,
-                'error_message': "AI Service returned no role mappings."
-            }
-            await crud_role_mapping.update(placeholder_id, update_records)
-            return
+        generated_data_list = await role_mapping_service.generate_role_mapping(
+            user_id=user_id,
+            org_type=org_type,
+            state_center_id=state_center_id,
+            state_center_name=state_center_name,
+            department_name=department_name,
+            department_id=department_id,
+            instruction=instruction
+        )
 
         # 3. Update the Placeholder to become the First Valid Record
         # The placeholder ID acts as the persistent reference for the user
@@ -206,21 +193,21 @@ async def generate_role_mapping(
             
             if current_status == ProcessingStatus.COMPLETED:
                 logger.info("Role mapping already completed, returning existing data.")
-                existing_role_mapping = await crud_role_mapping.get_all_completed_mapping(db, state_center_id, current_user.user_id, department_id)
                 return JSONResponse(
                     status_code=status.HTTP_201_CREATED,
                     content=RoleMappingBackgroundResponse(
                         is_existing=True,
                         message="Role mapping generated successfully",
                         status=ProcessingStatus.COMPLETED,
-                        role_mappings=existing_role_mapping
                     ).model_dump(mode="json")
                 )
             
             if current_status == ProcessingStatus.FAILED:
-                logger.info("Previous role mapping generation failed, retrying...")
-                # Delete all records matching the filter to ensure a clean slate
-                await crud_role_mapping.delete_existing_mappings(db, state_center_id, current_user.user_id, department_id)
+                return RoleMappingBackgroundResponse(
+                    is_existing=False,
+                    status=ProcessingStatus.FAILED, 
+                    message="Role mapping generation failed. Please try again later."
+                )
         
         # Create Placeholder Row (Locks the process and acts as the first record)
         placeholder = RoleMapping(
