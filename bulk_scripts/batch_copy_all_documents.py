@@ -6,6 +6,11 @@ table directly: find every document row (excluding ones already owned by the
 target), and for each one that has a real file in GCS, copy that file to a
 new GCS object and insert a new row owned by the target user.
 
+Deduplicated by (state_center_id, department_id, filename): if the same
+document was uploaded by multiple different users under the same state/
+department, only the most recently created copy is kept for copying (an
+empty/NULL department_id is treated as its own consistent group, not skipped).
+
 Fully self-contained: does NOT import anything from this repo's src/ (no app
 config, no ORM models). Talks to Postgres directly via asyncpg and to GCS
 directly via google-cloud-storage.
@@ -160,17 +165,41 @@ def configure_logging() -> Path:
 
 async def get_all_documents(conn, exclude_uploader_id, limit: Optional[int]):
     """Every row in the documents table, excluding documents already owned by the
-    target (can't copy something to its own owner). limit=None means no cap --
-    the whole table."""
-    if limit:
-        return await conn.fetch(
-            "SELECT * FROM documents WHERE uploader_id IS DISTINCT FROM $1 ORDER BY created_at DESC LIMIT $2",
-            exclude_uploader_id, limit,
-        )
-    return await conn.fetch(
+    target (can't copy something to its own owner), deduplicated by
+    (state_center_id, department_id, filename) -- see dedupe_documents_by_scope_and_filename.
+    limit=None means no cap on the deduplicated result -- the whole table."""
+    rows = await conn.fetch(
         "SELECT * FROM documents WHERE uploader_id IS DISTINCT FROM $1 ORDER BY created_at DESC",
         exclude_uploader_id,
     )
+    deduped = dedupe_documents_by_scope_and_filename(rows)
+    return deduped[:limit] if limit else deduped
+
+
+def dedupe_documents_by_scope_and_filename(rows):
+    """The same document (same filename) can be uploaded by different users under the
+    same state_center_id/department_id -- only one copy per (state_center_id,
+    department_id, filename) should ever be copied to the target user, not one per
+    uploader. department_id is frequently empty/NULL, so it's normalized to a
+    consistent placeholder for the dedup key (mirrors build_blob_name's "_root_"
+    treatment of a missing department).
+
+    `rows` must already be ordered by created_at DESC (as get_all_documents does) --
+    dict.setdefault then keeps the FIRST row seen per key, i.e. the most recently
+    created one, and silently drops the rest."""
+    seen: dict = {}
+    for row in rows:
+        key = (row["state_center_id"], row["department_id"] or "_root_", row["filename"])
+        seen.setdefault(key, row)
+    deduped = list(seen.values())
+    dropped = len(rows) - len(deduped)
+    if dropped:
+        logger.info(
+            "DEDUPE: %s duplicate document(s) skipped (same state_center_id/department_id/filename, "
+            "kept the most recently created copy); %s unique document(s) remain",
+            dropped, len(deduped),
+        )
+    return deduped
 
 
 async def insert_document(conn, **fields):
