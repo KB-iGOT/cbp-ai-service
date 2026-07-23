@@ -565,14 +565,33 @@ class ExcelRow:
     role_mapping_id: uuid.UUID
 
 
-def read_excel_rows(path: str) -> List[ExcelRow]:
+@dataclass
+class SkippedRow:
+    """A data row dropped by read_excel_rows because role_mapping_id was blank or not a
+    valid UUID -- kept (with all its other input columns, same as ExcelRow) so it can
+    still be reported as its own, fully-populated row in the outcome CSV (previously it
+    only affected the skipped_rows count in a log line, with no trace in the CSV)."""
+    row_number: int
+    state_center_id: str
+    department_id: str
+    org_type: str
+    state_center_name: str
+    department_name: str
+    designation: str
+    raw_role_mapping_id: str
+    reason: str
+
+
+def read_excel_rows(path: str) -> Tuple[List[ExcelRow], List[SkippedRow]]:
     """
     Reads the input Excel file. The ONLY mandatory column is 'role_mapping_id' (a UUID that
     directly identifies the role_mapping to process). The other 6 columns (state_center_id,
     department_id, org_type, state_center_name, department_name, designation) are optional and
     carried through purely so they can be echoed into the outcome CSV.
 
-    A data row with a blank/invalid role_mapping_id is skipped (logged as a warning).
+    A data row with a blank/invalid role_mapping_id is dropped from the returned ExcelRow list
+    (logged as a warning), but is still returned in the second list (SkippedRow) so it shows up
+    as its own row in the outcome CSV instead of only affecting a count in the log.
     """
     if not os.path.exists(path):
         raise FileNotFoundError(f"Excel file not found: {path}")
@@ -603,20 +622,32 @@ def read_excel_rows(path: str) -> List[ExcelRow]:
         return str(val).strip()
 
     rows: List[ExcelRow] = []
-    skipped_rows = 0
+    skipped_rows: List[SkippedRow] = []
     for row_idx, row in enumerate(worksheet.iter_rows(min_row=2, values_only=False), start=2):
         rm_val = row[rm_col].value
 
+        skipped_row_kwargs = dict(
+            row_number=row_idx,
+            state_center_id=read_text_col(row, "state_center_id"),
+            department_id=read_text_col(row, "department_id"),
+            org_type=read_text_col(row, "org_type"),
+            state_center_name=read_text_col(row, "state_center_name"),
+            department_name=read_text_col(row, "department_name"),
+            designation=read_text_col(row, "designation"),
+        )
+
         if rm_val in (None, ""):
-            skipped_rows += 1
-            logger.warning(f"Row {row_idx}: missing role_mapping_id -> skipping row")
+            reason = "missing role_mapping_id"
+            logger.warning(f"Row {row_idx}: {reason} -> skipping row")
+            skipped_rows.append(SkippedRow(**skipped_row_kwargs, raw_role_mapping_id="", reason=reason))
             continue
 
         try:
             role_mapping_id = uuid.UUID(str(rm_val).strip())
         except ValueError:
-            skipped_rows += 1
-            logger.warning(f"Row {row_idx}: role_mapping_id {rm_val!r} is not a valid UUID -> skipping row")
+            reason = f"role_mapping_id {rm_val!r} is not a valid UUID"
+            logger.warning(f"Row {row_idx}: {reason} -> skipping row")
+            skipped_rows.append(SkippedRow(**skipped_row_kwargs, raw_role_mapping_id=str(rm_val), reason=reason))
             continue
 
         rows.append(
@@ -633,10 +664,10 @@ def read_excel_rows(path: str) -> List[ExcelRow]:
         )
 
     logger.info(
-        f"Read {len(rows)} valid data row(s) from Excel ({skipped_rows} skipped due to "
+        f"Read {len(rows)} valid data row(s) from Excel ({len(skipped_rows)} skipped due to "
         f"missing/invalid role_mapping_id): {path}"
     )
-    return rows
+    return rows, skipped_rows
 
 
 # --------------------------------------------------------------------------------------
@@ -1480,7 +1511,7 @@ async def main():
                      "recommendations/CBP plans are reported as SKIPPED_EXISTING using existing data.")
     logger.info("=" * 100)
 
-    excel_rows = read_excel_rows(EXCEL_FILE)
+    excel_rows, skipped_input_rows = read_excel_rows(EXCEL_FILE)
     if not excel_rows:
         logger.warning("No data rows found in Excel. Nothing to do.")
         await engine.dispose()
@@ -1507,13 +1538,20 @@ async def main():
     logger.info("=" * 100)
     logger.info("RUN SUMMARY")
     logger.info("=" * 100)
-    logger.info(f"Excel rows read:          {len(excel_rows)}")
-    logger.info(f"Units of work (role maps): {units_count}")
-    logger.info(f"Succeeded:                {len(succeeded)}")
-    logger.info(f"Skipped (already done):   {len(skipped)}")
-    logger.info(f"Failed:                   {len(failed)}")
+    logger.info(f"Excel rows read:               {len(excel_rows)}")
+    logger.info(f"Skipped (invalid input row):   {len(skipped_input_rows)}")
+    logger.info(f"Units of work (role maps):     {units_count}")
+    logger.info(f"Succeeded:                     {len(succeeded)}")
+    logger.info(f"Skipped (already done):        {len(skipped)}")
+    logger.info(f"Failed:                        {len(failed)}")
     if DRY_RUN:
         logger.info(f"Would generate (dry-run, LLM not called): {len(would_generate)}")
+
+    if skipped_input_rows:
+        logger.info("-" * 100)
+        logger.info("SKIPPED INVALID ROW DETAILS (also in the outcome CSV as SKIPPED_INVALID_ROW):")
+        for s in skipped_input_rows:
+            logger.info(f"  - row={s.row_number} role_mapping_id={s.raw_role_mapping_id!r} reason={s.reason}")
 
     if failed:
         logger.info("-" * 100)
@@ -1529,6 +1567,9 @@ async def main():
     # plus the recommendation_id, status, course counts, per-stage token usage, and error.
     # contextual_queries_tokens / filter_courses_tokens hold the COMPLETE Gemini usage_metadata
     # object as a JSON string (not just a total), per the requirement for full usage detail.
+    # Rows dropped by read_excel_rows (missing/invalid role_mapping_id) get their own CSV row
+    # too, with only row_number/role_mapping_id/status/error populated -- previously these were
+    # silently absent from the CSV, only visible as a count in the log.
     with open(OUTCOME_CSV_FILE, "w", encoding="utf-8", newline="") as f:
         writer = csv.writer(f)
         writer.writerow([
@@ -1557,6 +1598,21 @@ async def main():
                 t.embedding_tokens if t else 0,
                 t.total_tokens if t else 0,
                 o.error or "",
+            ])
+
+        for skipped in skipped_input_rows:
+            writer.writerow([
+                skipped.state_center_id,
+                skipped.department_id,
+                skipped.org_type,
+                skipped.state_center_name,
+                skipped.department_name,
+                skipped.designation,
+                skipped.raw_role_mapping_id,
+                "",
+                "SKIPPED_INVALID_ROW",
+                0, 0, "", "", 0, 0,
+                f"row {skipped.row_number}: {skipped.reason}",
             ])
 
     logger.info("=" * 100)
