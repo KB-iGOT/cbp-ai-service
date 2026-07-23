@@ -73,7 +73,7 @@ import sys
 import uuid
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 import httpx
 import openpyxl
@@ -357,7 +357,26 @@ class ExcelRow:
     mdo_id: str
 
 
-def read_excel_rows(path: str) -> List[ExcelRow]:
+@dataclass
+class SkippedRow:
+    """A data row dropped by read_excel_rows because role_mapping_id/recommendation_id/
+    mdo_id was blank or not a valid UUID -- kept (with all its other input columns, same
+    as ExcelRow) so it can still be reported as its own row in the outcome CSV and RUN
+    SUMMARY, instead of only affecting a count in a log line."""
+    row_number: int
+    state_center_id: str
+    department_id: str
+    org_type: str
+    state_center_name: str
+    department_name: str
+    designation: str
+    raw_role_mapping_id: str
+    raw_recommendation_id: str
+    raw_mdo_id: str
+    reason: str
+
+
+def read_excel_rows(path: str) -> Tuple[List[ExcelRow], List[SkippedRow]]:
     """
     Reads all columns from the Excel file. 'role_mapping_id', 'recommendation_id', and
     'mdo_id' are MANDATORY columns -- if any of the three is missing from the file
@@ -412,32 +431,48 @@ def read_excel_rows(path: str) -> List[ExcelRow]:
         return str(val).strip() if val not in (None, "") else ""
 
     rows: List[ExcelRow] = []
-    skipped_rows = 0
+    skipped_rows: List[SkippedRow] = []
     for row_idx, row in enumerate(worksheet.iter_rows(min_row=2, values_only=False), start=2):
         rm_raw = row[role_mapping_id_col].value
         rec_raw = row[recommendation_id_col].value
         mdo_raw = row[mdo_id_col].value
 
+        skipped_row_kwargs = dict(
+            row_number=row_idx,
+            state_center_id=_optional_value(row, optional_cols["state_center_id"]),
+            department_id=_optional_value(row, optional_cols["department_id"]),
+            org_type=_optional_value(row, optional_cols["org_type"]),
+            state_center_name=_optional_value(row, optional_cols["state_center_name"]),
+            department_name=_optional_value(row, optional_cols["department_name"]),
+            designation=_optional_value(row, optional_cols["designation"]),
+            raw_role_mapping_id=str(rm_raw) if rm_raw not in (None, "") else "",
+            raw_recommendation_id=str(rec_raw) if rec_raw not in (None, "") else "",
+            raw_mdo_id=str(mdo_raw) if mdo_raw not in (None, "") else "",
+        )
+
         if rm_raw in (None, "") or rec_raw in (None, "") or mdo_raw in (None, ""):
-            skipped_rows += 1
-            logger.warning(
-                f"Row {row_idx}: missing role_mapping_id/recommendation_id/mdo_id "
-                f"(role_mapping_id={rm_raw!r}, recommendation_id={rec_raw!r}, mdo_id={mdo_raw!r}) -> skipping row"
+            reason = (
+                f"missing role_mapping_id/recommendation_id/mdo_id "
+                f"(role_mapping_id={rm_raw!r}, recommendation_id={rec_raw!r}, mdo_id={mdo_raw!r})"
             )
+            logger.warning(f"Row {row_idx}: {reason} -> skipping row")
+            skipped_rows.append(SkippedRow(**skipped_row_kwargs, reason=reason))
             continue
 
         try:
             rm_id = uuid.UUID(str(rm_raw).strip())
         except ValueError:
-            skipped_rows += 1
-            logger.warning(f"Row {row_idx}: role_mapping_id {rm_raw!r} is not a valid UUID -> skipping row")
+            reason = f"role_mapping_id {rm_raw!r} is not a valid UUID"
+            logger.warning(f"Row {row_idx}: {reason} -> skipping row")
+            skipped_rows.append(SkippedRow(**skipped_row_kwargs, reason=reason))
             continue
 
         try:
             rec_id = uuid.UUID(str(rec_raw).strip())
         except ValueError:
-            skipped_rows += 1
-            logger.warning(f"Row {row_idx}: recommendation_id {rec_raw!r} is not a valid UUID -> skipping row")
+            reason = f"recommendation_id {rec_raw!r} is not a valid UUID"
+            logger.warning(f"Row {row_idx}: {reason} -> skipping row")
+            skipped_rows.append(SkippedRow(**skipped_row_kwargs, reason=reason))
             continue
 
         rows.append(
@@ -457,9 +492,9 @@ def read_excel_rows(path: str) -> List[ExcelRow]:
 
     logger.info(
         f"Read {len(rows)} valid data row(s) from Excel "
-        f"({skipped_rows} skipped due to missing/invalid role_mapping_id/recommendation_id/mdo_id): {path}"
+        f"({len(skipped_rows)} skipped due to missing/invalid role_mapping_id/recommendation_id/mdo_id): {path}"
     )
-    return rows
+    return rows, skipped_rows
 
 
 # --------------------------------------------------------------------------------------
@@ -825,7 +860,7 @@ async def main():
                      "Rows with a role_mapping + matching CBP plan are reported as WOULD_CREATE.")
     logger.info("=" * 100)
 
-    excel_rows = read_excel_rows(EXCEL_FILE)
+    excel_rows, skipped_input_rows = read_excel_rows(EXCEL_FILE)
     if not excel_rows:
         logger.warning("No data rows found in Excel. Nothing to do.")
         await engine.dispose()
@@ -846,12 +881,22 @@ async def main():
     logger.info("RUN SUMMARY")
     logger.info("=" * 100)
     logger.info(f"Excel rows read:              {len(excel_rows)}")
+    logger.info(f"Skipped (invalid input row):  {len(skipped_input_rows)}")
     logger.info(f"Succeeded:                    {len(succeeded)}")
     logger.info(f"Skipped (role_mapping n/f):   {len(skipped_no_rm)}")
     logger.info(f"Skipped (no CBP plan):        {len(skipped_no_plan)}")
     logger.info(f"Failed:                       {len(failed)}")
     if DRY_RUN:
         logger.info(f"Would create (dry-run):       {len(would_create)}")
+
+    if skipped_input_rows:
+        logger.info("-" * 100)
+        logger.info("SKIPPED INVALID ROW DETAILS (also in the outcome CSV as SKIPPED_INVALID_ROW):")
+        for s in skipped_input_rows:
+            logger.info(
+                f"  - row={s.row_number} role_mapping_id={s.raw_role_mapping_id!r} "
+                f"recommendation_id={s.raw_recommendation_id!r} mdo_id={s.raw_mdo_id!r} reason={s.reason}"
+            )
 
     if failed:
         logger.info("-" * 100)
@@ -891,6 +936,25 @@ async def main():
                 ",".join(str(i) for i in o.approval_request_item_ids) if o.approval_request_item_ids else "",
                 o.result.value,
                 o.error or "",
+            ])
+
+        for skipped in skipped_input_rows:
+            writer.writerow([
+                skipped.state_center_id,
+                skipped.department_id,
+                skipped.org_type,
+                skipped.state_center_name,
+                skipped.department_name,
+                skipped.designation,
+                skipped.raw_role_mapping_id,
+                skipped.raw_recommendation_id,
+                skipped.raw_mdo_id,
+                "",
+                "",
+                0,
+                "",
+                "SKIPPED_INVALID_ROW",
+                f"row {skipped.row_number}: {skipped.reason}",
             ])
 
     logger.info("=" * 100)
