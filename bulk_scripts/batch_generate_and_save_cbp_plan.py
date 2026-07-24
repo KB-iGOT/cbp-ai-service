@@ -35,6 +35,9 @@ Flow per Excel row (one role_mapping_id):
                 (recommendation is NOT regenerated).
         d. A recommendation row exists with status COMPLETED AND a CBP plan already exists
              -> skip this role_mapping entirely.
+    Before any fresh generation (cases a/b above), the role_mapping's igot_designation_name /
+    igot_designation_id are checked: both are mandatory, so a role_mapping with neither set is
+    skipped entirely (SKIPPED_NO_IGOT_DESIGNATION, no LLM call) -- in both dry-run and --execute.
        Recommendation generation (hybrid vector search + LLM filtering) writes
        status=IN_PROGRESS -> COMPLETED (or FAILED with error_message) directly into
        `recommended_courses`, exactly like the API's background task does. On success,
@@ -454,6 +457,8 @@ class RoleMapping(Base):
     activities = Column(JSONB, nullable=True)
     competencies = Column(JSONB, nullable=True)
     sort_order = Column(Integer, nullable=True)
+    igot_designation_name = Column(String, nullable=True)
+    igot_designation_id = Column(String, nullable=True)
 
 
 class RecommendedCourse(Base):
@@ -1226,6 +1231,9 @@ async def create_cbp_plan(
 
 class UnitResult(str, Enum):
     SKIPPED_EXISTING = "SKIPPED_EXISTING"
+    SKIPPED_NO_IGOT_DESIGNATION = "SKIPPED_NO_IGOT_DESIGNATION"  # role_mapping has neither
+    # igot_designation_name nor igot_designation_id -- both are mandatory, so no course
+    # recommendation is generated for it.
     SUCCEEDED = "SUCCEEDED"
     FAILED = "FAILED"
     WOULD_GENERATE = "WOULD_GENERATE"  # dry-run only: no existing COMPLETED recommendation+plan,
@@ -1409,14 +1417,8 @@ async def process_role_mapping(
                 else:
                     logger.info(f"      {label} -> no existing recommendation found -> generating fresh")
 
-                if DRY_RUN:
-                    # Dry-run is a zero-cost plan preview: never call the LLM/embedding pipeline.
-                    # Report that this role_mapping WOULD be freshly generated, with no
-                    # recommendation_id/total_courses/tokens, and stop here.
-                    logger.info(f"      {label} -> dry-run: would generate fresh recommendation (LLM not called)")
-                    return UnitOutcome(excel_row=excel_row, result=UnitResult.WOULD_GENERATE)
-
-                # --- Full role_mapping fetch — only needed now that generation is actually happening ---
+                # --- Full role_mapping fetch — needed now (both to check the mandatory iGOT
+                # designation fields, and, if generation proceeds, to build the user profile) ---
                 async with get_session() as db:
                     role_mapping = await fetch_role_mapping_by_id(db, rm_id)
                 if not role_mapping:
@@ -1424,6 +1426,21 @@ async def process_role_mapping(
                     logger.error(f"FAIL  {label} -> {error_message}")
                     return UnitOutcome(excel_row=excel_row, result=UnitResult.FAILED, error=error_message)
                 label = f"[{index}/{progress.total}] role_mapping={rm_id} designation='{role_mapping.designation_name}' (excel row {excel_row.row_number})"
+
+                # igot_designation_name/igot_designation_id are mandatory -- a role_mapping with
+                # both blank is skipped entirely (no LLM call, no DB writes), in dry-run and execute.
+                if not (role_mapping.igot_designation_name or role_mapping.igot_designation_id):
+                    reason = "role_mapping has neither igot_designation_name nor igot_designation_id"
+                    logger.info(f"SKIP  {label} -> {reason}, skipping")
+                    return UnitOutcome(excel_row=excel_row, result=UnitResult.SKIPPED_NO_IGOT_DESIGNATION,
+                                       error=reason)
+
+                if DRY_RUN:
+                    # Dry-run is a zero-cost plan preview: never call the LLM/embedding pipeline.
+                    # Report that this role_mapping WOULD be freshly generated, with no
+                    # recommendation_id/total_courses/tokens, and stop here.
+                    logger.info(f"      {label} -> dry-run: would generate fresh recommendation (LLM not called)")
+                    return UnitOutcome(excel_row=excel_row, result=UnitResult.WOULD_GENERATE)
 
                 # --- Create fresh IN_PROGRESS recommendation row ---
                 async with get_session() as db:
@@ -1532,6 +1549,7 @@ async def main():
 
     succeeded = [o for o in outcomes if o.result == UnitResult.SUCCEEDED]
     skipped = [o for o in outcomes if o.result == UnitResult.SKIPPED_EXISTING]
+    skipped_no_igot = [o for o in outcomes if o.result == UnitResult.SKIPPED_NO_IGOT_DESIGNATION]
     failed = [o for o in outcomes if o.result == UnitResult.FAILED]
     would_generate = [o for o in outcomes if o.result == UnitResult.WOULD_GENERATE]
 
@@ -1543,6 +1561,7 @@ async def main():
     logger.info(f"Units of work (role maps):     {units_count}")
     logger.info(f"Succeeded:                     {len(succeeded)}")
     logger.info(f"Skipped (already done):        {len(skipped)}")
+    logger.info(f"Skipped (no igot designation): {len(skipped_no_igot)}")
     logger.info(f"Failed:                        {len(failed)}")
     if DRY_RUN:
         logger.info(f"Would generate (dry-run, LLM not called): {len(would_generate)}")
