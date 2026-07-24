@@ -21,6 +21,7 @@ async def get_departments_by_state_center(
     limit: int = 9999,
     offset: int = 0,
     sub_org_type: Optional[OrgTypeEnum] = OrgTypeEnum.state,
+    query: Optional[str] = None,
     current_user: User = Depends(get_current_active_user)
 ):
     """
@@ -43,9 +44,7 @@ async def get_departments_by_state_center(
                     "ministryOrStateType": sub_org_type.value,
                     "ministryOrStateId": state_center_id
                 },
-                "sort_by": {
-                    "createdDate": "desc"
-                },
+                "query": query.strip() if query else "",
                 "limit": limit,
                 "offset": offset,
                 "fields": [
