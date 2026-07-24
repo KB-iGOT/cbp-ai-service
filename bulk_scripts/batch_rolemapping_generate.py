@@ -296,6 +296,8 @@ class Target:
     attempts: int = 0
     comp_count: int = 0
     role_mapping_id: Optional[str] = None
+    igot_designation_name: Optional[str] = None
+    igot_designation_id: Optional[str] = None
     tok_input: int = 0
     tok_output: int = 0
     tok_thinking: int = 0
@@ -450,6 +452,8 @@ async def process_one(t: Target, svc, matcher, user_id: uuid.UUID, instruction: 
                     m = next((x for x in (res or []) if (x.get("input_designation") or "").lower()
                               == (t.designation or "").lower()), None)
                     if m and m.get("id"):
+                        t.igot_designation_name = m.get("designation")
+                        t.igot_designation_id = m.get("id")
                         await crud_role_mapping.update(created[0].id, {
                             "igot_designation_name": m.get("designation"),
                             "igot_designation_id": m.get("id")})
@@ -498,8 +502,8 @@ async def run_execute(to_process: list[Target], user_id: uuid.UUID, instruction:
 # ── report + per-row status ──────────────────────────────────────────────────
 _FIELDS = ["sheet", "row", "resolution", "state_id", "dept_id", "designation", "org_type",
            "state_name", "dept_name", "prior_status", "final_status", "attempts",
-           "competencies", "role_mapping_id", "tok_input", "tok_output", "tok_thinking",
-           "tok_total", "error"]
+           "competencies", "role_mapping_id", "igot_designation_name", "igot_designation_id",
+           "tok_input", "tok_output", "tok_thinking", "tok_total", "error"]
 
 
 def _row_of(t: Target) -> dict:
@@ -510,6 +514,8 @@ def _row_of(t: Target) -> dict:
             "prior_status": t.prior_status or "", "final_status": t.final_status or "",
             "attempts": t.attempts or "", "competencies": t.comp_count or "",
             "role_mapping_id": t.role_mapping_id or "",
+            "igot_designation_name": t.igot_designation_name or "",
+            "igot_designation_id": t.igot_designation_id or "",
             "tok_input": t.tok_input or "", "tok_output": t.tok_output or "",
             "tok_thinking": t.tok_thinking or "", "tok_total": t.tok_total or "",
             "error": t.error or ""}
