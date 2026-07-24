@@ -16,6 +16,7 @@ class OrgType(str, Enum):
 
 class Competency(BaseModel):
     """Schema for competency"""
+    competency_id: Optional[str] = Field(default=None, description="KCM competency id (e.g. BEH-07 / FUN-23); present for Behavioural/Functional, absent for Domain")
     type: str = Field(..., description="Type of competency (Behavioral, Functional, Domain)")
     theme: str = Field(..., description="Theme of the competency")
     sub_theme: str = Field(..., description="Sub-theme of the competency")

@@ -17,6 +17,7 @@ from ...prompts.v2.prompts import DESIGNATION_ROLE_MAPPING_PROMPT
 from ...schemas.role_mapping import AddDesignationToRoleMappingRequest, OrgType, RoleMappingBackgroundResponse, RoleMappingResponse, RoleMappingUpdate, RoleMappingWithoutCBP
 from ...services.v2.role_mapping_service import role_mapping_service
 from ...services.v3.role_mapping_service import role_mapping_service as role_mapping_service_v3
+from ...services.v3.role_mapping_service import canonicalize_competencies
 
 from ...core.database import get_db_session
 from ...core.logger import logger
@@ -401,13 +402,13 @@ async def add_designation_to_role_mapping(
             except Exception as e:
                 logger.warning(f"WAO domain enrichment skipped for add-designation: {e}; keeping summary-based domain")
 
-        # Cross-verify Behavioural/Functional competencies against the KCM dataset, correcting
-        # any theme/sub_theme/type drift from the LLM (reuses the v3 reconciliation logic).
+        # Deterministically canonicalize Behavioural/Functional competencies against the KCM
+        # dataset — snap each to its exact KCM entry by competency_id (or recover the id via
+        # exact name match), correcting type/theme/sub_theme drift and dropping out-of-KCM items.
+        # Reuses the v3 canonicalization logic.
         if designations_to_insert:
-            wrapped = [{"competencies": m.competencies or []} for m in designations_to_insert]
-            wrapped = role_mapping_service_v3.reconcile_role_mappings_with_kcm(wrapped)
-            for m, w in zip(designations_to_insert, wrapped):
-                m.competencies = w["competencies"]
+            for m in designations_to_insert:
+                m.competencies = canonicalize_competencies(m.competencies or [])["competencies"]
 
         # Assign sort_order atomically to prevent duplicates under parallel calls
         new_mapping = await crud_role_mapping.create_with_next_sort_order(
