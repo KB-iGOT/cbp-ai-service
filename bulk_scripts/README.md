@@ -119,6 +119,7 @@ anything from a previous run.
 **Env required**: `DATABASE_URL`, `GCP_STORAGE_BUCKET`, `GCP_STORAGE_PREFIX`, `GCP_STORAGE_CREDENTIALS`
 
 **Input**: none (reads the `documents` table directly).
+
 **Output**: `bulk_scripts/logs/copy_all_documents_<timestamp>.{log,csv}` — one CSV row per document
 (`status, source_file_id, filename, state_center_id, department_id, source_stored_path,
 target_user_id, new_stored_path, new_file_id, error`).
@@ -169,6 +170,7 @@ and logged, not fatal to the batch.
 
 **Input**: `.xlsx` (all tabs, or one via `--sheet`) or `.csv`; columns auto-detected as above, or
 override with `--filter-col`, `--file-id-col`, `--filename-col`, `--state-col`, `--dept-col`.
+
 **Output**: plan/result CSV next to the source file (`--out` to override); per-row status written
 back into the source file (disable with `--no-annotate`); log at
 `bulk_scripts/logs/bulk_summary_runner_<timestamp>.log`.
@@ -218,6 +220,7 @@ whole run. A designation that already has a mapping is skipped by default (re-ge
 
 **Input**: `.xlsx`/`.csv`; ALL of `state_center_id, department_id, org_type, state_center_name,
 department_name, designation` are mandatory columns — missing any of them aborts the whole run.
+
 **Output**: plan/result CSV next to source (`--out` to override); per-row status written back to
 the source file (disable with `--no-annotate`); log at
 `bulk_scripts/logs/role_mapping_runner_<timestamp>.log`.
@@ -274,6 +277,7 @@ Dry-run never calls the LLM/embedding pipeline, even for rows that would need fr
 **Input**: Excel with 7 columns — only `role_mapping_id` (UUID) is mandatory; `state_center_id,
 department_id, org_type, state_center_name, department_name, designation` are optional and only
 echoed into the outcome CSV.
+
 **Output**: `<dir of --excel>/batch_generate_and_save_cbp_plan_<timestamp>.csv` (input columns +
 `recommendation_id`, `status`, `total_courses`, per-stage token counts, `error`); log at
 `bulk_scripts/logs/batch_generate_and_save_cbp_plan_<timestamp>.log`.
@@ -328,6 +332,7 @@ approval requests and sends duplicate emails; only run this once per input file.
 **Input**: Excel with mandatory columns `role_mapping_id`, `recommendation_id`, `mdo_id`; optional/
 echoed-only columns `state_center_id`, `department_id`, `org_type`, `state_center_name`,
 `department_name`, `designation`.
+
 **Output**: `<dir of --excel>/batch_send_approval_requests_<timestamp>.csv` (input columns +
 `approval_request_id`, `request_name`, `designation_count`, `approval_request_item_ids`, `status`,
 `error`); log at `bulk_scripts/logs/batch_send_approval_requests_<timestamp>.log`.
@@ -337,8 +342,10 @@ echoed-only columns `state_center_id`, `department_id`, `org_type`, `state_cente
   guarantee the notification email reached anyone. Sending the email is best-effort: if it fails
   (approver not found, notification service down, etc.), only a warning is logged and the row still
   counts as a success.
-- The approval request's display name is capped at 100 characters, with `...` appended if trimmed —
-  two requests with very long, similar designation names could look identical in a review list.
+- The approval request's display name is built as "AI CBP for `<designation>`" — it uses the iGOT
+  designation name if one is set on the role mapping, and only falls back to the plain designation
+  name when there's no iGOT name. Capped at 100 characters, with `...` appended if trimmed — two
+  requests with very long, similar designation names could look identical in a review list.
 - A row can be "skipped" for two normal, expected reasons that are not failures: no matching CBP
   plan was found, or the role mapping wasn't found for that user — both show up as skips in the
   report, not as errors, so don't assume "0 failures" means every row was submitted.
@@ -378,6 +385,7 @@ credentials — never commit real values).
 
 **Input**: CSV/Excel with mandatory column `approval_request_id`; an optional per-row `due_date`
 column overrides `--due-date` for that row; every other input column is passed through unchanged.
+
 **Output**: `<dir of --excel>/bulk_training_plan_approval_<timestamp>.csv` — every input column (in
 original order) followed by `cbp_plan_name, cbp_plan_id, due_date, status, error, published_by`;
 log at `bulk_scripts/logs/bulk_training_plan_approval_<timestamp>.log`.
@@ -393,6 +401,9 @@ log at `bulk_scripts/logs/bulk_training_plan_approval_<timestamp>.log`.
 - The CBP plan's name is always taken from the **request's own record in the database**, never from
   anything typed in your spreadsheet — a `designation` column in your input file is for your own
   reference/logging only, it does not affect the published plan's name.
+- The plan name is built as "AI CBP for `<designation>`" — it uses the iGOT designation name if one
+  is set on the request's item, and only falls back to the plain designation name when there's no
+  iGOT name.
 - Plan names longer than 70 characters are silently cut short — two long, similar designation names
   could end up looking identical in the published plan list.
 - Sending the "approved" notification email is best-effort, same as script 5 — a row can show
