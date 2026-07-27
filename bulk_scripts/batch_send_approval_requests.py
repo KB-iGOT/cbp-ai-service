@@ -646,9 +646,18 @@ async def send_cbp_approval_email(mdo_id: str, request_name: str, requested_by: 
 # Approval request creation (mirrors crud_approval_request.create_approval_request)
 # --------------------------------------------------------------------------------------
 
-def build_request_name(designation_name: str) -> str:
-    """Request name is simply 'CBP Plan for <designation_name>', per requirement."""
-    return f"AI CBP for {designation_name}"
+REQUEST_NAME_MAX_LEN = 100
+
+
+def build_request_name(designation_name: Optional[str], igot_designation_name: Optional[str] = None) -> str:
+    """Request name is 'AI CBP for <designation>', preferring igot_designation_name over
+    designation_name when both are present. Truncated to REQUEST_NAME_MAX_LEN (100) characters
+    total, with a trailing '...' marker if it had to be cut."""
+    designation = igot_designation_name or designation_name or "Unknown Designation"
+    name = f"AI CBP for {designation}"
+    if len(name) <= REQUEST_NAME_MAX_LEN:
+        return name
+    return name[:REQUEST_NAME_MAX_LEN - 3].rstrip() + "..."
 
 
 def build_approval_request_item(role_mapping: RoleMapping, plan: CBPPlan) -> Dict[str, Any]:
@@ -801,7 +810,7 @@ async def process_row(row: ExcelRow, semaphore: asyncio.Semaphore, progress: "Pr
                 logger.warning(f"SKIP  {label} -> {error_message}")
                 return RowOutcome(excel_row=row, result=RowResult.SKIPPED_NO_CBP_PLAN, error=error_message)
 
-            request_name = build_request_name(role_mapping.designation_name or "Unknown Designation")
+            request_name = build_request_name(role_mapping.designation_name, role_mapping.igot_designation_name)
 
             if DRY_RUN:
                 # Zero-cost plan preview: no DB write, no email, no fabricated ids -- report

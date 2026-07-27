@@ -24,8 +24,9 @@ an update, never an overwrite. The DB row keeps the ORIGINAL filename as-is;
 the GCS object always gets a fresh UUID-based path, so re-running this script
 does not collide with, skip, or overwrite anything copied by a previous run.
 
-DRY RUN BY DEFAULT: without --execute, nothing is written -- only a plan is
-computed and a JSON preview is written. Pass --execute to perform real copies.
+DRY RUN BY DEFAULT: without --execute, no DB/GCS writes happen -- only a plan is computed. An outcome
+CSV (one row per document, dry-run or --execute) is written to bulk_scripts/logs/ either way. Pass
+--execute to perform real copies.
 
 Usage:
     python batch_copy_all_documents.py --user-id <UUID>                       # dry run (default)
@@ -35,7 +36,7 @@ Usage:
 
 import argparse
 import asyncio
-import json
+import csv
 import logging
 import os
 import sys
@@ -66,7 +67,7 @@ def parse_args():
                         help="How many documents to process concurrently (default: 10).")
     parser.add_argument("--execute", action="store_true",
                         help="Perform real copies. Without this flag, the script only does a dry run "
-                             "(no DB writes, no GCS uploads) and writes a JSON preview.")
+                             "(no DB writes, no GCS uploads); an outcome CSV is written either way.")
     parser.add_argument("--limit", type=int, default=None,
                         help="Maximum documents to process (default: unlimited -- the whole table).")
     return parser.parse_args()
@@ -89,7 +90,7 @@ LOGS_DIR = SCRIPT_DIR / "logs"
 LOGS_DIR.mkdir(parents=True, exist_ok=True)
 RUN_TIMESTAMP = datetime.now().strftime("%Y%m%d_%H%M%S")
 LOG_FILE = LOGS_DIR / f"copy_all_documents_{RUN_TIMESTAMP}.log"
-DRY_RUN_OUTPUT_JSON = LOGS_DIR / f"copy_all_documents_{RUN_TIMESTAMP}_dry_run.json"
+OUTCOME_CSV_FILE = LOGS_DIR / f"copy_all_documents_{RUN_TIMESTAMP}.csv"
 
 
 # --------------------------------------------------------------------------
@@ -381,12 +382,28 @@ async def run_copy_all(
         "copy_errors": copy_errors,
     }
 
-    if dry_run:
-        with open(DRY_RUN_OUTPUT_JSON, "w", encoding="utf-8") as f:
-            json.dump({"summary": summary, "documents": outcomes}, f, indent=2, ensure_ascii=False)
-        logger.info("Dry-run JSON output written to: %s", DRY_RUN_OUTPUT_JSON)
+    write_outcome_csv(outcomes)
+    logger.info("Outcome CSV written to: %s", OUTCOME_CSV_FILE)
 
     return summary
+
+
+OUTCOME_CSV_COLUMNS = [
+    "status", "source_file_id", "filename", "state_center_id", "department_id",
+    "source_stored_path", "target_user_id", "new_stored_path", "new_file_id", "error",
+]
+
+
+def write_outcome_csv(outcomes: list) -> None:
+    """One row per document (dry-run or --execute) -- the sole outcome output, replacing the old
+    dry-run-only JSON file. Columns are the union of every possible per-document detail field across
+    all four outcome statuses (copied/would_copy/not_found_in_storage/copy_error); a status that
+    doesn't populate a given field just leaves it blank."""
+    with open(OUTCOME_CSV_FILE, "w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=OUTCOME_CSV_COLUMNS, extrasaction="ignore")
+        writer.writeheader()
+        for row in outcomes:
+            writer.writerow({k: ("" if row.get(k) is None else row.get(k)) for k in OUTCOME_CSV_COLUMNS})
 
 
 # --------------------------------------------------------------------------
@@ -422,8 +439,7 @@ def main():
         logger.info("=" * 100)
         for key, value in result.items():
             logger.info("%s: %s", key, value)
-        if DRY_RUN:
-            logger.info("Dry-run JSON output: %s", DRY_RUN_OUTPUT_JSON)
+        logger.info("Outcome CSV: %s", OUTCOME_CSV_FILE)
         logger.info("Detailed logs written to: %s", log_file)
         logger.info("=" * 100)
         print(result)
