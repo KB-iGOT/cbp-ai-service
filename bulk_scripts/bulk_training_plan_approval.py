@@ -475,13 +475,19 @@ def extract_content_ids(cbp_plan_data_list):
 # as the sibling scripts' with_retry, but built for inspecting an httpx.Response rather than retrying an
 # arbitrary coroutine on any exception.
 
-async def with_retry(client, url, payload, headers, *, description, max_retries, backoff):
+async def with_retry(client, url, payload, headers, *, description, max_retries, backoff, log_payload=True):
     """POST with retry on transport errors + RETRYABLE_HTTP (exponential backoff). A 401/403 is returned
     as-is without retry (the caller reports it as a normal failure). Returns
-    (response|None, transport_error|None, attempts)."""
+    (response|None, transport_error|None, attempts). When log_payload is true (the default -- used for
+    the cb-ext-course-service create/publish calls), logs the full request payload before each attempt
+    and the full response body after each attempt; the notification-email call opts out of this since
+    its payload embeds a large HTML template that would otherwise flood the log."""
     attempts = 0
     while True:
         attempts += 1
+        if log_payload:
+            logger.info(f"  [request] {description} attempt {attempts} -> POST {url} "
+                        f"payload={json.dumps(payload, ensure_ascii=False, default=str)}")
         try:
             resp = await client.post(url, json=payload, headers=headers)
         except httpx.HTTPError as e:
@@ -492,6 +498,10 @@ async def with_retry(client, url, payload, headers, *, description, max_retries,
                            f"(transport error): {e}. Retrying in {delay:.1f}s...")
             await asyncio.sleep(delay)
             continue
+
+        if log_payload:
+            logger.info(f"  [response] {description} attempt {attempts} -> HTTP {resp.status_code} "
+                        f"body={_http_detail(resp)}")
 
         if resp.status_code in (401, 403):
             return resp, None, attempts
@@ -529,7 +539,7 @@ async def call_igot_create(client, cfg, org_id, plan_name, due_date, designation
                         {
                             "userGroupName": "User Group 1",
                             "userGroupCriteriaList": [
-                                {"criteriaKey": "service", "criteriaValue": [designation]},
+                                {"criteriaKey": "designation", "criteriaValue": [designation]},
                                 {"criteriaKey": "rootOrgId", "criteriaValue": [org_id]},
                             ],
                         }
@@ -544,6 +554,7 @@ async def call_igot_create(client, cfg, org_id, plan_name, due_date, designation
             "planType": "AICBP",
         }
     }
+    
     resp, err, _att = await with_retry(client, url, payload, _cb_ext_course_headers(cfg),
                                        description="cb-ext-course-create", max_retries=cfg.max_retries,
                                        backoff=cfg.backoff)
@@ -690,8 +701,9 @@ async def approve_and_publish(session, client, cfg, request_id, due_date_obj):
         await session.rollback()
         return "request_not_found", [], None
     if request.status != ApprovalStatusEnum.PENDING:
+        status = request.status
         await session.rollback()
-        return ("already_approved" if request.status == ApprovalStatusEnum.APPROVED else "not_pending"), [], None
+        return ("already_approved" if status == ApprovalStatusEnum.APPROVED else "not_pending"), [], None
 
     org_id = request.department_id or request.state_center_id
     pending_items = [it for it in request.items if it.status == ApprovalItemStatusEnum.PENDING]
@@ -791,7 +803,7 @@ async def send_approval_email(client, cfg, recipient, plan_name):
     resp, err, _ = await with_retry(client, cfg.notification_base + "/v2/notification/send",
                                     payload, {"Content-Type": "application/json"},
                                     description=f"notify[{recipient}]", max_retries=cfg.max_retries,
-                                    backoff=cfg.backoff)
+                                    backoff=cfg.backoff, log_payload=False)
     if resp is not None and 200 <= resp.status_code < 300:
         logger.info(f"Approval email sent to <{recipient}>")
         return "yes"
