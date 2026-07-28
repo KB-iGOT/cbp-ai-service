@@ -383,6 +383,25 @@ token env var to configure or go stale.
 `TOKEN_CLIENT_SECRET`, `TOKEN_USERNAME`, `TOKEN_PASSWORD` (the last two are the approver's SSO
 credentials — never commit real values).
 
+⚠️ **`CB_EXT_COURSE_SERVICE_URL` and running from a jumphost**: this script calls the CB ext course
+service's admin APIs directly to create and publish the plan. If you're running the script from a
+jumphost (not from inside the cluster), that service isn't reachable directly — you must port-forward
+it to the jumphost first:
+
+```bash
+kubectl port-forward -n dev pod/cb-ext-course-service-75b747db79-plj6m 17005:7005
+```
+
+Then point `CB_EXT_COURSE_SERVICE_URL` in `.env` at the forwarded local port, e.g.:
+
+```
+CB_EXT_COURSE_SERVICE_URL="http://localhost:17005"
+```
+
+The pod name and local port above are examples — use the actual pod name for the environment
+you're targeting (`kubectl get pods -n dev | grep cb-ext-course-service`), and keep the port-forward
+running in a separate terminal for the duration of the script run.
+
 **Input**: CSV/Excel with mandatory column `approval_request_id`; an optional per-row `due_date`
 column overrides `--due-date` for that row; every other input column is passed through unchanged.
 
