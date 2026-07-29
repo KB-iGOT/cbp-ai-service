@@ -545,6 +545,10 @@ original order) followed by `cbp_plan_name, cbp_plan_id, due_date, status, error
 log at `bulk_scripts/logs/bulk_training_plan_approval_<timestamp>.log`.
 
 **Things to know**
+- `published_by` is the approver's user id, extracted from the fetched user token's own `sub` claim
+  (not `--user-id`, which only scopes which requests can be looked up). It's written both to the
+  outcome CSV and to `approval_requests.published_by` in the DB once a request is flipped to
+  `APPROVED`.
 - The **row status is strictly pass/fail** — there is no "partially published" status. If a request
   has 3 designations and 2 publish successfully but 1 fails, the row still shows `failed`, even
   though 2 designations did get published. Don't assume a `failed` row means nothing happened.
