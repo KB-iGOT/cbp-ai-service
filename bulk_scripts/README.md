@@ -116,7 +116,13 @@ before copying, keeping only the most recently created one per group (an empty/N
 gets a brand-new DB row and a brand-new GCS object path, so it never overwrites or collides with
 anything from a previous run.
 
-**Env required**: `DATABASE_URL`, `GCP_STORAGE_BUCKET`, `GCP_STORAGE_PREFIX`, `GCP_STORAGE_CREDENTIALS`
+**Env required**: `DATABASE_URL`, `GCP_STORAGE_BUCKET`, `GCP_STORAGE_PREFIX`, `GCP_STORAGE_CREDENTIALS`, `DOCUMENT_STORAGE_TYPE`
+
+Keep these as-is:
+```
+GCP_STORAGE_PREFIX="documents"
+DOCUMENT_STORAGE_TYPE=gcp
+```
 
 **Input**: none (reads the `documents` table directly).
 
@@ -259,8 +265,8 @@ python bulk_scripts/batch_rolemapping_generate.py --excel <path/to/source.csv> -
 ## 4. `batch_generate_and_save_cbp_plan.py`
 
 **What it does**: Generates course recommendations and saves CBP plans for every
-`role_mapping_id` in an Excel file. Fully self-contained — re-implements the DB/Gemini logic
-directly, no HTTP calls to the app.
+`role_mapping_id` in an input file (Excel or CSV). Fully self-contained — re-implements the
+DB/Gemini logic directly, no HTTP calls to the app.
 
 **What it handles**: A row with a missing/invalid `role_mapping_id` is skipped, not fatal.
 Idempotency per role_mapping: a `COMPLETED` recommendation with an existing CBP plan is skipped
@@ -274,9 +280,9 @@ Dry-run never calls the LLM/embedding pipeline, even for rows that would need fr
 `GOOGLE_GENAI_USE_VERTEXAI`, `GOOGLE_APPLICATION_CREDENTIALS`, `GOOGLE_API_KEY`,
 `GOOGLE_EMBEDDING_MODEL`, `EMBEDDING_OUTPUT_DIMENSIONALITY`, `GEMINI_PRO_MODEL_NAME`
 
-**Input**: Excel with 7 columns — only `role_mapping_id` (UUID) is mandatory; `state_center_id,
-department_id, org_type, state_center_name, department_name, designation` are optional and only
-echoed into the outcome CSV.
+**Input**: `.xlsx`/`.xlsm` or `.csv` with 7 columns — only `role_mapping_id` (UUID) is mandatory;
+`state_center_id, department_id, org_type, state_center_name, department_name, designation` are
+optional and only echoed into the outcome CSV.
 
 **Output**: `<dir of --excel>/batch_generate_and_save_cbp_plan_<timestamp>.csv` (input columns +
 `recommendation_id`, `status`, `total_courses`, per-stage token counts, `error`); log at
@@ -329,9 +335,9 @@ approval requests and sends duplicate emails; only run this once per input file.
 **Env required**: `DATABASE_URL`, `KB_BASE_URL`, `KB_AUTH_TOKEN`, `NOTIFICATION_BASE_URL`,
 `MDO_PORTAL_URL`, `ENABLE_EMAIL_NOTIFICATION`
 
-**Input**: Excel with mandatory columns `role_mapping_id`, `recommendation_id`, `mdo_id`; optional/
-echoed-only columns `state_center_id`, `department_id`, `org_type`, `state_center_name`,
-`department_name`, `designation`.
+**Input**: `.xlsx`/`.xlsm` or `.csv` with mandatory columns `role_mapping_id`, `recommendation_id`,
+`mdo_id`; optional/echoed-only columns `state_center_id`, `department_id`, `org_type`,
+`state_center_name`, `department_name`, `designation`.
 
 **Output**: `<dir of --excel>/batch_send_approval_requests_<timestamp>.csv` (input columns +
 `approval_request_id`, `request_name`, `designation_count`, `approval_request_item_ids`, `status`,

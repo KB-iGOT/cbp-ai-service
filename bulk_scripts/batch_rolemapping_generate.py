@@ -500,17 +500,17 @@ async def run_execute(to_process: list[Target], user_id: uuid.UUID, instruction:
 
 
 # ── report + per-row status ──────────────────────────────────────────────────
-_FIELDS = ["sheet", "row", "resolution", "state_id", "dept_id", "designation", "org_type",
-           "state_name", "dept_name", "prior_status", "final_status", "attempts",
+_FIELDS = ["sheet", "row", "resolution", "state_center_id", "department_id", "designation", "org_type",
+           "state_center_name", "department_name", "prior_status", "final_status", "attempts",
            "competencies", "role_mapping_id", "igot_designation_name", "igot_designation_id",
            "tok_input", "tok_output", "tok_thinking", "tok_total", "error"]
 
 
 def _row_of(t: Target) -> dict:
     return {"sheet": t.sheet or "", "row": t.excel_row, "resolution": t.resolution,
-            "state_id": t.state_id or "", "dept_id": t.dept_id or "",
+            "state_center_id": t.state_id or "", "department_id": t.dept_id or "",
             "designation": t.designation or "", "org_type": t.org_type.value if t.org_type else "",
-            "state_name": t.names[0], "dept_name": t.names[1],
+            "state_center_name": t.names[0], "department_name": t.names[1],
             "prior_status": t.prior_status or "", "final_status": t.final_status or "",
             "attempts": t.attempts or "", "competencies": t.comp_count or "",
             "role_mapping_id": t.role_mapping_id or "",
