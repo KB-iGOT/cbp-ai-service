@@ -32,9 +32,10 @@ touched tables are defined IN THIS FILE (nothing is imported from `src` or `mdo_
 
 Auth for the CB ext course service calls: just `x-authenticated-user-token: {user_token}` (the approver's
 user JWT) + Content-Type -- no service Authorization token, no org/rootorg headers.
-published_by (recorded in the outcome CSV) is extracted from the fetched user_token's own `sub` claim --
-NOT from --user-id. --user-id is the separate value approval_requests.user_id is matched against when
-looking up a row -- a request that exists but belongs to a different user_id is FAILED.
+published_by (recorded in the outcome CSV AND written to approval_requests.published_by once a request is
+flipped to APPROVED) is extracted from the fetched user_token's own `sub` claim -- NOT from --user-id.
+--user-id is the separate value approval_requests.user_id is matched against when looking up a row --
+a request that exists but belongs to a different user_id is FAILED.
 
 The approver user_token is ALWAYS fetched fresh via the SSO OIDC password grant (POST
 {SUNBIRD_SSO_URL}/auth/realms/{SUNBIRD_SSO_REALM}/protocol/openid-connect/token with client_id/
@@ -256,6 +257,7 @@ class ApprovalRequest(Base):
     designation_count = Column(Integer, default=0)
     status = Column(SAEnum(ApprovalStatusEnum, name="approval_status_enum", create_type=False),
                     default=ApprovalStatusEnum.PENDING)
+    published_by = Column(String)
     rejected_at = Column(DateTime(timezone=True))
     revoked_at = Column(DateTime(timezone=True))
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
@@ -635,7 +637,7 @@ async def _get_request_readonly(session, request_id, user_id):
 
 
 async def _persist_approval_per_item(session, request_id, user_id, plan_name, due_date_obj, all_items,
-                                     item_results):
+                                     item_results, published_by):
     """Persist the publish outcome. ONLY items whose iGOT create+publish both succeeded are written --
     a failed item gets NO mdo_approval row and stays PENDING, so it is naturally retried on the next run
     (no special-cased retry-handle placeholder needed). The request is flipped to APPROVED only when
@@ -670,7 +672,7 @@ async def _persist_approval_per_item(session, request_id, user_id, plan_name, du
             update(ApprovalRequest)
             .where(and_(ApprovalRequest.id == request_id, ApprovalRequest.user_id == user_id,
                         ApprovalRequest.status == ApprovalStatusEnum.PENDING))
-            .values(status=ApprovalStatusEnum.APPROVED, updated_at=now)
+            .values(status=ApprovalStatusEnum.APPROVED, published_by=published_by, updated_at=now)
         )
     await session.commit()
 
@@ -721,7 +723,7 @@ async def approve_and_publish(session, client, cfg, request_id, due_date_obj):
         await session.rollback()
         return "already_approved", [], plan_name
     await _persist_approval_per_item(session, request_id, cfg.user_id, plan_name, due_date_obj,
-                                     request.items, item_results)
+                                     request.items, item_results, cfg.published_by)
     return "published", item_results, plan_name
 
 
