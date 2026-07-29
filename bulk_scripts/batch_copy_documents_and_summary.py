@@ -20,8 +20,10 @@ documents share the same filename (uploaded by different people), only the most 
 created one is copied -- see dedupe_documents_by_filename.
 
 A source document is also skipped (status=skipped_already_in_target) if its filename already
-exists among the documents in the row's TARGET scope -- so re-running this script (or two rows
-pointing at the same target scope) never creates duplicate copies there.
+exists among the documents in the row's TARGET scope FOR --user-id specifically -- so re-running
+this script (or two rows pointing at the same target scope for the same user) never creates
+duplicate copies for that user. A same-named document owned by a different user at that target
+scope does not trigger this skip.
 
 Fully self-contained: does NOT import anything from this repo's src/ (no app config, no ORM
 models). Talks to Postgres directly via asyncpg and to GCS directly via google-cloud-storage.
@@ -326,19 +328,24 @@ async def get_documents_in_scope(conn, state_center_id: str, department_id: Opti
     )
 
 
-async def get_existing_filenames_in_scope(conn, state_center_id: str, department_id: Optional[str]) -> set:
-    """Filenames already present in the target scope (regardless of uploader) -- used to skip
-    re-copying a source document whose filename already exists at the target, so a re-run
-    doesn't keep piling up duplicate copies there."""
+async def get_existing_filenames_in_scope(conn, state_center_id: str, department_id: Optional[str],
+                                          uploader_id) -> set:
+    """Filenames already present in the target scope FOR THIS TARGET USER -- used to skip
+    re-copying a source document whose filename already exists at the target under --user-id, so
+    a re-run doesn't keep piling up duplicate copies there. Scoped to uploader_id (not "any
+    uploader") since a same-named document owned by a different user at that scope is not this
+    user's copy and should not block a fresh one from being created for them."""
     if department_id:
         rows = await conn.fetch(
-            "SELECT filename FROM documents WHERE state_center_id = $1 AND department_id = $2",
-            state_center_id, department_id,
+            "SELECT filename FROM documents WHERE state_center_id = $1 AND department_id = $2 "
+            "AND uploader_id = $3",
+            state_center_id, department_id, uploader_id,
         )
     else:
         rows = await conn.fetch(
-            "SELECT filename FROM documents WHERE state_center_id = $1 AND department_id IS NULL",
-            state_center_id,
+            "SELECT filename FROM documents WHERE state_center_id = $1 AND department_id IS NULL "
+            "AND uploader_id = $2",
+            state_center_id, uploader_id,
         )
     return {row["filename"] for row in rows}
 
@@ -525,11 +532,11 @@ async def run_copy_between_scopes(
             })
             continue
 
-        # Skip any source document whose filename already exists in the target scope --
-        # otherwise a re-run of this script (or two rows landing on the same target scope)
-        # would keep piling up duplicate copies there.
+        # Skip any source document whose filename already exists in the target scope FOR THIS
+        # TARGET USER -- otherwise a re-run of this script (or two rows landing on the same
+        # target scope) would keep piling up duplicate copies for that user.
         existing_target_filenames = await get_existing_filenames_in_scope(
-            pool, pair.target_state_center_id, pair.target_department_id
+            pool, pair.target_state_center_id, pair.target_department_id, target_user_id
         )
         for doc in docs:
             if doc["filename"] in existing_target_filenames:

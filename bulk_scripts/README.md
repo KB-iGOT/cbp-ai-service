@@ -173,10 +173,11 @@ in the source scope (regardless of who uploaded it) is a candidate to copy into 
 owned by `--user-id`. Two independent skip checks keep re-runs safe and avoid duplicates:
 - **Within the source scope**: documents sharing the same filename are deduped, keeping only the
   most recently created one (`status=` reflected via the dedup log line, not its own CSV row).
-- **Against the target scope**: a source document is skipped entirely (`status=
-  skipped_already_in_target`) if a document with that same filename already exists in the target
-  scope — so re-running the same input file, or two rows pointing at the same target scope, never
-  creates duplicate copies there.
+- **Against the target scope, for `--user-id` specifically**: a source document is skipped entirely
+  (`status=skipped_already_in_target`) if a document with that same filename already exists in the
+  target scope **owned by `--user-id`** — so re-running the same input file, or two rows pointing
+  at the same target scope for the same user, never creates duplicate copies for that user. A
+  same-named document owned by a different user at that target scope does not trigger the skip.
 
 A scope-pair row whose source scope has zero documents is reported `status=no_documents_in_scope`
 (not fatal to the rest of the run). A document with no real file in GCS is reported
