@@ -1,8 +1,8 @@
 """
 Standalone batch script: generate course recommendations and save CBP plans,
-driven by an Excel file whose mandatory `role_mapping_id` column directly identifies
-each role_mapping to process (one Excel data row == exactly one role_mapping / one unit
-of work — there is no state/department scope expansion).
+driven by an input file (.xlsx/.xlsm or .csv) whose mandatory `role_mapping_id` column
+directly identifies each role_mapping to process (one data row == exactly one role_mapping /
+one unit of work — there is no state/department scope expansion).
 
 This script is FULLY SELF-CONTAINED. It does not import anything from `src/`
 and does not call the HTTP API. All logic (role-mapping lookup, hybrid vector
@@ -14,14 +14,14 @@ SQL/queries/prompts as:
     - src/crud/role_mapping.py, src/crud/course_recommendation.py, src/crud/cbp_plan.py
     - src/models/role_mapping.py, src/models/course_recommendation.py, src/models/cbp_plan.py
 
-Input Excel file has 7 columns (header row 1):
+Input file (.xlsx/.xlsm or .csv) has 7 columns (header row 1):
     state_center_id, department_id, org_type, state_center_name, department_name,
     designation, role_mapping_id
 Only `role_mapping_id` (a UUID) is mandatory as a column; the other 6 columns are carried
 through purely so they can be echoed back into the outcome CSV. Every role_mapping_id in
 the file is processed regardless of its DB status column.
 
-Flow per Excel row (one role_mapping_id):
+Flow per input row (one role_mapping_id):
     Run the idempotency check (re-run-safe — this is what makes a second run of the script
     skip work already done):
         a. No recommendation row exists yet for this role_mapping
@@ -99,14 +99,14 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
             "Generate course recommendations and save CBP plans for every role_mapping_id "
-            "listed in an Excel file. Dry-run is the default; pass --execute to write to the "
-            "database."
+            "listed in an input file (.xlsx/.xlsm or .csv). Dry-run is the default; pass "
+            "--execute to write to the database."
         )
     )
     parser.add_argument(
         "--excel",
         required=True,
-        help="Path to the input Excel file (must contain a 'role_mapping_id' column).",
+        help="Path to the input file: .xlsx/.xlsm or .csv (must contain a 'role_mapping_id' column).",
     )
     parser.add_argument(
         "--user-id",
@@ -587,31 +587,51 @@ class SkippedRow:
     reason: str
 
 
+def _iter_input_rows(path: str) -> Tuple[List[str], "list"]:
+    """Reads the input file's header row + data rows into a uniform shape regardless of format:
+    (lowercased headers, list of raw-value lists aligned to those headers). Supports .xlsx/.xlsm
+    (via openpyxl) and .csv (via the stdlib csv module) -- both input formats share the exact same
+    downstream row-processing logic in read_excel_rows below."""
+    if path.lower().endswith((".xlsx", ".xlsm")):
+        workbook = openpyxl.load_workbook(path)
+        worksheet = workbook.active
+        headers = [str(c.value).strip().lower() if c.value is not None else "" for c in worksheet[1]]
+        data_rows = [
+            [cell.value for cell in row]
+            for row in worksheet.iter_rows(min_row=2, values_only=False)
+        ]
+        return headers, data_rows
+
+    with open(path, newline="", encoding="utf-8-sig") as f:
+        reader = csv.reader(f)
+        try:
+            headers = [h.strip().lower() for h in next(reader)]
+        except StopIteration:
+            return [], []
+        data_rows = [list(raw) for raw in reader]
+        return headers, data_rows
+
+
 def read_excel_rows(path: str) -> Tuple[List[ExcelRow], List[SkippedRow]]:
     """
-    Reads the input Excel file. The ONLY mandatory column is 'role_mapping_id' (a UUID that
-    directly identifies the role_mapping to process). The other 6 columns (state_center_id,
-    department_id, org_type, state_center_name, department_name, designation) are optional and
-    carried through purely so they can be echoed into the outcome CSV.
+    Reads the input file (.xlsx/.xlsm or .csv). The ONLY mandatory column is 'role_mapping_id' (a
+    UUID that directly identifies the role_mapping to process). The other 6 columns
+    (state_center_id, department_id, org_type, state_center_name, department_name, designation)
+    are optional and carried through purely so they can be echoed into the outcome CSV.
 
     A data row with a blank/invalid role_mapping_id is dropped from the returned ExcelRow list
     (logged as a warning), but is still returned in the second list (SkippedRow) so it shows up
     as its own row in the outcome CSV instead of only affecting a count in the log.
     """
     if not os.path.exists(path):
-        raise FileNotFoundError(f"Excel file not found: {path}")
+        raise FileNotFoundError(f"Input file not found: {path}")
 
-    workbook = openpyxl.load_workbook(path)
-    worksheet = workbook.active
-
-    headers: Dict[str, int] = {}
-    for col_idx, cell in enumerate(worksheet[1]):
-        if cell.value is not None and str(cell.value).strip():
-            headers[str(cell.value).strip().lower()] = col_idx
+    header_list, data_rows = _iter_input_rows(path)
+    headers: Dict[str, int] = {h: i for i, h in enumerate(header_list) if h}
 
     if headers.get("role_mapping_id") is None:
         raise SystemExit(
-            f"[config] required column 'role_mapping_id' not found in Excel file: {path}. "
+            f"[config] required column 'role_mapping_id' not found in input file: {path}. "
             f"Headers found: {list(headers.keys())}"
         )
 
@@ -619,17 +639,19 @@ def read_excel_rows(path: str) -> Tuple[List[ExcelRow], List[SkippedRow]]:
 
     def read_text_col(row, name: str) -> str:
         col = headers.get(name)
-        if col is None:
+        if col is None or col >= len(row):
             return ""
-        val = row[col].value
+        val = row[col]
         if val in (None, ""):
             return ""
         return str(val).strip()
 
     rows: List[ExcelRow] = []
     skipped_rows: List[SkippedRow] = []
-    for row_idx, row in enumerate(worksheet.iter_rows(min_row=2, values_only=False), start=2):
-        rm_val = row[rm_col].value
+    for row_idx, row in enumerate(data_rows, start=2):
+        if not row or all(v is None or str(v).strip() == "" for v in row):
+            continue
+        rm_val = row[rm_col] if rm_col < len(row) else None
 
         skipped_row_kwargs = dict(
             row_number=row_idx,
@@ -669,7 +691,7 @@ def read_excel_rows(path: str) -> Tuple[List[ExcelRow], List[SkippedRow]]:
         )
 
     logger.info(
-        f"Read {len(rows)} valid data row(s) from Excel ({len(skipped_rows)} skipped due to "
+        f"Read {len(rows)} valid data row(s) from input file ({len(skipped_rows)} skipped due to "
         f"missing/invalid role_mapping_id): {path}"
     )
     return rows, skipped_rows
