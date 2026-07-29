@@ -158,6 +158,70 @@ python bulk_scripts/batch_copy_all_documents.py --user-id <uuid> --execute --bat
 
 ---
 
+## 1b. `batch_copy_documents_and_summary.py` (optional utility, not a numbered pipeline stage)
+
+**What it does**: Different from script 1 above — this one copies documents **between two specific
+state/department scopes**, driven by an input file, and it carries the **existing AI summary over
+as-is** (no resummarization needed afterwards). Use it when a state/department has no documents of
+its own yet, and you want to seed it by copying an already-summarized set of documents from another
+state/department that already has them — instead of running the full ingestion + summarization
+pipeline (scripts 1 + 2) from scratch for that scope.
+
+**What it handles**: Input rows give one scope-pair each: `source_state_center_id,
+source_department_id, target_state_center_id, target_department_id`. For each row, every document
+in the source scope (regardless of who uploaded it) is a candidate to copy into the target scope,
+owned by `--user-id`. Two independent skip checks keep re-runs safe and avoid duplicates:
+- **Within the source scope**: documents sharing the same filename are deduped, keeping only the
+  most recently created one (`status=` reflected via the dedup log line, not its own CSV row).
+- **Against the target scope**: a source document is skipped entirely (`status=
+  skipped_already_in_target`) if a document with that same filename already exists in the target
+  scope — so re-running the same input file, or two rows pointing at the same target scope, never
+  creates duplicate copies there.
+
+A scope-pair row whose source scope has zero documents is reported `status=no_documents_in_scope`
+(not fatal to the rest of the run). A document with no real file in GCS is reported
+`not_found_in_storage`, same as script 1.
+
+**Env required**: same as script 1 — `DATABASE_URL`, `GCP_STORAGE_BUCKET`, `GCP_STORAGE_PREFIX`,
+`GCP_STORAGE_CREDENTIALS`, `DOCUMENT_STORAGE_TYPE`.
+
+**Input**: `.csv` or `.xlsx`/`.xlsm` with mandatory columns `source_state_center_id,
+source_department_id, target_state_center_id, target_department_id` (the two `*_department_id`
+columns may be blank/empty for a root-level scope). `--sheet` restricts an xlsx read to one tab
+(default: all tabs).
+
+**Output**: log at `bulk_scripts/logs/<input-file-name>_<timestamp>.log`; outcome CSV written
+**alongside the input file** at `<input-file-name>_<timestamp>.csv` (one row per source document
+found, plus one row per skipped/empty scope-pair) — columns: `status, sheet, row, source_file_id,
+filename, source_state_center_id, source_department_id, target_state_center_id,
+target_department_id, source_stored_path, source_summary_status, target_user_id, new_stored_path,
+new_file_id, error`.
+
+**Things to know**
+- Unlike script 1, the copied document's summary (`summary_status`, `summary_text`,
+  `summary_error`, `last_summary_request_id`) is carried over unchanged — the copy is immediately
+  usable downstream (e.g. role mapping generation) without re-running script 2.
+- Source documents are matched by state/department scope only — **not** filtered by uploader, so
+  every document under that source scope is a candidate regardless of who originally uploaded it.
+- Safe to re-run: a document already present (by filename) in the target scope is skipped, not
+  re-copied.
+- The underlying GCS object always gets a brand-new UUID-based path (never the original filename)
+  so it can never collide in storage — the DB row's `filename` column still keeps the original
+  name, so nothing user-visible changes.
+
+```bash
+# 1. Dry run
+python bulk_scripts/batch_copy_documents_and_summary.py --input <path/to/scopes.csv> --user-id <uuid>
+
+# 2. Execute
+python bulk_scripts/batch_copy_documents_and_summary.py --input <path/to/scopes.csv> --user-id <uuid> --execute
+
+# 3. Execute with a specific batch size (default 10)
+python bulk_scripts/batch_copy_documents_and_summary.py --input <path/to/scopes.xlsx> --user-id <uuid> --execute --batch-size 20
+```
+
+---
+
 ## 2. `batch_document_summary.py`
 
 **What it does**: Bulk-generates document summaries from an Excel/CSV list of documents, calling
@@ -258,6 +322,70 @@ python bulk_scripts/batch_rolemapping_generate.py --excel <path/to/source.csv> -
 
 # 3. Execute with a specific batch size (default 10)
 python bulk_scripts/batch_rolemapping_generate.py --excel <path/to/source.csv> --user-id <uuid> --execute --batch-size 20
+```
+
+---
+
+## 3b. `copy_role_mapping_by_designation.py` (optional utility, not a numbered pipeline stage)
+
+**What it does**: Copies existing `role_mappings` rows (one designation's FRAC mapping) from a
+source scope to a target scope, driven by an input file. Pure DB, no LLM calls — use it to seed a
+designation into a new state/department by cloning an already-generated mapping from elsewhere,
+instead of running script 3 (which calls the LLM) again for that designation.
+
+**What it handles**: Each input row names one source designation and one target designation (by
+scope + name). Source rows are matched by **scope + designation name only** — not filtered by
+uploader/owner, so any user's mapping in that source scope is a candidate. If more than one valid
+source row matches (e.g. mapped by different users), only the **most recently created** one is used
+— the rest are silently ignored (dedup by designation name, keep newest). A source designation is
+only copied if it's `COMPLETED` **and** carries real content (non-empty
+`role_responsibilities`/`activities`/`competencies`); otherwise the row is skipped as
+`source_not_completed` or `source_empty`, not fatal to the rest of the run. A missing source
+designation is `source_not_found`. If the **target** user already has that designation in the
+target scope, the row is skipped as `skipped_existing` — safe to re-run without duplicating.
+`sort_order` for the new row is computed fresh for the target scope (`MAX(sort_order)+1`, or `1` if
+the target scope has none yet for that user) — never copied from the source.
+
+**Env required**: `DATABASE_URL` only (pure DB script, no GCS/Gemini).
+
+**Input**: `.csv` (tab- or comma-delimited, auto-detected) or `.xlsx`/`.xlsm`, with "From ... / To
+..." headers (case/space-insensitive): `From Center State ID` (required), `From Department ID`
+(optional, blank = root scope), `From Designation Name` (required), `To Center State ID`
+(required), `To Center state name` (required), `To Department ID` (optional, blank = root scope),
+`To Designation Name` (required). The user id is **not** in the file — every copy is created under
+`--user-id`. An ID cell pasted in scientific notation (e.g. `1.36E+18`) is rejected
+(`id_scientific_notation`) rather than silently mismatched — format ID columns as Text before
+pasting.
+
+**Output**: log at `bulk_scripts/logs/<input-file-name>_<timestamp>.log`; outcome CSV written
+**alongside the input file** at `<input-file-name>_<timestamp>.csv` — one row per input line,
+columns: `row_no, status, reason, source_state_center_id, source_department_id,
+source_designation, source_id, source_status, target_user_id, target_state_center_id,
+target_department_id, target_designation, new_role_mapping_id, new_sort_order`.
+
+**Things to know**
+- `--user-id` is used **only** for the target side (ownership of the new row and the
+  already-has-this-designation check) — it never filters or restricts the source lookup.
+- Only the `role_mappings` row itself is cloned — suggested/user-added courses, course
+  recommendations, and CBP plans are **not** copied; those live downstream of script 4 and would
+  need to be regenerated separately for the new scope.
+- `state_center_name`/`department_name`/`designation_name`/`status`/`user_id`/`state_center_id`/
+  `department_id` are all overridden to the target row's values (`status` is always forced to
+  `COMPLETED`); everything else (the FRAC content, `igot_designation_name`/`igot_designation_id`,
+  `sector_name`, `org_type`, `instruction`, `wing_division_section`) is copied verbatim from the
+  source.
+- Safe to re-run: a designation already present for the target user in the target scope is
+  skipped, not duplicated or overwritten.
+
+```bash
+# 1. Dry run
+python bulk_scripts/copy_role_mapping_by_designation.py --input <path/to/mapping.csv> --user-id <uuid>
+
+# 2. Execute
+python bulk_scripts/copy_role_mapping_by_designation.py --input <path/to/mapping.csv> --user-id <uuid> --execute
+
+# 3. Execute with a specific batch size (default 10)
+python bulk_scripts/copy_role_mapping_by_designation.py --input <path/to/mapping.xlsx> --user-id <uuid> --execute --batch-size 20
 ```
 
 ---
