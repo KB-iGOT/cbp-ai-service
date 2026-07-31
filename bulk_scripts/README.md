@@ -188,15 +188,19 @@ A scope-pair row whose source scope has zero documents is reported `status=no_do
 
 **Input**: `.csv` or `.xlsx`/`.xlsm` with mandatory columns `source_state_center_id,
 source_department_id, target_state_center_id, target_department_id` (the two `*_department_id`
-columns may be blank/empty for a root-level scope). `--sheet` restricts an xlsx read to one tab
-(default: all tabs).
+columns may be blank/empty for a root-level scope). Optional columns `source_state_center_name,
+source_department_name, target_state_center_name, target_department_name` are echoed as-is into
+the outcome CSV if present (purely cosmetic — the `documents` table has no name columns, only
+ids, so these are never looked up, only carried through from the input file). `--sheet` restricts
+an xlsx read to one tab (default: all tabs).
 
 **Output**: log at `bulk_scripts/logs/<input-file-name>_<timestamp>.log`; outcome CSV written
 **alongside the input file** at `<input-file-name>_<timestamp>.csv` (one row per source document
 found, plus one row per skipped/empty scope-pair) — columns: `status, sheet, row, source_file_id,
-filename, source_state_center_id, source_department_id, target_state_center_id,
-target_department_id, source_stored_path, source_summary_status, target_user_id, new_stored_path,
-new_file_id, error`.
+filename, source_state_center_id, source_department_id, source_state_center_name,
+source_department_name, target_state_center_id, target_department_id,
+target_state_center_name, target_department_name, source_stored_path, source_summary_status,
+target_user_id, new_stored_path, new_file_id, error`.
 
 **Things to know**
 - Unlike script 1, the copied document's summary (`summary_status`, `summary_text`,
