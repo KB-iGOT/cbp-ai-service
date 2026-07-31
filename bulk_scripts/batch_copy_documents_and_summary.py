@@ -4,6 +4,10 @@ target state/department scope, for one target user.
 
 Driven by an input file (.csv or .xlsx) where each data row gives one scope-pair:
     source_state_center_id, source_department_id, target_state_center_id, target_department_id
+Optionally also: source_state_center_name, source_department_name, target_state_center_name,
+target_department_name -- purely cosmetic, echoed as-is into the outcome CSV if present (the
+documents table has no name columns, only ids, so these are never looked up -- only carried
+through from the input file).
 
 For each row: every document in the documents table whose (state_center_id, department_id)
 matches the source scope -- regardless of who uploaded it -- is copied. The copy's GCS file
@@ -77,7 +81,9 @@ def parse_args():
     parser.add_argument("--input", required=True,
                         help="Path to the input file: .csv or .xlsx/.xlsm. Must contain columns "
                              "source_state_center_id, source_department_id, target_state_center_id, "
-                             "target_department_id.")
+                             "target_department_id. Optionally also source_state_center_name, "
+                             "source_department_name, target_state_center_name, "
+                             "target_department_name (echoed as-is into the outcome CSV).")
     parser.add_argument("--user-id", required=True, type=uuid.UUID,
                         help="Target user UUID (owner of every copied document). Mandatory.")
     parser.add_argument("--batch-size", type=int, default=10,
@@ -249,13 +255,21 @@ def load_scope_rows(path: str, sheet: str = "") -> list:
 class ScopePair:
     def __init__(self, sheet: str, row_number: int, source_state_center_id: str,
                 source_department_id: Optional[str], target_state_center_id: str,
-                target_department_id: Optional[str]):
+                target_department_id: Optional[str],
+                source_state_center_name: str = "", source_department_name: str = "",
+                target_state_center_name: str = "", target_department_name: str = ""):
         self.sheet = sheet
         self.row_number = row_number
         self.source_state_center_id = source_state_center_id
         self.source_department_id = source_department_id
         self.target_state_center_id = target_state_center_id
         self.target_department_id = target_department_id
+        # Optional, echoed straight from the input file (no DB lookup -- the documents table
+        # has no name columns, only ids) -- blank if the input file doesn't provide them.
+        self.source_state_center_name = source_state_center_name
+        self.source_department_name = source_department_name
+        self.target_state_center_name = target_state_center_name
+        self.target_department_name = target_department_name
 
 
 class SkippedScopeRow:
@@ -299,6 +313,10 @@ def read_scope_pairs(path: str, sheet: str = ""):
             sheet=sheet_name, row_number=row_number,
             source_state_center_id=source_state, source_department_id=source_dept,
             target_state_center_id=target_state, target_department_id=target_dept,
+            source_state_center_name=_cell(row.get("source_state_center_name")) or "",
+            source_department_name=_cell(row.get("source_department_name")) or "",
+            target_state_center_name=_cell(row.get("target_state_center_name")) or "",
+            target_department_name=_cell(row.get("target_department_name")) or "",
         ))
 
     logger.info(
@@ -415,8 +433,12 @@ async def _copy_one_document(conn, bucket, gcs_prefix, doc, pair: ScopePair, tar
         "filename": doc["filename"],
         "source_state_center_id": pair.source_state_center_id,
         "source_department_id": pair.source_department_id,
+        "source_state_center_name": pair.source_state_center_name,
+        "source_department_name": pair.source_department_name,
         "target_state_center_id": pair.target_state_center_id,
         "target_department_id": pair.target_department_id,
+        "target_state_center_name": pair.target_state_center_name,
+        "target_department_name": pair.target_department_name,
         "source_stored_path": doc["stored_path"],
         "source_summary_status": doc["summary_status"],
         "target_user_id": str(target_user_id),
@@ -525,8 +547,12 @@ async def run_copy_between_scopes(
                 "row": pair.row_number,
                 "source_state_center_id": pair.source_state_center_id,
                 "source_department_id": pair.source_department_id,
+                "source_state_center_name": pair.source_state_center_name,
+                "source_department_name": pair.source_department_name,
                 "target_state_center_id": pair.target_state_center_id,
                 "target_department_id": pair.target_department_id,
+                "target_state_center_name": pair.target_state_center_name,
+                "target_department_name": pair.target_department_name,
                 "target_user_id": str(target_user_id),
                 "error": "no documents found for source scope",
             })
@@ -554,8 +580,12 @@ async def run_copy_between_scopes(
                     "filename": doc["filename"],
                     "source_state_center_id": pair.source_state_center_id,
                     "source_department_id": pair.source_department_id,
+                    "source_state_center_name": pair.source_state_center_name,
+                    "source_department_name": pair.source_department_name,
                     "target_state_center_id": pair.target_state_center_id,
                     "target_department_id": pair.target_department_id,
+                    "target_state_center_name": pair.target_state_center_name,
+                    "target_department_name": pair.target_department_name,
                     "source_stored_path": doc["stored_path"],
                     "source_summary_status": doc["summary_status"],
                     "target_user_id": str(target_user_id),
@@ -622,7 +652,9 @@ async def run_copy_between_scopes(
 OUTCOME_CSV_COLUMNS = [
     "status", "sheet", "row", "source_file_id", "filename",
     "source_state_center_id", "source_department_id",
+    "source_state_center_name", "source_department_name",
     "target_state_center_id", "target_department_id",
+    "target_state_center_name", "target_department_name",
     "source_stored_path", "source_summary_status", "target_user_id",
     "new_stored_path", "new_file_id", "error",
 ]
