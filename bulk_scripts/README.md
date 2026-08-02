@@ -603,6 +603,89 @@ If you're running these as a pipeline for a new state/department onboarding, the
 Each step's outcome CSV tells you what's ready to feed into the next step (e.g. which
 `role_mapping_id`s succeeded in step 3 are the ones to hand to step 4).
 
+## Running scripts in the background (VM / jumphost)
+
+Long-running scripts (document summarization, CBP plan generation, etc.) can take hours. On a VM
+or jumphost, run them detached from your terminal so they keep going even if your SSH session
+drops.
+
+**Start the script in the background:**
+
+```bash
+nohup uv run bulk_scripts/batch_document_summary.py \
+  --excel "/path/to/input.csv" --user-id <uuid> --execute \
+  > bulk_scripts/logs/batch_document_summary_console_<label>.out 2>&1 &
+disown
+```
+
+- `nohup ... &` — runs the command in the background and keeps it alive after you log out.
+- `> ...console_<label>.out 2>&1` — redirects stdout+stderr to a file (in addition to the script's
+  own timestamped log file under `bulk_scripts/logs/`, which is written either way). Name the
+  `<label>` something identifying the run (e.g. the date or input file name) so you can find it
+  later.
+- `disown` — detaches the job from the current shell so closing the terminal can't send it a
+  hangup signal. Must be run right after the `&` command, in the same shell session.
+
+**Check whether it's still running:**
+
+```bash
+ps aux | grep batch_document_summary.py
+```
+
+If the only line returned is the `grep` command matching itself, the script has finished (or
+crashed) — it is NOT running anymore. A still-running script shows a second line with the actual
+`python`/`uv run` process.
+
+**Watch its progress live:**
+
+```bash
+tail -f bulk_scripts/logs/batch_document_summary_console_<label>.out
+```
+
+Press `Ctrl+C` to stop watching — this does NOT stop the script itself, it only stops `tail`.
+
+**How to tell it's actually done (not just idle/stuck):** the script's last few log lines report
+the outcome CSV and log file paths (e.g. `report: ...` / `per-row status: ...` /
+`Outcome CSV written to: ...`) — these are only printed once the run has fully finished. If the
+log just stops mid-batch with no such closing lines, and `ps aux` still shows the process, it's
+still running; if `ps aux` shows nothing and there are no closing lines, it likely crashed — check
+the tail of the log/`.out` file for a traceback.
+
+### Killing a background run
+
+**1. Find the process ID (PID):**
+
+```bash
+ps aux | grep batch_document_summary.py
+```
+
+**2. Kill it gracefully first** (lets it close files cleanly):
+
+```bash
+kill <PID>
+```
+
+**3. If it's still running after a few seconds, force-kill it:**
+
+```bash
+kill -9 <PID>
+```
+
+**Or, one-liner to find and kill by name** (kills every process matching, so double-check nothing
+else legitimate matches first):
+
+```bash
+pkill -f batch_document_summary.py
+# or, if it won't stop:
+pkill -9 -f batch_document_summary.py
+```
+
+Killing a script mid-run is safe: every script's outcome CSV and log file are flushed to disk
+incrementally as each row/document finishes, so whatever's already been written stays valid — you
+just won't get a final "RUN SUMMARY" for the rows that hadn't been reached yet. Re-running the
+same command afterwards picks up safely where it left off, for every script except
+`batch_send_approval_requests.py` (see its re-run warning above).
+
 ## If something goes wrong
 
 - Read the outcome CSV's `status`/`error` columns first — every failure has a reason there.
