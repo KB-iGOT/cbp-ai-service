@@ -213,8 +213,7 @@ center_json_output = {
                 "competency_id": "KCM id e.g. BEH-07 / FUN-23 (REQUIRED for Behavioural & Functional; omit for Domain)",
                 "type": "Behavioural | Functional | Domain",
                 "theme": "string",
-                "sub_theme": "string",
-                "source": "KCM or AI Suggested"
+                "sub_theme": "string"
             }
         ],
         "source": ["ACBP", "Work Allocation Order", "AI Suggested"]
@@ -233,8 +232,7 @@ state_json_output = {
                 "competency_id": "KCM id e.g. BEH-07 / FUN-23 (REQUIRED for Behavioural & Functional; omit for Domain)",
                 "type": "Behavioural | Functional | Domain",
                 "theme": "string",
-                "sub_theme": "string",
-                "source": "KCM or AI Suggested"
+                "sub_theme": "string"
             }
         ],
         "source": ["Work Allocation Order", "ACBP", "Additional supporting document", "AI Suggested"]
@@ -259,7 +257,7 @@ class FRACCompetency(BaseModel):
     type: Literal["Behavioural", "Functional", "Domain"] = Field(description="Competency type: Behavioural, Functional, or Domain")
     theme: str = Field(description="Competency theme")
     sub_theme: str = Field(description="Competency sub theme")
-    source: Optional[str] = Field(default=None, description="Competency source")
+    
 class FRACRoleMapping(BaseModel):
     designation_name: str = Field(description="Official designation name")
     wing_division_section: str = Field(description="Wing/division/section the designation belongs to")
