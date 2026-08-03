@@ -168,6 +168,28 @@ class Settings(BaseSettings):
 
     COURSE_RECOMMENDATION_MIN_RELEVANCY: int = 80
 
+    # Per-competency-type controls for course recommendation. Behavioural/Functional courses are
+    # generic and naturally score lower relevancy than Domain courses, so a single flat cutoff
+    # silently deletes them. These give each type its own relevancy floor and a hard MINIMUM count
+    # enforced deterministically after LLM filtering (top-up from the already-retrieved pool when a
+    # type is under its minimum) so per-type counts are stable run-to-run. There is no maximum /
+    # trim: a course the LLM selected is never dropped to satisfy a quota.
+    ENFORCE_COMPETENCY_QUOTAS: bool = Field(
+        default=True,
+        description="If true, enforce hard per-type minimum counts on the final recommended "
+                    "courses (deterministic top-up, never a trim). Set false to fall back to the "
+                    "flat COURSE_RECOMMENDATION_MIN_RELEVANCY cutoff with no count guarantees."
+    )
+    BEHAVIOURAL_MIN_RELEVANCY: int = 75
+    FUNCTIONAL_MIN_RELEVANCY: int = 75
+    BEHAVIOURAL_MIN_COUNT: int = 3
+    FUNCTIONAL_MIN_COUNT: int = 3
+    # Domain keeps the original COURSE_RECOMMENDATION_MIN_RELEVANCY (80) floor — no separate,
+    # lower Domain floor — so Domain courses are filtered exactly as they always were. Only the
+    # count is now guaranteed, because Domain was observed swinging (occasionally near zero)
+    # run-to-run for the same role profile.
+    DOMAIN_MIN_COUNT: int = 3
+
     # Domain competencies from the Work Allocation Order (WAO)
     DOMAIN_FROM_WAO_ENABLED: bool = Field(
         default=False,

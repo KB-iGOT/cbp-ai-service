@@ -153,6 +153,7 @@ async def infer_designation_group(user_profile: str) -> str:
             return "AB"
         result = json.loads(response.text)
         group = result.get("group", "AB")
+        
         logger.info(f"LLM classified designation group as: {group}")
         return group
     except Exception as e:
@@ -175,13 +176,11 @@ async def get_filtered_courses_by_llm(
     """
     logger.info("Filtering candidate courses through LLM")
 
-    if designation_group == "AB":
-        mix_rule = "Domain: ≥50%, Behavioral: ~25%, Functional: ~25%"
-    else:
-        mix_rule = "Domain: ~40%, Behavioral: ~30%, Functional: ~30%"
-    # ({mix_rule})
-    
-
+    # NOTE: The LLM prompt is intentionally left exactly as it was originally — no Behavioural/
+    # Functional coverage instruction is injected here. Adding B/F emphasis to a fixed-size
+    # selection made the model under-pick Domain courses (the total is capped, so more B/F means
+    # fewer Domain). Domain selection must stay identical to the pre-change behaviour, so the B/F
+    # guarantee is enforced ONLY in code (deterministic pure-B/F top-up), never via the prompt.
     user_part = types.Part.from_text(text=f"""
 Role Profile:
 {user_profile}
@@ -322,6 +321,163 @@ async def get_general_courses_from_gemini(user_profile) -> List[Dict[str, Any]]:
         print("Gemini raw response (before failure):", locals().get("response", "No response"))
         print(f"Error fetching general courses from Gemini: {e}")
         return []
+
+def _course_competency_areas(course: dict) -> set:
+    """Return the set of competency areas a course covers, drawn from its competencies list
+    (competencyAreaName / type): any of {'domain', 'functional', 'behavioural'}. A course can
+    cover several. Tolerates both the British 'behavioural' and US 'behavioral' spellings, and
+    mirrors the retrieval SQL (competencyAreaName LIKE '%functional%'/'%behavioural%') and the
+    report grouping so 'a course covers type X' means the same thing everywhere."""
+    areas = set()
+    for c in course.get("competencies") or []:
+        if not isinstance(c, dict):
+            continue
+        area = (c.get("competencyAreaName") or c.get("type") or "").lower()
+        if "domain" in area:
+            areas.add("domain")
+        elif "function" in area:
+            areas.add("functional")
+        elif "behav" in area:
+            areas.add("behavioural")
+    return areas
+
+
+def _passes_type_floor(course: dict) -> bool:
+    """Relevancy floor. The lower Behavioural/Functional floor is applied ONLY to courses that
+    carry no Domain competency — i.e. courses that can never appear in the Domain grouping. Any
+    course that touches Domain (or covers no B/F area) keeps the original flat floor, so every
+    Domain-contributing course is filtered exactly as it was before this change. This guarantees
+    the Domain set is unchanged; only pure Behavioural/Functional courses are affected."""
+    rel = course.get("relevancy", 0)
+    areas = _course_competency_areas(course)
+    if "domain" in areas or not (areas & {"functional", "behavioural"}):
+        return rel >= settings.COURSE_RECOMMENDATION_MIN_RELEVANCY
+    floors = []
+    if "functional" in areas:
+        floors.append(settings.FUNCTIONAL_MIN_RELEVANCY)
+    if "behavioural" in areas:
+        floors.append(settings.BEHAVIOURAL_MIN_RELEVANCY)
+    return rel >= min(floors)
+
+
+def _topup_relevancy(distance: float, floor: int) -> int:
+    """Relevancy to record for a top-up course.
+
+    A top-up never went through the LLM, so it has no LLM-assigned relevancy. Rather than stamping
+    every top-up with the same floor constant (which made them indistinguishable and tied in the
+    final sort), scale the retrieval similarity into a percentage and clamp it into [floor, 100]:
+    the floor keeps them at or above the cutoff they were admitted under, so a downstream consumer
+    filtering on `relevancy >= cutoff` still keeps them, while stronger retrieval matches now rank
+    above weaker ones. Still an approximation, not an LLM judgement — `is_topup` marks it as such."""
+    return max(floor, min(100, round(float(distance) * 100)))
+
+
+def _enrich_topup_course(identifier: str, meta: Any, ptype: str, floor: int, distance: float) -> dict:
+    """Build a course dict for a quota top-up candidate (never went through the LLM filter),
+    shaped exactly like an LLM-filtered+enriched course (same keys, plus `is_topup`) so downstream
+    persistence treats it identically to the others."""
+    _org = getattr(meta, "organisation", None)
+    return {
+        "identifier": identifier,
+        "course": meta.name,
+        "relevancy": _topup_relevancy(distance, floor),
+        "rationale": f"Added to meet minimum {ptype} competency coverage for this role.",
+        "is_public": False,
+        # Marks a deterministic quota top-up rather than an LLM-selected course, so the relevancy
+        # above is read as a retrieval-similarity approximation, not an LLM relevance judgement.
+        "is_topup": True,
+        "competencies": meta.competencies_v6,
+        "duration": meta.duration,
+        "organisation": (
+            ", ".join(str(o) for o in _org if o) if isinstance(_org, list) else (_org or None)
+        ),
+    }
+
+
+def _enforce_competency_quotas(
+    selected: List[dict],
+    all_candidates: List[dict],
+    metadata_map: Dict[str, Any],
+) -> List[dict]:
+    """Guarantee a minimum number of Behavioural, Functional AND Domain courses.
+
+    For each type: count how many selected courses already cover that area; if under its minimum,
+    top up the shortfall from the already-retrieved candidate pool, ranked by vector distance and
+    deduped against the current selection, so identical input yields an identical set.
+
+    Eligibility differs by type:
+      - Behavioural / Functional → PURE candidates only (cover the type, carry NO Domain
+        competency), so a B/F top-up can never enlarge the Domain grouping.
+      - Domain → any Domain-bearing candidate.
+
+    Domain has a minimum because it was observed swinging run-to-run (occasionally near zero) for
+    the same role profile. This is a top-up ONLY: no course the LLM selected is ever dropped,
+    trimmed, or reordered by this function — a type can freely exceed its minimum.
+
+    Returns the adjusted list."""
+    if not settings.ENFORCE_COMPETENCY_QUOTAS:
+        return selected
+
+    # B/F first so their deficits are measured against the LLM's own selection (unchanged
+    # behaviour), then Domain — a Domain top-up that also covers B/F therefore cannot mask a
+    # B/F shortfall. Domain uses the original flat relevancy cutoff, not a lower dedicated floor.
+    reqs = {
+        "behavioural": (settings.BEHAVIOURAL_MIN_COUNT, settings.BEHAVIOURAL_MIN_RELEVANCY),
+        "functional":  (settings.FUNCTIONAL_MIN_COUNT,  settings.FUNCTIONAL_MIN_RELEVANCY),
+        "domain":      (settings.DOMAIN_MIN_COUNT,      settings.COURSE_RECOMMENDATION_MIN_RELEVANCY),
+    }
+
+    result = list(selected)
+    selected_ids = {c["identifier"] for c in result}
+
+    def _is_eligible_topup(course: dict, ptype: str) -> bool:
+        """True if the course may be used to top up ptype. Domain accepts any Domain-bearing
+        course; Behavioural/Functional accept only PURE candidates (no Domain competency) so
+        topping them up cannot enlarge the Domain grouping."""
+        areas = _course_competency_areas(course)
+        if ptype not in areas:
+            return False
+        if ptype == "domain":
+            return True
+        return "domain" not in areas
+
+    for ptype, (min_count, floor) in reqs.items():
+        covered = sum(1 for c in result if ptype in _course_competency_areas(c))
+        deficit = min_count - covered
+        if deficit <= 0:
+            continue
+
+        pool = sorted(
+            (c for c in all_candidates
+             if c.get("identifier") not in selected_ids and _is_eligible_topup(c, ptype)),
+            key=lambda c: c.get("distance", 0),
+            reverse=True,
+        )
+        added = 0
+        for cand in pool:
+            if added >= deficit:
+                break
+            meta = metadata_map.get(cand["identifier"])
+            if not meta:
+                continue
+            result.append(
+                _enrich_topup_course(
+                    cand["identifier"], meta, ptype, floor, cand.get("distance", 0)
+                )
+            )
+            selected_ids.add(cand["identifier"])
+            added += 1
+
+        if added < deficit:
+            logger.warning(
+                f"Quota: '{ptype}' still short by {deficit - added} after top-up (min {min_count}) "
+                f"— no eligible {ptype} candidates left in the retrieved pool; likely a data gap."
+            )
+        else:
+            logger.info(f"Quota: topped up {added} '{ptype}' course(s) to meet min {min_count}")
+
+    return result
+
 
 def _build_competency_query(competencies: list) -> str:
     """
@@ -522,8 +678,9 @@ async def process_recommendation_task(
 
         courses_prompt = "\n".join(candidate_lines)
 
-        # 8. Determine designation group for mix ratios (LLM-reasoned)
-        # designation_group = await infer_designation_group(user_profile)
+        # 8. designation_group is intentionally not inferred: the B/F guarantee is enforced in code
+        #    (pure-B/F top-up), not via prompt emphasis, so no per-group prompt tuning is needed and
+        #    the LLM prompt stays identical to the original — keeping Domain selection unchanged.
         designation_group = None
 
         # 9. LLM filtering + general courses (parallel)
@@ -551,6 +708,9 @@ async def process_recommendation_task(
         logger.info(f"After enrichment, {len(filtered_courses)} courses remain with valid metadata")
         for course in filtered_courses:
             course["is_public"] = False
+            # Explicit False so the flag is present on every course, not only on quota top-ups:
+            # this course's relevancy IS an LLM judgement (see _enrich_topup_course).
+            course["is_topup"] = False
             meta = enriched_map.get(course["identifier"])
             if meta:
                 course["course"] = meta.name
@@ -561,12 +721,29 @@ async def process_recommendation_task(
                     ", ".join(str(o) for o in _org if o) if isinstance(_org, list) else (_org or None)
                 )
 
-        final_filtered_courses = filtered_courses + general_courses
-        final_filtered_courses = [
-            course for course in final_filtered_courses
-            if course.get("relevancy", 0) >= settings.COURSE_RECOMMENDATION_MIN_RELEVANCY
+        # Per-type relevancy floor: Domain-bearing (and untyped) courses keep the original flat
+        # cutoff, so nothing Domain-bearing is filtered differently than before; only pure
+        # Behavioural/Functional courses get the lower floor that stops them being silently deleted.
+        floor_passed = [
+            course for course in (filtered_courses + general_courses)
+            if _passes_type_floor(course)
         ]
+
+        # Guarantee a minimum count for Behavioural, Functional AND Domain via deterministic top-up
+        # from the retrieved pool. Top-up only — no course the LLM selected is ever dropped or
+        # reordered here. B/F top-ups stay restricted to pure B/F candidates so they cannot inflate
+        # the Domain grouping; Domain tops up from any Domain-bearing candidate.
+        final_filtered_courses = _enforce_competency_quotas(floor_passed, all_candidates, metadata_map)
         final_filtered_courses.sort(key=lambda course: course.get("relevancy", 0), reverse=True)
+
+        _breakdown = {"domain": 0, "functional": 0, "behavioural": 0, "untyped": 0}
+        for _c in final_filtered_courses:
+            _areas = _course_competency_areas(_c)
+            if not _areas:
+                _breakdown["untyped"] += 1
+            for _a in _areas:                       # a course can cover several areas
+                _breakdown[_a] += 1
+        logger.info(f"Final course competency coverage (courses may cover multiple): {_breakdown}")
 
         # 11. Persist
         await crud_recommended_course.update_status_and_data(
@@ -579,7 +756,7 @@ async def process_recommendation_task(
 
         logger.info(
             f"Course Recommendation task completed for {recommendation_id}: "
-            f"{len(final_filtered_courses)} courses with relevancy >= 80 "
+            f"{len(final_filtered_courses)} courses after per-type floor + quota enforcement "
             f"(from {len(filtered_courses)} iGOT + {len(general_courses)} public candidates)"
         )
 
