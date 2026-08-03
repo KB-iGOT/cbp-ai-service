@@ -186,13 +186,18 @@ A scope-pair row whose source scope has zero documents is reported `status=no_do
 **Env required**: same as script 1 — `DATABASE_URL`, `GCP_STORAGE_BUCKET`, `GCP_STORAGE_PREFIX`,
 `GCP_STORAGE_CREDENTIALS`, `DOCUMENT_STORAGE_TYPE`.
 
-**Input**: `.csv` or `.xlsx`/`.xlsm` with mandatory columns `source_state_center_id,
-source_department_id, target_state_center_id, target_department_id` (the two `*_department_id`
-columns may be blank/empty for a root-level scope). Optional columns `source_state_center_name,
-source_department_name, target_state_center_name, target_department_name` are echoed as-is into
-the outcome CSV if present (purely cosmetic — the `documents` table has no name columns, only
-ids, so these are never looked up, only carried through from the input file). `--sheet` restricts
-an xlsx read to one tab (default: all tabs).
+**Input**: `.csv` or `.xlsx`/`.xlsm`. `--sheet` restricts an xlsx read to one tab (default: all tabs).
+
+| Column | Required | Notes |
+|---|:---:|---|
+| `source_state_center_id` | ✅ | |
+| `source_department_id` | | blank = root-level scope |
+| `target_state_center_id` | ✅ | |
+| `target_department_id` | | blank = root-level scope |
+| `source_state_center_name` | | cosmetic only — echoed as-is into the outcome CSV, never looked up (the `documents` table has no name columns) |
+| `source_department_name` | | cosmetic only, same as above |
+| `target_state_center_name` | | cosmetic only, same as above |
+| `target_department_name` | | cosmetic only, same as above |
 
 **Output**: log at `bulk_scripts/logs/<input-file-name>_<timestamp>.log`; outcome CSV written
 **alongside the input file** at `<input-file-name>_<timestamp>.csv` (one row per source document
@@ -291,10 +296,27 @@ whole run. A designation that already has a mapping is skipped by default (re-ge
 `--force`). Optionally matches designations to the iGOT master (`--igot-match`, on by default).
 
 **Env required**: `DATABASE_URL`, `GOOGLE_APPLICATION_CREDENTIALS`, `GOOGLE_API_KEY`,
-`GOOGLE_PROJECT_ID` (loaded via `src.core.configs.settings`, same as script 2).
+`GOOGLE_PROJECT_ID` (loaded via `src.core.configs.settings`, same as script 2), plus
+`REDIS_HOST`, `REDIS_PORT`, `REDIS_DB`, `REDIS_DESIG_EMB_PREFIX` — needed because `--igot-match`
+(on by default) caches designation embeddings in Redis via `designation_matcher_service`. These
+four have code-level defaults (`localhost`/`6379`/`0`/`cbp_desig_emb`), so the script won't fail
+outright if they're unset, but they must point at the correct Redis instance for this environment
+or the iGOT-match step will silently talk to the wrong (or no) Redis.
 
-**Input**: `.xlsx`/`.csv`; ALL of `state_center_id, department_id, org_type, state_center_name,
-department_name, designation` are mandatory columns — missing any of them aborts the whole run.
+**Input**: `.xlsx`/`.csv`. **ALL** columns below are mandatory — missing any one aborts the whole
+run (not just the affected row):
+
+| Column | Required | Notes |
+|---|:---:|---|
+| `state_center_id` | ✅ | |
+| `department_id` | ✅ | blank = root-level scope (still must be present as a column) |
+| `org_type` | ✅ | must parse to `state` or `ministry` (tolerant of synonyms like `center`/`central`/`union`) |
+| `state_center_name` | ✅ | |
+| `department_name` | ✅ | |
+| `designation` | ✅ | |
+
+No yes/no filter column exists for this script — every row is processed unless it's a duplicate
+scope+designation or its scope has no document summaries yet.
 
 **Output**: plan/result CSV next to source (`--out` to override); per-row status written back to
 the source file (disable with `--no-annotate`); log at
@@ -354,19 +376,37 @@ the target scope has none yet for that user) — never copied from the source.
 **Env required**: `DATABASE_URL` only (pure DB script, no GCS/Gemini).
 
 **Input**: `.csv` (tab- or comma-delimited, auto-detected) or `.xlsx`/`.xlsm`, with "From ... / To
-..." headers (case/space-insensitive): `From Center State ID` (required), `From Department ID`
-(optional, blank = root scope), `From Designation Name` (required), `To Center State ID`
-(required), `To Center state name` (required), `To Department ID` (optional, blank = root scope),
-`To Designation Name` (required). The user id is **not** in the file — every copy is created under
-`--user-id`. An ID cell pasted in scientific notation (e.g. `1.36E+18`) is rejected
-(`id_scientific_notation`) rather than silently mismatched — format ID columns as Text before
-pasting.
+..." headers (case/space-insensitive; snake_case internal names also accepted). The user id is
+**not** in the file — every copy is created under `--user-id`.
+
+| Column | Required | Notes |
+|---|:---:|---|
+| `From Center State ID` | ✅ | source `state_center_id` |
+| `From Center state name` | | context only |
+| `From Department ID` | | blank = root scope |
+| `From Department Name` | | context only |
+| `From Designation ID` | | informational — matching is by name, not id |
+| `From Designation Name` | ✅ | source designation to copy |
+| `Source Org Type` | ✅ | must be `state` or `ministry` — context only, never applied to the new row |
+| `To Center State ID` | ✅ | target `state_center_id` |
+| `To Center state name` | ✅ | becomes the new row's `state_center_name` |
+| `To Department ID` | | blank = root scope |
+| `ToDepartment Name` | | becomes the new row's `department_name` |
+| `To Designation ID` | | informational |
+| `To Designation Name` | ✅ | target designation |
+| `Target Org Type` | ✅ | must be `state` or `ministry` — becomes the new row's `org_type` |
+
+An ID cell pasted in scientific notation (e.g. `1.36E+18`) is rejected (`id_scientific_notation`)
+rather than silently mismatched — format ID columns as Text before pasting. Either org_type column
+with an unrecognized value (not `state`/`ministry`, tolerant to a few synonyms like
+`center`/`central`/`union`) is rejected as `invalid_org_type`, not fatal to the rest of the run.
 
 **Output**: log at `bulk_scripts/logs/<input-file-name>_<timestamp>.log`; outcome CSV written
 **alongside the input file** at `<input-file-name>_<timestamp>.csv` — one row per input line,
 columns: `row_no, status, reason, source_state_center_id, source_department_id,
-source_designation, source_id, source_status, target_user_id, target_state_center_id,
-target_department_id, target_designation, new_role_mapping_id, new_sort_order`.
+source_designation, source_org_type, source_id, source_status, target_user_id,
+target_state_center_id, target_department_id, target_designation, target_org_type,
+new_role_mapping_id, new_sort_order`.
 
 **Things to know**
 - `--user-id` is used **only** for the target side (ownership of the new row and the
@@ -375,10 +415,12 @@ target_department_id, target_designation, new_role_mapping_id, new_sort_order`.
   recommendations, and CBP plans are **not** copied; those live downstream of script 4 and would
   need to be regenerated separately for the new scope.
 - `state_center_name`/`department_name`/`designation_name`/`status`/`user_id`/`state_center_id`/
-  `department_id` are all overridden to the target row's values (`status` is always forced to
-  `COMPLETED`); everything else (the FRAC content, `igot_designation_name`/`igot_designation_id`,
-  `sector_name`, `org_type`, `instruction`, `wing_division_section`) is copied verbatim from the
-  source.
+  `department_id`/`org_type` are all overridden to the target row's values (`status` is always
+  forced to `COMPLETED`; `org_type` always comes from the input's `Target Org Type` column, **never**
+  cloned from the source — the target scope's org type can legitimately differ from the source's,
+  e.g. copying a state-level designation into a ministry); everything else (the FRAC content,
+  `igot_designation_name`/`igot_designation_id`, `sector_name`, `instruction`,
+  `wing_division_section`) is copied verbatim from the source.
 - Safe to re-run: a designation already present for the target user in the target scope is
   skipped, not duplicated or overwritten.
 
@@ -413,9 +455,17 @@ Dry-run never calls the LLM/embedding pipeline, even for rows that would need fr
 `GOOGLE_GENAI_USE_VERTEXAI`, `GOOGLE_APPLICATION_CREDENTIALS`, `GOOGLE_API_KEY`,
 `GOOGLE_EMBEDDING_MODEL`, `EMBEDDING_OUTPUT_DIMENSIONALITY`, `GEMINI_PRO_MODEL_NAME`
 
-**Input**: `.xlsx`/`.xlsm` or `.csv` with 7 columns — only `role_mapping_id` (UUID) is mandatory;
-`state_center_id, department_id, org_type, state_center_name, department_name, designation` are
-optional and only echoed into the outcome CSV.
+**Input**: `.xlsx`/`.xlsm` or `.csv`.
+
+| Column | Required | Notes |
+|---|:---:|---|
+| `role_mapping_id` | ✅ | UUID identifying the role_mapping to process |
+| `state_center_id` | | optional, echoed into the outcome CSV only |
+| `department_id` | | optional, echoed into the outcome CSV only |
+| `org_type` | | optional, echoed into the outcome CSV only |
+| `state_center_name` | | optional, echoed into the outcome CSV only |
+| `department_name` | | optional, echoed into the outcome CSV only |
+| `designation` | | optional, echoed into the outcome CSV only |
 
 **Output**: `<dir of --excel>/batch_generate_and_save_cbp_plan_<timestamp>.csv` (input columns +
 `recommendation_id`, `status`, `total_courses`, per-stage token counts, `error`); log at
@@ -468,9 +518,20 @@ approval requests and sends duplicate emails; only run this once per input file.
 **Env required**: `DATABASE_URL`, `KB_BASE_URL`, `KB_AUTH_TOKEN`, `NOTIFICATION_BASE_URL`,
 `MDO_PORTAL_URL`, `ENABLE_EMAIL_NOTIFICATION`
 
-**Input**: `.xlsx`/`.xlsm` or `.csv` with mandatory columns `role_mapping_id`, `recommendation_id`,
-`mdo_id`; optional/echoed-only columns `state_center_id`, `department_id`, `org_type`,
-`state_center_name`, `department_name`, `designation`.
+**Input**: `.xlsx`/`.xlsm` or `.csv`. If any of the 3 mandatory columns is entirely missing from
+the file, the script aborts immediately (not just the affected row).
+
+| Column | Required | Notes |
+|---|:---:|---|
+| `role_mapping_id` | ✅ | |
+| `recommendation_id` | ✅ | |
+| `mdo_id` | ✅ | |
+| `state_center_id` | | optional, echoed into the outcome CSV only |
+| `department_id` | | optional, echoed into the outcome CSV only |
+| `org_type` | | optional, echoed into the outcome CSV only |
+| `state_center_name` | | optional, echoed into the outcome CSV only |
+| `department_name` | | optional, echoed into the outcome CSV only |
+| `designation` | | optional, echoed into the outcome CSV only |
 
 **Output**: `<dir of --excel>/batch_send_approval_requests_<timestamp>.csv` (input columns +
 `approval_request_id`, `request_name`, `designation_count`, `approval_request_item_ids`, `status`,
@@ -541,8 +602,13 @@ The pod name and local port above are examples — use the actual pod name for t
 you're targeting (`kubectl get pods -n dev | grep cb-ext-course-service`), and keep the port-forward
 running in a separate terminal for the duration of the script run.
 
-**Input**: CSV/Excel with mandatory column `approval_request_id`; an optional per-row `due_date`
-column overrides `--due-date` for that row; every other input column is passed through unchanged.
+**Input**: CSV/Excel.
+
+| Column | Required | Notes |
+|---|:---:|---|
+| `approval_request_id` | ✅ | blank/invalid value skips that row, not fatal |
+| `due_date` | | overrides `--due-date` for that row only |
+| *(anything else)* | | passed through unchanged into the outcome CSV |
 
 **Output**: `<dir of --excel>/bulk_training_plan_approval_<timestamp>.csv` — every input column (in
 original order) followed by `cbp_plan_name, cbp_plan_id, due_date, status, error, published_by`;
