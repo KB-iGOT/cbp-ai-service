@@ -299,14 +299,18 @@ REPORT_COLUMNS = [
     "status",
     "reason",
     "source_state_center_id",
+    "source_state_center_name",
     "source_department_id",
+    "source_department_name",
     "source_designation",
     "source_org_type",
     "source_id",
     "source_status",
     "target_user_id",
     "target_state_center_id",
+    "target_state_center_name",
     "target_department_id",
+    "target_department_name",
     "target_designation",
     "target_org_type",
     "new_role_mapping_id",
@@ -454,7 +458,9 @@ async def copy_one(db, row, execute, target_user_id):
     Source rows are matched by scope + designation_name only, regardless of owner. Returns a
     uniform result dict (status + all report fields)."""
     ssc = _clean(row.get("source_state_center_id"))
+    ssc_name = _clean(row.get("source_state_center_name"))
     sdept = _clean(row.get("source_department_id"))
+    sdept_name = _clean(row.get("source_department_name"))
     source_designation = _clean(row.get("source_designation_name"))
     source_org_type_raw = _clean(row.get("source_org_type"))
 
@@ -475,14 +481,18 @@ async def copy_one(db, row, execute, target_user_id):
         "status": None,
         "reason": "",
         "source_state_center_id": ssc,
+        "source_state_center_name": ssc_name,
         "source_department_id": sdept,
+        "source_department_name": sdept_name,
         "source_designation": source_designation,
         "source_org_type": source_org_type_raw,
         "source_id": "",
         "source_status": "",
         "target_user_id": str(target_user_id),
         "target_state_center_id": tsc,
+        "target_state_center_name": tsc_name,
         "target_department_id": tdept,
+        "target_department_name": tdept_name,
         "target_designation": target_designation,
         "target_org_type": target_org_type_raw,
         "new_role_mapping_id": "",
