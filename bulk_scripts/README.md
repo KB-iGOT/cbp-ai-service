@@ -375,26 +375,33 @@ the target scope has none yet for that user) — never copied from the source.
 
 **Env required**: `DATABASE_URL` only (pure DB script, no GCS/Gemini).
 
-**Input**: `.csv` (tab- or comma-delimited, auto-detected) or `.xlsx`/`.xlsm`, with "From ... / To
-..." headers (case/space-insensitive; snake_case internal names also accepted). The user id is
-**not** in the file — every copy is created under `--user-id`.
+**Input**: `.csv` (tab- or comma-delimited, auto-detected) or `.xlsx`/`.xlsm`. Also accepts the
+display-style "From ... / To ..." headers (case/space-insensitive) — both forms map to the same
+columns. The user id is **not** in the file — every copy is created under `--user-id`.
+
+**FROM (source) columns:**
 
 | Column | Required | Notes |
 |---|:---:|---|
-| `From Center State ID` | ✅ | source `state_center_id` |
-| `From Center state name` | | context only |
-| `From Department ID` | | blank = root scope |
-| `From Department Name` | | context only |
-| `From Designation ID` | | informational — matching is by name, not id |
-| `From Designation Name` | ✅ | source designation to copy |
-| `Source Org Type` | ✅ | must be `state` or `ministry` — context only, never applied to the new row |
-| `To Center State ID` | ✅ | target `state_center_id` |
-| `To Center state name` | ✅ | becomes the new row's `state_center_name` |
-| `To Department ID` | | blank = root scope |
-| `ToDepartment Name` | | becomes the new row's `department_name` |
-| `To Designation ID` | | informational |
-| `To Designation Name` | ✅ | target designation |
-| `Target Org Type` | ✅ | must be `state` or `ministry` — becomes the new row's `org_type` |
+| `source_state_center_id` | ✅ | |
+| `source_state_center_name` | | context only |
+| `source_department_id` | | blank = root scope |
+| `source_department_name` | | context only |
+| `source_designation_id` | | informational — matching is by name, not id |
+| `source_designation_name` | ✅ | source designation to copy |
+| `source_org_type` | ✅ | must be `state` or `ministry` — context only, never applied to the new row |
+
+**TO (target) columns:**
+
+| Column | Required | Notes |
+|---|:---:|---|
+| `target_state_center_id` | ✅ | |
+| `target_state_center_name` | ✅ | becomes the new row's `state_center_name` |
+| `target_department_id` | | blank = root scope |
+| `target_department_name` | | becomes the new row's `department_name` |
+| `target_designation_id` | | informational |
+| `target_designation_name` | ✅ | target designation |
+| `target_org_type` | ✅ | must be `state` or `ministry` — becomes the new row's `org_type` |
 
 An ID cell pasted in scientific notation (e.g. `1.36E+18`) is rejected (`id_scientific_notation`)
 rather than silently mismatched — format ID columns as Text before pasting. Either org_type column
