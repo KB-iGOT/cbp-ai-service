@@ -577,7 +577,7 @@ You will be provided with the following inputs:
 
 2.1. **Minimum Coverage Requirements**
 - **Behavioural:** MINIMUM 4, MAXIMUM 6 competencies per designation.
-- **Functional:** MINIMUM 3, MAXIMUM 6 competencies per designation.
+- **Functional:** MINIMUM 4, MAXIMUM 6 competencies per designation.
 - **Domain:** MINIMUM 8, MAXIMUM 10 competencies per designation.
 - Do not exceed these ceilings. Prioritise the most critical competencies for the designation’s actual role rather than mapping exhaustively.
 
