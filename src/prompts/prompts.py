@@ -968,53 +968,21 @@ Within each category, sort by:
 ---
 
 ### 11. Language Preference & Sorting
-Language preference must be applied ONLY AFTER contextual relevance has been fully determined.
+(should influence ranking only after contextual relevance has been established. Never recommend a less relevant course solely because it is available in a preferred language.)
 
-Never increase a course's relevance score solely because it is available in a preferred language.
+Select and rank courses based on the learner's administrative context and preferred working language, while ensuring the course remains contextually relevant to the role.
 
-Language should only influence the ranking of courses that have comparable contextual relevance and learning value.
-
-#### Step 1 – Determine Contextual Relevance
-
-First identify and rank the most contextually relevant courses based on:
-
-- Actual Roles & Responsibilities
-- Practical applicability to the designation
-- Course Description
-- Course Keywords / tags
-- Domain, Functional and Behavioral alignment
-- Ministry, Department, Organisation and Sector alignment
-
-Only after this contextual ranking is complete should language preference be considered.
-
-#### Step 2 – Apply Language Preference
-
-##### For State Government roles
+#### For State Government roles
 
 - Prefer courses available in the official language(s) of the respective state wherever available.
-- If two or more courses provide substantially equivalent learning outcomes and contextual relevance, prioritize the state language version for operational and field-level roles.
-- If no suitable state language version is available, recommend the English version.
-- Do not recommend duplicate language versions of the same course unless each version provides distinct learning outcomes or contextual value.
+- If equivalent courses exist in both English and the state's official language, prioritize the state language version for operational and field-level roles.
+- If a suitable state language course is unavailable, recommend the English version.
 
-##### For Central Government roles
+#### For Central Government organisation roles
 
-- Prefer English courses for strategic, policy-making, leadership and senior management roles (e.g., Director, Joint Secretary, Additional Secretary, Secretary, Principal Secretary, Commissioner, etc.).
-- Prefer Hindi courses for operational, implementation-focused and field-level roles when an equivalent contextually relevant course is available.
-- If multiple language versions of the same course exist, recommend only the most appropriate language version.
-
-#### Step 3 – Preserve Contextual Relevance
-
-If the English version is materially more relevant to the learner's role than the preferred language version, the English course must remain ranked higher.
-
-Language preference must NEVER override:
-
-- Contextual relevance
-- Practical applicability
-- Responsibility alignment
-- Learning value
-- Competency alignment
-
-Contextual relevance must always take precedence over language preference.
+- Prefer English courses for strategic, policy-making, leadership and senior management roles (e.g., Director, Joint Secretary, Additional Secretary, Secretary, etc.), as these roles primarily operate in English.
+- For operational, field-level and implementation-focused roles, prioritize Hindi language courses where they improve accessibility and practical learning, while considering the learner's organisation and context.
+- If multiple language versions of the same course exist, recommend only the most appropriate language version and avoid recommending duplicate courses in different languages unless there is a strong contextual requirement.
 
 Return ONLY a JSON array. No markdown.
 """

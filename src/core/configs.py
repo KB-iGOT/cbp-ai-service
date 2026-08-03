@@ -166,14 +166,7 @@ class Settings(BaseSettings):
     
     DEFAULT_RELEVANCY_SCORE: int = 90
 
-    COURSE_RECOMMENDATION_MIN_RELEVANCY: int = 80 # Domain / default relevancy floor
-    COURSE_RECOMMENDATION_FB_MIN_RELEVANCY: int = 80  # (legacy, unused) old shared F/B floor
-    COURSE_RECOMMENDATION_FB_MIN_COUNT: int = 5  # (legacy, unused)
-    # --- experiment: per-type floors + counts ---
-    COURSE_RECOMMENDATION_FUNCTIONAL_MIN_RELEVANCY: int = 70   # Functional floor (experiment: 70)
-    COURSE_RECOMMENDATION_BEHAVIOURAL_MIN_RELEVANCY: int = 80  # Behavioural floor
-    COURSE_RECOMMENDATION_FUNCTIONAL_MIN_COUNT: int = 4        # guaranteed min Functional courses
-    COURSE_RECOMMENDATION_BEHAVIOURAL_MIN_COUNT: int = 5       # guaranteed min Behavioural courses
+    COURSE_RECOMMENDATION_MIN_RELEVANCY: int = 80
 
     # Domain competencies from the Work Allocation Order (WAO)
     DOMAIN_FROM_WAO_ENABLED: bool = Field(
