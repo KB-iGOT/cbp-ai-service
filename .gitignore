@@ -213,7 +213,6 @@ curl
 
 .vscode/
 approaches/
-data/
 logs/
 outputs/
 scripts/

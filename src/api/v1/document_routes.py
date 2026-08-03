@@ -489,32 +489,3 @@ async def download_file(
     except Exception as e:
         logger.error(f"Error downloading file {file_id}: {e}")
         raise HTTPException(status_code=500, detail="Failed to download file")
-
-@router.patch("/document-type", response_model=DocumentResponse, status_code=status.HTTP_200_OK)
-async def update_document_type(
-    file_id: uuid.UUID = Form(...),
-    document_type: DocumentType = Form(...),
-    db: AsyncSession = Depends(get_db_session),
-    current_user: User = Depends(get_current_active_user),
-):
-    """Change the document_type of an already-uploaded file (Manage Document screen).
-    Validates the file belongs to the caller. Does not affect the summary."""
-    logger.info(
-        f"Update document_type request: file_id={file_id}, "
-        f"new_type='{document_type.value}', user={current_user.user_id}"
-    )
-    doc: Document = await crud_document.get_by_id(file_id)
-    if not doc:
-        raise HTTPException(status_code=404, detail="File not found")
-
-    # Ownership validation: file must belong to this user
-    if doc.uploader_id != current_user.user_id:
-        raise HTTPException(status_code=403, detail="Document does not belong to the user")
-
-    try:
-        updated = await crud_document.update(file_id, {"document_type": document_type.value})
-        updated.summary_text = None  # keep payload light, mirror get_file default
-        return updated
-    except Exception as e:
-        logger.error(f"Error updating document_type for file {file_id}: {e}")
-        raise HTTPException(status_code=500, detail="Failed to update document type")
