@@ -980,7 +980,7 @@ async def fetch_keyword_search_courses(db: AsyncSession, keywords: List[str], li
     array_overlaps = " OR ".join(f"keywords && ARRAY[:{f'kw{i}'}]" for i, _ in enumerate(keywords))
     name_ilike = " OR ".join(f"name ILIKE :{f'nl{i}'}" for i, _ in enumerate(keywords))
     fts_parts = " OR ".join(
-        f"to_tsvector('english', COALESCE(description, '')) @@ plainto_tsquery('english', :{f'fts{i}'})"
+        f"description_tsv @@ plainto_tsquery('english', :{f'fts{i}'})"
         for i, _ in enumerate(keywords)
     )
 
