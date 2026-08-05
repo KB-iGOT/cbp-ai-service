@@ -662,6 +662,96 @@ python bulk_scripts/bulk_training_plan_approval.py --excel <path/to/plans.xlsx> 
 
 ---
 
+## 7. `bulk_update_courses_by_role_mapping.py`
+
+**What it does**: Bulk-removes and/or bulk-adds courses on a `role_mappings` row's recommendation
+and CBP plan, driven by an input file. Pure DB, no LLM/API calls — use it to hand-correct a course
+list (e.g. swap out a mis-recommended course) without re-running generation or the app's UI.
+
+**What it handles**: For every input row, updates **both**
+`recommended_courses.filtered_courses` (the recommendation shown in the UI) and
+`cbp_plans.selected_courses` (every CBP plan built on that role mapping) — matching courses to
+remove by their `identifier` field, the same field the app's own single-course delete uses. A
+course to add is resolved against `course_metadata_weightage` (the same table the recommendation
+pipeline enriches from) so it carries the same keys as a generated course and is indistinguishable
+downstream; an identifier not found there is **not** added and is reported under
+`unresolved_courses` rather than inserted as a bare id that would render as an empty card. A
+manually added course is stamped with `--relevancy` (default 90, the app's own default for
+identifier-added courses) and `--rationale`, and `filtered_courses` is re-sorted by relevancy
+descending after an add, matching how generation persists it.
+
+Every row lands in exactly one of these outcomes, all non-fatal to the rest of the run (one bad row
+never aborts the batch):
+
+| Status | When |
+|---|---|
+| `role_mapping_not_found` | `role_mapping_id` doesn't exist in `role_mappings` |
+| `user_mismatch` | role mapping exists but is owned by someone other than `--user-id` |
+| `no_records` | role mapping exists but has no `recommended_courses` **and** no `cbp_plans` rows at all |
+| `recommendation_in_progress` | the role mapping's recommendation is still `IN_PROGRESS` — skipped whole rather than half-edited under a running generation (the same guard the app's API returns a 409 for) |
+| `additions_unresolved` | every requested addition failed to resolve against `course_metadata_weightage`, and there were no removals either |
+| `no_change_needed` | every removal was already absent and every addition was already present — nothing left to do |
+| `would_update` | dry-run only: at least one real add/remove would happen |
+| `updated` | `--execute` only: the add/remove was persisted |
+| `error` | row-level input problem — `missing_columns`, `ambiguous_columns`, `no_courses_specified` (both course columns empty), `identifier_in_both` (same id in both columns), or `invalid_role_mapping_id` |
+
+Safe to re-run: an identifier already gone (or already present) is reported, not an error, so a row
+with nothing left to do comes back as `no_change_needed` rather than failing. Every row runs in its
+own transaction with `SELECT ... FOR UPDATE` under `--execute`, so a concurrent app edit can't be
+silently clobbered by the read-modify-write.
+
+**Env required**: `DATABASE_URL` only (pure DB script, no GCS/Gemini).
+
+**Input**: `.csv` (tab- or comma-delimited, auto-detected) or `.xlsx`/`.xlsm`. Headers are matched
+case/space/underscore-insensitively, so `Role Mapping ID`, `role_mapping_id` and `role-mapping-id`
+are all the same column.
+
+| Column | Required | Accepted header aliases | Notes |
+|---|:---:|---|---|
+| `role_mapping_id` | ✅ | `role mapping`, `role mapping ids` | must exist in `role_mappings`, else `role_mapping_not_found` |
+| `courses_to_be_removed` | | `course_to_be_removed`, `courses to remove`, `course to remove`, `courses to be deleted`, `remove courses`, `removed courses`, `course ids to be removed` | identifier(s) to remove; comma/semicolon/pipe/newline/space-separated or a JSON list — at least one of this or the add column is required |
+| `courses_to_be_added` | | `course_to_be_added`, `courses to add`, `course to add`, `add courses`, `added courses`, `new courses`, `course ids to be added` | identifier(s) to add; same list formats as removals |
+
+A courses cell may hold a single identifier, a separated list, or a JSON/Python-style list — all
+parse to the same result, with duplicates within a cell collapsed. An unquoted bracketed list split
+across columns by a comma-delimited CSV (`[do_1,do_2]` written without surrounding quotes) is
+stitched back together automatically; if a row still has more fields than the header after that
+repair, it's rejected as `ambiguous_columns` rather than guessed at.
+
+**Output**: log at `bulk_scripts/logs/<input-file-name>_<timestamp>.log`; outcome CSV written
+**alongside the input file** at `<input-file-name>_<timestamp>.csv` — one row per input line,
+columns: `row_no, mode, status, reason, role_mapping_id, role_mapping_user_id, state_center_id,
+department_id, designation_name, requested_removals, requested_additions, recommendation_ids,
+recommendation_statuses, rec_courses_before, rec_courses_after, removed_from_recommendations,
+added_to_recommendations, cbp_plan_ids, cbp_courses_before, cbp_courses_after,
+removed_from_cbp_plans, added_to_cbp_plans, added_course_names, not_found_courses,
+unresolved_courses, already_present_courses`.
+
+**Things to know**
+- `--user-id` is **mandatory** and scopes every row: a role mapping owned by anyone else is
+  skipped as `user_mismatch`, never touched.
+- `recommended_courses.actual_courses` (the raw vector-search audit trail) is deliberately left
+  untouched by both operations — only `filtered_courses` drives what the user sees.
+  `suggested_courses` and `user_added_courses` are not touched either; an identifier that only
+  exists there is reported under `not_found_courses` on removal, not removed.
+- Re-generating recommendations afterwards discards every edit made here (removed courses come
+  back, added ones disappear) — run this only after generation has settled for that role mapping.
+- If the same `role_mapping_id` appears on several rows, each row is processed independently
+  against the identifiers on that row (they are not merged).
+
+```bash
+# 1. Dry run
+python bulk_scripts/bulk_update_courses_by_role_mapping.py --excel <path/to/changes.csv> --user-id <uuid>
+
+# 2. Execute
+python bulk_scripts/bulk_update_courses_by_role_mapping.py --excel <path/to/changes.csv> --user-id <uuid> --execute
+
+# 3. Execute with a specific batch size (default 10)
+python bulk_scripts/bulk_update_courses_by_role_mapping.py --excel <path/to/changes.xlsx> --user-id <uuid> --execute --batch-size 20
+```
+
+---
+
 ## Typical end-to-end order
 
 If you're running these as a pipeline for a new state/department onboarding, the usual order is:
@@ -675,6 +765,9 @@ If you're running these as a pipeline for a new state/department onboarding, the
 
 Each step's outcome CSV tells you what's ready to feed into the next step (e.g. which
 `role_mapping_id`s succeeded in step 3 are the ones to hand to step 4).
+
+`bulk_update_courses_by_role_mapping.py` (script 7) is not part of this sequence — it's an ad-hoc
+utility for hand-correcting a course list after step 4 has already run, not a pipeline stage.
 
 ## Running scripts in the background (VM / jumphost)
 
