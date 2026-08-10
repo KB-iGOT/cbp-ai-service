@@ -513,10 +513,13 @@ python bulk_scripts/batch_generate_and_save_cbp_plan.py --excel <path/to/input.x
 plan = one approval request). Fully self-contained — re-implements the send-for-approval + MDO
 email logic directly against the DB.
 
-**What it handles**: If the `role_mapping_id`, `recommendation_id`, or `mdo_id` column is entirely
-missing from the input file, the script aborts immediately (these three columns are mandatory). A
-row with a blank/invalid `role_mapping_id`/`recommendation_id`, or blank `mdo_id`, is skipped, not
-fatal to the batch. A row whose CBP plan isn't found is skipped (`SKIPPED_NO_CBP_PLAN`).
+**What it handles**: If the `role_mapping_id` or `recommendation_id` column is entirely missing
+from the input file, the script aborts immediately (these two columns are mandatory). A row with a
+blank/invalid `role_mapping_id`/`recommendation_id` is skipped, not fatal to the batch. A row whose
+CBP plan isn't found is skipped (`SKIPPED_NO_CBP_PLAN`). `mdo_id` is optional — if the column is
+missing entirely, or present but blank on a row, that row's `mdo_id` is stored as `NULL` (never
+skipped/failed for it); the MDO approval email is simply not sent for that row, logged as a
+no-op, same as when a real `mdo_id` doesn't resolve to any MDO admin.
 
 ⚠️ **Does not handle re-runs safely** — there is no dedup/already-submitted check. Every run creates
 fresh approval requests for every eligible row. Re-running the same input file creates duplicate
@@ -525,14 +528,14 @@ approval requests and sends duplicate emails; only run this once per input file.
 **Env required**: `DATABASE_URL`, `KB_BASE_URL`, `KB_AUTH_TOKEN`, `NOTIFICATION_BASE_URL`,
 `MDO_PORTAL_URL`, `ENABLE_EMAIL_NOTIFICATION`
 
-**Input**: `.xlsx`/`.xlsm` or `.csv`. If any of the 3 mandatory columns is entirely missing from
-the file, the script aborts immediately (not just the affected row).
+**Input**: `.xlsx`/`.xlsm` or `.csv`. If either mandatory column is entirely missing from the
+file, the script aborts immediately (not just the affected row).
 
 | Column | Required | Notes |
 |---|:---:|---|
 | `role_mapping_id` | ✅ | |
 | `recommendation_id` | ✅ | |
-| `mdo_id` | ✅ | |
+| `mdo_id` | | optional — missing column or blank cell is stored as `NULL`; the approval email is skipped for that row, not an error |
 | `state_center_id` | | optional, echoed into the outcome CSV only |
 | `department_id` | | optional, echoed into the outcome CSV only |
 | `org_type` | | optional, echoed into the outcome CSV only |
@@ -545,6 +548,10 @@ the file, the script aborts immediately (not just the affected row).
 `error`); log at `bulk_scripts/logs/batch_send_approval_requests_<timestamp>.log`.
 
 **Things to know**
+- `mdo_id` is optional — a row with no `mdo_id` (missing column or blank cell) is still submitted
+  normally; it's stored as `NULL` on the approval request and the MDO approval email is simply not
+  sent for that row (logged, not a failure). If the app's own DB has `mdo_id` as `NOT NULL`, keep
+  that DB change in sync with this script's assumption before relying on this.
 - A row marked "succeeded" in the output means the approval request was created — it does **not**
   guarantee the notification email reached anyone. Sending the email is best-effort: if it fails
   (approver not found, notification service down, etc.), only a warning is logged and the row still

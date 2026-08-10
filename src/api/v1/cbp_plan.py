@@ -311,7 +311,7 @@ async def update_cbp_plan(
         raise
     except Exception as e:
         logger.error(f"Error updating CBP plan: {str(e)}")
-        db.rollback()
+        await db.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to update CBP plan: {str(e)}"

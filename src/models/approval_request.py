@@ -29,7 +29,7 @@ class ApprovalRequest(Base):
     state_center_name = Column(String(255), nullable=False)
     department_name = Column(String(255), nullable=True)
     # Approver (MDO Admin/Leader)
-    mdo_id = Column(String(255), nullable=False, index=True)
+    mdo_id = Column(String(255), nullable=True, index=True)
     
     # Counts
     designation_count = Column(Integer, nullable=False, default=0)
