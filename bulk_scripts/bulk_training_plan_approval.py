@@ -253,7 +253,7 @@ class ApprovalRequest(Base):
     department_id = Column(String)
     state_center_name = Column(String)
     department_name = Column(String)
-    mdo_id = Column(String)
+    mdo_id = Column(String, nullable=True)
     designation_count = Column(Integer, default=0)
     status = Column(SAEnum(ApprovalStatusEnum, name="approval_status_enum", create_type=False),
                     default=ApprovalStatusEnum.PENDING)
