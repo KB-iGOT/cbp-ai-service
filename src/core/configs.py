@@ -2,7 +2,6 @@ from enum import Enum
 from typing import Union
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from google.genai import types
 
 class EnvironmentOption(str, Enum):
     LOCAL = "local"
@@ -73,17 +72,6 @@ class Settings(BaseSettings):
     GEMINI_RETRY_ATTEMPTS: int = Field(default=3, description="Max number of retry attempts for a failed Gemini API call")
     GEMINI_RETRY_EXP_BASE: float = Field(default=2.0, description="Exponential backoff base multiplier for Gemini API call retries")
     GEMINI_RETRY_HTTP_STATUS_CODES: list[int] = Field(default=[429, 500, 502, 503, 504], description="HTTP status codes that trigger a retry for Gemini API calls")
-
-    @property
-    def GEMINI_HTTP_OPTIONS(self) -> types.HttpOptions:
-        return types.HttpOptions(
-            retry_options=types.HttpRetryOptions(
-                initial_delay=self.GEMINI_RETRY_INITIAL_DELAY,
-                attempts=self.GEMINI_RETRY_ATTEMPTS,
-                exp_base=self.GEMINI_RETRY_EXP_BASE,
-                http_status_codes=self.GEMINI_RETRY_HTTP_STATUS_CODES,
-            )
-        )
 
     ROLE_MAPPING_BATCH_SIZE: int = Field(default=30, description="Number of designations per batch when processing PASS 2 role mapping generation in parallel")
 
