@@ -29,7 +29,7 @@ class ApprovalRequest(Base):
     state_center_name = Column(String(255), nullable=False)
     department_name = Column(String(255), nullable=True)
     # Approver (MDO Admin/Leader)
-    mdo_id = Column(String(255), nullable=False, index=True)
+    mdo_id = Column(String(255), nullable=True, index=True)
     
     # Counts
     designation_count = Column(Integer, nullable=False, default=0)
@@ -41,6 +41,9 @@ class ApprovalRequest(Base):
         default=ApprovalStatus.PENDING
     )
     
+    # Published by (external iGOT portal user id, set once the request is published)
+    published_by = Column(String(255), nullable=True, index=True)
+
     # Timestamps
     rejected_at = Column(DateTime(timezone=True), nullable=True)
     revoked_at = Column(DateTime(timezone=True), nullable=True)
@@ -69,7 +72,7 @@ class ApprovalRequestItem(Base):
         index=True
     )
     wing_division_section = Column(
-        String(255), 
+        Text,
         nullable=True
     )
     role_responsibilities = Column(

@@ -13,24 +13,12 @@ from ...prompts.v3.prompts import (
     DESIGNATION_EXTRACTION_PROMPT,
     ROLE_MAPPING_PROMPT_CENTRE,
     ROLE_MAPPING_PROMPT_STATE,
-    DOMAIN_FROM_WAO_PROMPT
 )
 from ...crud.document import crud_document
-from ...services.storage_service import get_storage_service
 from ...core.logger import logger
 
 with open("data/competencies.json") as f:
     COMPETENCY_MAPPING = json.load(f)
-
-# Response schema for the per-designation domain-from-WAO pass (PASS 3)
-DOMAIN_FROM_WAO_SCHEMA = {
-    "type": "ARRAY",
-    "items": {
-        "type": "OBJECT",
-        "properties": {"theme": {"type": "STRING"}, "sub_theme": {"type": "STRING"}},
-        "required": ["theme", "sub_theme"],
-    },
-}
 
 # src/prompts/v2/prompts.py (add this to your existing prompts file)
 
@@ -45,8 +33,7 @@ center_json_output = {
             {
                 "type": "Behavioural | Functional | Domain",
                 "theme": "string",
-                "sub_theme": "string",
-                "source": "KCM or AI Suggested"
+                "sub_theme": "string"
             }
         ],
         "source": ["ACBP", "Work Allocation Order", "AI Suggested"]
@@ -64,8 +51,7 @@ state_json_output = {
             {
                 "type": "Behavioural | Functional | Domain",
                 "theme": "string",
-                "sub_theme": "string",
-                "source": "KCM or AI Suggested"
+                "sub_theme": "string"
             }
         ],
         "source": ["Work Allocation Order", "ACBP", "Additional supporting document", "AI Suggested"]
@@ -89,7 +75,7 @@ class FRACCompetency(BaseModel):
     type: Literal["Behavioural", "Functional", "Domain"] = Field(description="Competency type: Behavioural, Functional, or Domain")
     theme: str = Field(description="Competency theme")
     sub_theme: str = Field(description="Competency sub theme")
-    source: Optional[str] = Field(default=None, description="Competency source")
+    
 class FRACRoleMapping(BaseModel):
     designation_name: str = Field(description="Official designation name")
     wing_division_section: str = Field(description="Wing/division/section the designation belongs to")
@@ -341,151 +327,6 @@ class RoleMappingService:
         
         return "\n\n".join(parts)
     
-    async def _get_wao_pdf_parts(
-        self, user_id, state_center_id, department_id=None,
-        document_type: str | None = "Work Allocation Order"
-    ) -> List[types.Part]:
-        """Read the WAO document(s) from storage as Gemini PDF Parts.
-
-        The PDF bytes are sent to Gemini directly (native PDF understanding), so scanned/image
-        pages, tables and column layouts are handled — mirroring how the summary is generated
-        (Part.from_bytes(application/pdf)). Returns [] on any failure so PASS 3 falls back to the
-        summary-based domain competencies (non-breaking).
-        """
-        try:
-            _, docs = await crud_document.get_all_documents_async(
-                user_id, state_center_id, department_id, document_type=document_type)
-            if not docs:
-                return []
-            storage = get_storage_service()
-            parts = []
-            for doc in docs:
-                try:
-                    pdf_bytes = storage.read_file(doc.stored_path)
-                    if pdf_bytes:
-                        parts.append(types.Part.from_bytes(data=pdf_bytes, mime_type="application/pdf"))
-                except Exception as e:
-                    logger.warning(f"WAO PDF read failed for '{getattr(doc, 'stored_path', '?')}': {e}")
-            return parts
-        except Exception as e:
-            logger.warning(f"_get_wao_pdf_parts failed: {e}")
-            return []
-
-    async def _create_wao_cache(self, pdf_parts: List[types.Part]) -> Optional[str]:
-        """Create a Gemini context cache holding the WAO PDF(s), reused across the per-designation
-        domain calls (the PDF is uploaded/charged once, not per call). Returns the cache name, or
-        None if caching is disabled (DOMAIN_FROM_WAO_CACHE_TTL_SECONDS <= 0) or unavailable (e.g.
-        the doc is below the model's minimum cacheable size) — the caller then sends the PDF inline
-        on each call (still correct, just less token-efficient)."""
-        ttl = settings.DOMAIN_FROM_WAO_CACHE_TTL_SECONDS
-        if not ttl or ttl <= 0:
-            logger.info("WAO context caching disabled (DOMAIN_FROM_WAO_CACHE_TTL_SECONDS<=0); sending PDF inline per call")
-            return None
-        try:
-            cache = await self.client.aio.caches.create(
-                model="gemini-3.1-pro-preview",
-                config=types.CreateCachedContentConfig(
-                    display_name="wao-domain",
-                    contents=[types.Content(role="user", parts=pdf_parts)],
-                    ttl=f"{ttl}s"))
-            logger.info(f"WAO context cache created ({cache.name}, ttl={ttl}s) — reused across designations")
-            return cache.name
-        except Exception as e:
-            logger.warning(f"WAO context cache unavailable ({e}); sending PDF inline per call")
-            return None
-
-    async def _delete_wao_cache(self, cache_name: str):
-        """Best-effort cache cleanup (it would otherwise expire via TTL)."""
-        try:
-            await self.client.aio.caches.delete(name=cache_name)
-        except Exception as e:
-            logger.warning(f"WAO cache delete failed for {cache_name}: {e} (will expire via TTL)")
-
-    async def _generate_domain_from_wao(
-        self, organization_data: Dict[str, Any], designation: str, wing: str,
-        pdf_parts: List[types.Part], cache_name: Optional[str] = None
-    ) -> List[Dict[str, Any]]:
-        """PASS 3 (per designation): derive Domain competencies from the WAO PDF. Uses the shared
-        context cache when available, else sends the PDF inline. Returns a list of
-        {type:'Domain', theme, sub_theme, source} (empty on failure)."""
-        prompt = DOMAIN_FROM_WAO_PROMPT.format(
-            organization_name=organization_data.get("organization_name"),
-            department_name=organization_data.get("department_name"),
-            designation=designation,
-            wing=wing or "N/A",
-        )
-        gen_kwargs = dict(
-            temperature=0.3, top_p=0.90, max_output_tokens=32768,
-            response_mime_type="application/json", response_schema=DOMAIN_FROM_WAO_SCHEMA)
-        if cache_name:
-            contents = [types.Content(role="user", parts=[types.Part.from_text(text=prompt)])]
-            config = types.GenerateContentConfig(cached_content=cache_name, **gen_kwargs)
-        else:
-            contents = [types.Content(role="user",
-                                      parts=list(pdf_parts) + [types.Part.from_text(text=prompt)])]
-            config = types.GenerateContentConfig(**gen_kwargs)
-        resp = await self.client.aio.models.generate_content(
-            model="gemini-3.1-pro-preview", contents=contents, config=config)
-        data = json.loads(resp.text or "[]")
-        out = []
-        for d in data:
-            theme, sub_theme = (d or {}).get("theme"), (d or {}).get("sub_theme")
-            if theme and sub_theme:
-                out.append({"type": "Domain", "theme": theme, "sub_theme": sub_theme,
-                            "source": "Work Allocation Order"})
-        return out
-
-    async def _apply_wao_domain(
-        self, frac_mappings: List[Dict[str, Any]], organization_data: Dict[str, Any],
-        pdf_parts: List[types.Part], cache_name: Optional[str] = None
-    ) -> List[Dict[str, Any]]:
-        """Replace each mapping's Domain competencies with WAO-derived ones (Behavioural and
-        Functional kept as-is). Per-designation, concurrency-limited.
-
-        Minimum floor (settings.DOMAIN_FROM_WAO_MIN): if the WAO yields fewer domain competencies
-        than the floor, the shortfall is topped up (deduplicated) from that role's summary-based
-        (PASS 2) domain set — never dropping below the floor and never padding with invented items.
-        On a per-designation failure or empty WAO result, the original competencies are unchanged."""
-        sem = asyncio.Semaphore(max(1, settings.DOMAIN_FROM_WAO_CONCURRENCY))
-        floor = max(0, settings.DOMAIN_FROM_WAO_MIN)
-        stats = {"replaced": 0, "topped_up": 0, "kept_original": 0}
-
-        async def _one(mapping: Dict[str, Any]):
-            async with sem:
-                try:
-                    domain = await self._generate_domain_from_wao(
-                        organization_data,
-                        mapping.get("designation_name", ""),
-                        mapping.get("wing_division_section", ""),
-                        pdf_parts, cache_name)
-                except Exception as e:
-                    logger.warning(f"WAO domain pass failed for '{mapping.get('designation_name')}': {e}; keeping original domain")
-                    stats["kept_original"] += 1
-                    return
-                if not domain:
-                    stats["kept_original"] += 1
-                    return  # keep original (non-breaking)
-                comps = mapping.get("competencies") or []
-                non_domain = [c for c in comps if (c or {}).get("type") != "Domain"]
-                pass2_domain = [c for c in comps if (c or {}).get("type") == "Domain"]
-                if len(domain) >= floor:
-                    stats["replaced"] += 1
-                else:
-                    # Top up to the floor from the summary-based domain (deduped). If that is also
-                    # thin, keep what we have — graceful, no invented padding.
-                    have = {(d.get("theme"), d.get("sub_theme")) for d in domain}
-                    topup = [c for c in pass2_domain
-                             if (c.get("theme"), c.get("sub_theme")) not in have]
-                    domain = domain + topup[:max(0, floor - len(domain))]
-                    stats["topped_up"] += 1
-                mapping["competencies"] = non_domain + domain
-
-        await asyncio.gather(*[_one(m) for m in frac_mappings])
-        logger.info(f"PASS 3 summary: replaced={stats['replaced']} "
-                    f"topped_up_to_floor={stats['topped_up']} kept_original={stats['kept_original']} "
-                    f"(floor={floor})")
-        return frac_mappings
-
     @staticmethod
     def _normalize(text: Optional[str]) -> str:
         """Lowercase/trim for tolerant comparison"""
@@ -624,10 +465,11 @@ class RoleMappingService:
         instruction: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
-        Generate role mapping with two-pass approach:
+        Generate role mapping with three-pass approach:
         PASS 1: Extract all designations
         PASS 2: Generate FRAC mappings in batches
-        
+        PASS 3: Reconcile Behavioural/Functional competencies against the KCM dataset
+
         Args:
             user_id: User ID
             state_center_id: ID of associated state/center instance
@@ -635,13 +477,13 @@ class RoleMappingService:
             department_name: Department name (optional)
             department_id: Department ID (optional)
             instruction: Additional instructions (optional)
-            
+
         Returns:
             Dictionary containing:
                 - designations_extracted: List of extracted designations
         """
         try:
-            logger.info(f"Starting two-pass role mapping generation for user {user_id}, state_center_id {state_center_id}, department_id {department_id}")
+            logger.info(f"Starting three-pass role mapping generation for user {user_id}, state_center_id {state_center_id}, department_id {department_id}")
             
             # Fetch document summaries for PASS 1 (only Work Allocation Order type)
             wao_summary = await self.get_documents_summary(user_id, state_center_id, department_id, document_type="Work Allocation Order")
@@ -695,37 +537,13 @@ class RoleMappingService:
                 batch_size=settings.ROLE_MAPPING_BATCH_SIZE
             )
 
-            # ============ PASS 3: DOMAIN COMPETENCIES FROM RAW WAO (per designation) ============
-            # Behavioural/Functional competencies from PASS 2 are kept; only Domain competencies
-            # are replaced with an exhaustive, WAO-derived set. Fully guarded — any failure or a
-            # missing raw WAO leaves PASS 2's (summary-based) domain competencies untouched.
-            if settings.DOMAIN_FROM_WAO_ENABLED and frac_mappings:
-                try:
-                    pdf_parts = await self._get_wao_pdf_parts(
-                        user_id, state_center_id, department_id, document_type="Work Allocation Order")
-                    if pdf_parts:
-                        logger.info(f"STARTING PASS 3: DOMAIN FROM WAO PDF ({len(pdf_parts)} doc(s)) "
-                                    f"for {len(frac_mappings)} designations")
-                        cache_name = await self._create_wao_cache(pdf_parts)
-                        try:
-                            frac_mappings = await self._apply_wao_domain(
-                                frac_mappings, organization_data_pass2, pdf_parts, cache_name)
-                        finally:
-                            if cache_name:
-                                await self._delete_wao_cache(cache_name)
-                        logger.info("PASS 3 SUCCESS: WAO-derived domain competencies applied")
-                    else:
-                        logger.info("PASS 3 skipped: no WAO PDF available; keeping summary-based domain competencies")
-                except Exception as e:
-                    logger.warning(f"PASS 3 (WAO domain) failed: {e}; keeping summary-based domain competencies")
-
-            # ============ PASS 4: KCM RECONCILIATION (Behavioural/Functional only) ============
+            # ============ PASS 3: KCM RECONCILIATION (Behavioural/Functional only) ============
             # Cross-verify every Behavioural/Functional competency against data/competencies.json,
             # correcting LLM drift (swapped theme/sub_theme, wrong type) instead of trusting it
             # blindly. Domain competencies are left untouched (not part of the KCM master).
             frac_mappings = self.reconcile_role_mappings_with_kcm(frac_mappings)
 
-            logger.info("TWO-PASS ROLE MAPPING COMPLETE")
+            logger.info("THREE-PASS ROLE MAPPING COMPLETE")
             logger.info(f"Designations Extracted: {len(designations)}")
             logger.info(f"FRAC Mappings Generated: {len(frac_mappings)}")
 

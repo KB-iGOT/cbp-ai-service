@@ -207,7 +207,7 @@ async def delete_course_suggestions_by_role_mapping(
         raise
     except Exception as e:
         logger.error(f"Error deleting course suggestions: {str(e)}")
-        db.rollback()
+        await db.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to delete course suggestions: {str(e)}"
@@ -271,7 +271,7 @@ async def delete_course_suggestion(
         raise
     except Exception as e:
         logger.error(f"Error deleting course suggestion: {str(e)}")
-        db.rollback()
+        await db.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to delete course suggestion: {str(e)}"

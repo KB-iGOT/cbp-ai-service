@@ -6,6 +6,8 @@ from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 import uuid
 
+from .designation_approval import DesignationApproval
+
 from ..core.database import Base
 
 class ProcessingStatus(str, enum.Enum):
@@ -81,7 +83,7 @@ class RoleMapping(Base):
         index=True
     )
     wing_division_section = Column(
-        String(255), 
+        Text,
         nullable=True
     )
     role_responsibilities = Column(
@@ -156,7 +158,9 @@ class RoleMapping(Base):
 
     designation_approvals = relationship(
         "DesignationApproval",
-        back_populates="role_mapping"
+        primaryjoin=lambda: RoleMapping.id == DesignationApproval.rolemapping_id,
+        back_populates="role_mapping",
+        viewonly=True,
     )
     
     def __repr__(self):
