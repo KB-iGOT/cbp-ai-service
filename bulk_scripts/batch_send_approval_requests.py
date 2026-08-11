@@ -83,7 +83,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import httpx
 import openpyxl
-from sqlalchemy import Column, DateTime, Enum as SAEnum, Integer, String, and_, select
+from sqlalchemy import Column, DateTime, Enum as SAEnum, Integer, String, Text, and_, select
 from sqlalchemy.dialects.postgresql import JSON, JSONB, UUID as PG_UUID
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import declarative_base
@@ -238,7 +238,7 @@ class RoleMapping(Base):
     department_name = Column(String(255), nullable=True)
     status = Column(String(50), nullable=True)
     designation_name = Column(String(255), nullable=True)
-    wing_division_section = Column(String(255), nullable=True)
+    wing_division_section = Column(Text, nullable=True)
     role_responsibilities = Column(JSONB, nullable=True)
     activities = Column(JSONB, nullable=True)
     competencies = Column(JSONB, nullable=True)
@@ -284,7 +284,7 @@ class ApprovalRequestItem(Base):
     approval_request_id = Column(PG_UUID(as_uuid=True), nullable=False)
     source_role_mapping_id = Column(PG_UUID(as_uuid=True), nullable=False)
     designation_name = Column(String(255), nullable=False)
-    wing_division_section = Column(String(255), nullable=True)
+    wing_division_section = Column(Text, nullable=True)
     role_responsibilities = Column(JSONB, nullable=True)
     activities = Column(JSONB, nullable=True)
     competencies = Column(JSONB, nullable=True)

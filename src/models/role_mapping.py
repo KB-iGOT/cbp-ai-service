@@ -83,7 +83,7 @@ class RoleMapping(Base):
         index=True
     )
     wing_division_section = Column(
-        String(255), 
+        Text,
         nullable=True
     )
     role_responsibilities = Column(

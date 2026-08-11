@@ -453,7 +453,7 @@ class RoleMapping(Base):
     status = Column(String(50), nullable=True)
     sector_name = Column(String(255), nullable=True)
     designation_name = Column(String(255), nullable=True)
-    wing_division_section = Column(String(255), nullable=True)
+    wing_division_section = Column(Text, nullable=True)
     role_responsibilities = Column(JSONB, nullable=True)
     activities = Column(JSONB, nullable=True)
     competencies = Column(JSONB, nullable=True)

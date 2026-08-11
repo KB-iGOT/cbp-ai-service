@@ -77,9 +77,9 @@ class RoleMappingResponse(RoleMappingBase):
     """Schema for Role Mapping response"""
     id: uuid.UUID = Field(..., description="Unique identifier")
     user_id: uuid.UUID = Field(..., description="User ID")
-    designation_name: str = Field(..., min_length=1, max_length=255, description="Name of the designation")
+    designation_name: str = Field(..., min_length=1, description="Name of the designation")
     status: str = Field(..., description="Status")
-    wing_division_section: str = Field(..., max_length=255, description="Wing/Division/Section name")
+    wing_division_section: str = Field(..., description="Wing/Division/Section name")
     role_responsibilities: List[str] = Field(default=[], description="List of role responsibilities")
     activities: List[str] = Field(default=[], description="List of activities")
     competencies: List[Competency] = Field(default=[], description="List of competencies")
@@ -88,7 +88,7 @@ class RoleMappingResponse(RoleMappingBase):
     igot_designation_id: Optional[str] = Field(None, description="Designation ID from the iGOT portal")
     created_at: datetime = Field(..., description="Creation timestamp")
     updated_at: datetime = Field(..., description="Last update timestamp")
-    
+
     # Add CBP plans relationship
     cbp_plans: List[CBPPlan] = Field(default=[], description="List of CBP plans associated with this role mapping")
     # Add designation approval relationship
@@ -114,9 +114,9 @@ class RoleMappingWithoutCBP(RoleMappingBase):
     """Schema for Role Mapping response"""
     id: uuid.UUID = Field(..., description="Unique identifier")
     user_id: uuid.UUID = Field(..., description="User ID")
-    designation_name: str = Field(..., min_length=1, max_length=255, description="Name of the designation")
+    designation_name: str = Field(..., min_length=1, description="Name of the designation")
     status: str = Field(..., description="Status")
-    wing_division_section: str = Field(..., max_length=255, description="Wing/Division/Section name")
+    wing_division_section: str = Field(..., description="Wing/Division/Section name")
     role_responsibilities: List[str] = Field(default=[], description="List of role responsibilities")
     activities: List[str] = Field(default=[], description="List of activities")
     competencies: List[Competency] = Field(default=[], description="List of competencies")
