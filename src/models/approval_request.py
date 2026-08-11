@@ -41,6 +41,9 @@ class ApprovalRequest(Base):
         default=ApprovalStatus.PENDING
     )
     
+    # Published by (external iGOT portal user id, set once the request is published)
+    published_by = Column(String(255), nullable=True, index=True)
+
     # Timestamps
     rejected_at = Column(DateTime(timezone=True), nullable=True)
     revoked_at = Column(DateTime(timezone=True), nullable=True)
