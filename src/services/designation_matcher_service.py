@@ -106,7 +106,7 @@ class DesignationMatcherService:
             designations = response.get("result", {}).get("result", {}).get("data", [])
         except Exception as e:
             logger.warning(f"iGOT designation search failed: {e}")
-            content = []
+            designations = []
 
         lookup = {item.get("designation", "").lower(): item for item in designations}
         results = []

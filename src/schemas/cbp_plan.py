@@ -15,6 +15,13 @@ class CBPPlanUpdateRequest(BaseModel):
     course_identifiers: List[str] = Field(..., description="List of selected course identifiers/IDs from recommendations")
 
 
+class CBPPlanDeleteResponse(BaseModel):
+    """Schema for CBP plan delete response"""
+    message: str = Field(..., description="Delete operation message")
+    role_mapping_id: str = Field(..., description="Role mapping ID")
+    deleted_count: int = Field(..., description="Number of CBP plans deleted")
+
+
 class CBPPlanSaveResponse(BaseModel):
     """Schema for CBP plan save response"""
     id: uuid.UUID = Field(..., description="Unique identifier")

@@ -1,9 +1,11 @@
 """
 Standalone batch script: submit bulk approval requests for CBP plans, driven by an
 input file (.xlsx/.xlsm or .csv) where each row directly identifies one designation's CBP
-plan to submit -- role_mapping_id, recommendation_id, and mdo_id are read straight from the
-file (no more state/department scope lookup). ONE approval request is created per row,
-containing exactly ONE approval_request_item (one CBP plan per designation).
+plan to submit -- role_mapping_id and recommendation_id are read straight from the file
+(no more state/department scope lookup). mdo_id is read too but is OPTIONAL: if the column
+is present and the cell is non-blank it's used as-is, otherwise the row's mdo_id is stored
+as NULL -- a missing mdo_id never skips or fails a row. ONE approval request is created per
+row, containing exactly ONE approval_request_item (one CBP plan per designation).
 
 This script is FULLY SELF-CONTAINED. It does not import anything from `src/` and does
 not call the HTTP API. All logic (role-mapping/CBP-plan lookup, approval request +
@@ -16,14 +18,16 @@ the same logic as:
     - src/services/notification_service.py (send_cbp_approval_email)
     - src/services/user_search_service.py  (search_users)
 
-Flow per Excel row (role_mapping_id, recommendation_id, mdo_id -- all mandatory):
+Flow per Excel row (role_mapping_id, recommendation_id mandatory; mdo_id optional):
     1. Fetch the role_mapping by id (must belong to --user-id).
     2. Fetch the CBP plan matching role_mapping_id AND recommendation_id AND user_id.
        If no matching CBP plan exists, the row is skipped (logged, not fatal to the batch).
     3. Build ONE approval request containing exactly one approval_request_item (this
        designation's CBP plan), named "CBP Plan for <designation_name>".
-    4. An MDO approval email notification is sent for the created request (same as the
-       live API's background task), using the row's mdo_id.
+    4. An MDO approval email notification is attempted for the created request (same as
+       the live API's background task), using the row's mdo_id if one was given -- if
+       mdo_id is blank/absent, no MDO admin can be looked up so the email is skipped
+       (logged), same as when no matching MDO admin is found for a real mdo_id.
     5. No idempotency/dedup check is performed -- every run creates fresh approval
        requests for every eligible row in the input (matches "always submit").
     6. Any failure for a given row is caught, logged, and the run continues to the next
@@ -44,11 +48,13 @@ raised and the script exits if any is missing, no silent defaults.
 Mandatory CLI args: --excel, --user-id. --batch-size defaults to 10. --execute opts
 into a real run (dry-run is the default).
 
-Mandatory input columns: role_mapping_id, recommendation_id, mdo_id. If ANY of these
-three columns is missing from the file entirely, the script raises a fatal error and
-exits immediately. The remaining columns (state_center_id, department_id, org_type,
-state_center_name, department_name, designation) are read if present and echoed into
-the outcome CSV, but are not required for processing.
+Mandatory input columns: role_mapping_id, recommendation_id. If either is missing from
+the file entirely, the script raises a fatal error and exits immediately. mdo_id is
+optional -- if the column is absent, or present but blank on a given row, that row's
+mdo_id is simply stored as NULL; it never causes a row to be skipped or the script to
+exit. The remaining columns (state_center_id, department_id, org_type, state_center_name,
+department_name, designation) are read if present and echoed into the outcome CSV, but
+are not required for processing.
 
 Outcome is written as a CSV (not JSON) alongside the input file: input columns +
 approval_request_id, request_name, designation_count, approval_request_item_ids,
@@ -77,7 +83,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import httpx
 import openpyxl
-from sqlalchemy import Column, DateTime, Enum as SAEnum, Integer, String, and_, select
+from sqlalchemy import Column, DateTime, Enum as SAEnum, Integer, String, Text, and_, select
 from sqlalchemy.dialects.postgresql import JSON, JSONB, UUID as PG_UUID
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import declarative_base
@@ -91,11 +97,12 @@ from sqlalchemy.orm import declarative_base
 def parse_args():
     parser = argparse.ArgumentParser(
         description="Submit bulk approval requests for CBP plans listed in an input file "
-                     "(.xlsx/.xlsm or .csv; one row = one role_mapping/recommendation/mdo = one approval request)."
+                     "(.xlsx/.xlsm or .csv; one row = one role_mapping/recommendation = one approval request)."
     )
     parser.add_argument("--excel", required=True,
                         help="Path to the source input file: .xlsx/.xlsm or .csv. Must contain "
-                             "'role_mapping_id', 'recommendation_id', and 'mdo_id' columns. Mandatory.")
+                             "'role_mapping_id' and 'recommendation_id' columns. An 'mdo_id' column is "
+                             "optional -- a missing/blank mdo_id is stored as NULL. Mandatory.")
     parser.add_argument("--user-id", required=True, type=uuid.UUID,
                         help="Owner user UUID for the role_mappings/recommendations/CBP plans being submitted. Mandatory.")
     parser.add_argument("--batch-size", type=int, default=10,
@@ -231,7 +238,7 @@ class RoleMapping(Base):
     department_name = Column(String(255), nullable=True)
     status = Column(String(50), nullable=True)
     designation_name = Column(String(255), nullable=True)
-    wing_division_section = Column(String(255), nullable=True)
+    wing_division_section = Column(Text, nullable=True)
     role_responsibilities = Column(JSONB, nullable=True)
     activities = Column(JSONB, nullable=True)
     competencies = Column(JSONB, nullable=True)
@@ -263,7 +270,7 @@ class ApprovalRequest(Base):
     department_id = Column(String(255), nullable=True)
     state_center_name = Column(String(255), nullable=False)
     department_name = Column(String(255), nullable=True)
-    mdo_id = Column(String(255), nullable=False)
+    mdo_id = Column(String(255), nullable=True)
     designation_count = Column(Integer, nullable=False, default=0)
     status = Column(SAEnum(ApprovalStatus, name="approval_status_enum", create_type=False), nullable=False)
     created_at = Column(DateTime(timezone=True), nullable=False)
@@ -277,7 +284,7 @@ class ApprovalRequestItem(Base):
     approval_request_id = Column(PG_UUID(as_uuid=True), nullable=False)
     source_role_mapping_id = Column(PG_UUID(as_uuid=True), nullable=False)
     designation_name = Column(String(255), nullable=False)
-    wing_division_section = Column(String(255), nullable=True)
+    wing_division_section = Column(Text, nullable=True)
     role_responsibilities = Column(JSONB, nullable=True)
     activities = Column(JSONB, nullable=True)
     competencies = Column(JSONB, nullable=True)
@@ -359,10 +366,11 @@ class ExcelRow:
 
 @dataclass
 class SkippedRow:
-    """A data row dropped by read_excel_rows because role_mapping_id/recommendation_id/
-    mdo_id was blank or not a valid UUID -- kept (with all its other input columns, same
+    """A data row dropped by read_excel_rows because role_mapping_id/recommendation_id
+    was blank or not a valid UUID -- kept (with all its other input columns, same
     as ExcelRow) so it can still be reported as its own row in the outcome CSV and RUN
-    SUMMARY, instead of only affecting a count in a log line."""
+    SUMMARY, instead of only affecting a count in a log line. mdo_id is never a reason
+    a row lands here -- it's optional."""
     row_number: int
     state_center_id: str
     department_id: str
@@ -403,16 +411,17 @@ def _iter_input_rows(path: str) -> Tuple[List[str], "list"]:
 
 def read_excel_rows(path: str) -> Tuple[List[ExcelRow], List[SkippedRow]]:
     """
-    Reads all columns from the input file (.xlsx/.xlsm or .csv). 'role_mapping_id',
-    'recommendation_id', and 'mdo_id' are MANDATORY columns -- if any of the three is missing
-    from the file entirely, this raises SystemExit immediately (fatal, whole-script error). The
-    other columns (state_center_id, department_id, org_type, state_center_name,
-    department_name, designation) are read if present (empty string otherwise) and are
-    not required for processing -- they're only echoed into the outcome CSV.
+    Reads all columns from the input file (.xlsx/.xlsm or .csv). 'role_mapping_id' and
+    'recommendation_id' are MANDATORY columns -- if either is missing from the file
+    entirely, this raises SystemExit immediately (fatal, whole-script error). 'mdo_id' is
+    OPTIONAL: if the column is absent, or present but blank on a row, that row's mdo_id is
+    simply "" (stored as NULL later) -- it's never a reason to skip a row. The other
+    columns (state_center_id, department_id, org_type, state_center_name, department_name,
+    designation) are read if present (empty string otherwise) and are not required for
+    processing -- they're only echoed into the outcome CSV.
 
-    A row whose role_mapping_id/recommendation_id value is blank or not a valid UUID, or
-    whose mdo_id is blank, is skipped (logged as a warning), not fatal to the rest of
-    the file.
+    A row whose role_mapping_id/recommendation_id value is blank or not a valid UUID is
+    skipped (logged as a warning), not fatal to the rest of the file.
     """
     if not os.path.exists(path):
         raise FileNotFoundError(f"Input file not found: {path}")
@@ -422,12 +431,11 @@ def read_excel_rows(path: str) -> Tuple[List[ExcelRow], List[SkippedRow]]:
 
     role_mapping_id_col = headers.get("role_mapping_id")
     recommendation_id_col = headers.get("recommendation_id")
-    mdo_id_col = headers.get("mdo_id")
+    mdo_id_col = headers.get("mdo_id")  # optional -- absent column or blank cell -> mdo_id=""
 
     missing = [name for name, col in [
         ("role_mapping_id", role_mapping_id_col),
         ("recommendation_id", recommendation_id_col),
-        ("mdo_id", mdo_id_col),
     ] if col is None]
     if missing:
         raise SystemExit(
@@ -472,10 +480,10 @@ def read_excel_rows(path: str) -> Tuple[List[ExcelRow], List[SkippedRow]]:
             raw_mdo_id=str(mdo_raw) if mdo_raw not in (None, "") else "",
         )
 
-        if rm_raw in (None, "") or rec_raw in (None, "") or mdo_raw in (None, ""):
+        if rm_raw in (None, "") or rec_raw in (None, ""):
             reason = (
-                f"missing role_mapping_id/recommendation_id/mdo_id "
-                f"(role_mapping_id={rm_raw!r}, recommendation_id={rec_raw!r}, mdo_id={mdo_raw!r})"
+                f"missing role_mapping_id/recommendation_id "
+                f"(role_mapping_id={rm_raw!r}, recommendation_id={rec_raw!r})"
             )
             logger.warning(f"Row {row_idx}: {reason} -> skipping row")
             skipped_rows.append(SkippedRow(**skipped_row_kwargs, reason=reason))
@@ -508,13 +516,13 @@ def read_excel_rows(path: str) -> Tuple[List[ExcelRow], List[SkippedRow]]:
                 designation=_optional_value(row, optional_cols["designation"]),
                 role_mapping_id=rm_id,
                 recommendation_id=rec_id,
-                mdo_id=str(mdo_raw).strip(),
+                mdo_id=str(mdo_raw).strip() if mdo_raw not in (None, "") else "",
             )
         )
 
     logger.info(
         f"Read {len(rows)} valid data row(s) from input file "
-        f"({len(skipped_rows)} skipped due to missing/invalid role_mapping_id/recommendation_id/mdo_id): {path}"
+        f"({len(skipped_rows)} skipped due to missing/invalid role_mapping_id/recommendation_id): {path}"
     )
     return rows, skipped_rows
 
@@ -588,6 +596,10 @@ async def send_cbp_approval_email(mdo_id: str, request_name: str, requested_by: 
     live API where this runs as a fire-and-forget background task."""
     if not ENABLE_EMAIL_NOTIFICATION:
         logger.info(f"      {label} -> email notifications disabled, skipping CBP approval email")
+        return
+
+    if not mdo_id:
+        logger.info(f"      {label} -> no mdo_id for this row, skipping CBP approval email")
         return
 
     try:
@@ -733,7 +745,7 @@ async def create_approval_request_with_item(
             state_center_name=state_center_name,
             department_name=department_name,
             org_type=org_type,
-            mdo_id=mdo_id,
+            mdo_id=mdo_id or None,  # blank mdo_id -> NULL, matching the now-nullable DB column
             designation_count=1,
             status=ApprovalStatus.PENDING,
             created_at=now,
