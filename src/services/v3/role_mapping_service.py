@@ -17,7 +17,7 @@ from ...prompts.v3.prompts import (
 from ...crud.document import crud_document
 from ...core.logger import logger
 
-with open("data/competencies.json") as f:
+with open("data/withidentifier_competencies.json") as f:
     COMPETENCY_MAPPING = json.load(f)
 
 # Deterministic KCM canonicalization index (id -> exact {type, theme, sub_theme}).
