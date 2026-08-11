@@ -1,10 +1,7 @@
-# src/role_mapping_service.py
 import json
 from typing import Dict, Any, List, Literal, Optional
 import uuid
 import asyncio
-from google import genai
-from google.genai import types
 from pydantic import BaseModel, Field
 
 from ...schemas.role_mapping import OrgType
@@ -18,9 +15,14 @@ from ...prompts.v3.prompts import (
 from ...crud.document import crud_document
 from ...services.storage_service import get_storage_service
 from ...core.logger import logger
+from ..llm import CacheHandle, GenerationConfig, Message, Part, get_llm
 
 with open("data/competencies.json") as f:
     COMPETENCY_MAPPING = json.load(f)
+
+# The model used to create/reuse the WAO context cache and for PASS 3 generation. Kept as the
+# same hardcoded literal the original code used, rather than routed through settings.
+DOMAIN_FROM_WAO_MODEL = "gemini-3.1-pro-preview"
 
 # Response schema for the per-designation domain-from-WAO pass (PASS 3)
 DOMAIN_FROM_WAO_SCHEMA = {
@@ -87,7 +89,7 @@ class FRACCompetency(BaseModel):
     type: Literal["Behavioural", "Functional", "Domain"] = Field(description="Competency type: Behavioural, Functional, or Domain")
     theme: str = Field(description="Competency theme")
     sub_theme: str = Field(description="Competency sub theme")
-    
+
 class FRACRoleMapping(BaseModel):
     designation_name: str = Field(description="Official designation name")
     wing_division_section: str = Field(description="Wing/division/section the designation belongs to")
@@ -99,83 +101,60 @@ class FRACRoleMapping(BaseModel):
 class FRACBatchResponse(BaseModel):
     mappings: List[FRACRoleMapping] = Field(description="List of FRAC role mappings for all designations in the batch")
 class RoleMappingService:
-    """Service for generating role mappings using Google AI"""
-    
+    """Service for generating role mappings using an LLM"""
+
     def __init__(self):
-        """Initialize the role mapping service with Google AI configuration"""
-        try:
-            self.client = genai.Client(
-                project=settings.GOOGLE_PROJECT_ID,
-                location=settings.GOOOGLE_PROJECT_LOCATION_GLOBAL,
-                vertexai=settings.GOOGLE_GENAI_USE_VERTEXAI,
-                http_options=settings.GEMINI_HTTP_OPTIONS
-            )
-            logger.info("Google AI service for role mapping initialized successfully")
-        except Exception as e:
-            logger.error(f"Failed to initialize Google AI service for role mapping: {str(e)}")
-            raise
-    
+        self.llm = get_llm()
+
     async def _extract_designations(
         self,
         organization_data: Dict[str, Any]
     ) -> Dict[str, Any]:
         """
         PASS 1: Extract all designations from documents
-        
+
         Args:
             organization_data: Dictionary containing document summaries
             additional_document_contents: Additional PDF documents
-            
+
         Returns:
             Dict containing extracted designations with metadata
         """
         logger.info(f"PASS 1: Extracting designations for {organization_data.get('organization_name')}")
-                
-        contents = [
-            types.Content(
-                role="user",
-                parts=[types.Part.from_text(
-                    text="""
-                    Here is the input Data:
-                    Ministry/State Name: {ORGANIZATION_NAME}
-                    Department/Organisation Name: {DEPARTMENT_NAME}
 
-                    Primary reference document Summaries:
-                    {DOCUMENT_SUMMARIES}
+        prompt = """
+                Here is the input Data:
+                Ministry/State Name: {ORGANIZATION_NAME}
+                Department/Organisation Name: {DEPARTMENT_NAME}
 
-                    Extract ALL unique designations from the provided input data and organize them hierarchically based on the system prompt.
-                    """.format(
-                            ORGANIZATION_NAME=organization_data.get('organization_name'),
-                            DEPARTMENT_NAME=organization_data.get('department_name'),
-                            DOCUMENT_SUMMARIES=organization_data.get('docs_summary', 'N/A')
-                        )
-                )]
-            )
-        ]
-        
-        generate_content_config = types.GenerateContentConfig(
+                Primary reference document Summaries:
+                {DOCUMENT_SUMMARIES}
+
+                Extract ALL unique designations from the provided input data and organize them hierarchically based on the system prompt.
+                """.format(
+                    ORGANIZATION_NAME=organization_data.get('organization_name'),
+                    DEPARTMENT_NAME=organization_data.get('department_name'),
+                    DOCUMENT_SUMMARIES=organization_data.get('docs_summary', 'N/A')
+                )
+        contents = [Message.user(prompt)]
+
+        generate_content_config = GenerationConfig(
             system_instruction=DESIGNATION_EXTRACTION_PROMPT,
             temperature=0.1,   # Very low — factual extraction, no creativity
             top_p=0.85, # Restrict to high-probability tokens
-            response_mime_type="application/json",
-            response_schema=DesignationExtractionResponse.model_json_schema()
         )
-        
-        response = await self.client.aio.models.generate_content(
+
+        extraction_response = await self.llm.generate_structured(
+            contents,
             model=settings.GEMINI_FLASH_MODEL_NAME,
-            contents=contents,
+            schema=DesignationExtractionResponse,
             config=generate_content_config,
         )
-        
-        text_response = response.text
-        if not text_response:
-            raise Exception(f"Empty response from Gemini during designation extraction: {response}") 
-        
-        extraction_response = DesignationExtractionResponse.model_validate_json(text_response)
+
         return {
             "designations": [d.model_dump() for d in extraction_response.designations]
         }
-    
+
     async def _generate_frac_for_batch(
         self,
         designations_batch: List[Dict[str, Any]],
@@ -184,13 +163,13 @@ class RoleMappingService:
     ) -> List[Dict[str, Any]]:
         """
         PASS 2: Generate FRAC mapping for a batch of designations
-        
+
         Args:
             designations_batch: List of designations to process
             organization_data: Organization context data
             additional_document_contents: Additional documents
             batch_number: Current batch number for logging
-            
+
         Returns:
             List of FRAC mappings for the batch (empty list on failure)
         """
@@ -200,7 +179,7 @@ class RoleMappingService:
             logger.info(f"Role Mapping is using prompt :: {'STATE_PROMPT' if is_state else 'CENTER_PROMPT'}")
             PROMPT = ROLE_MAPPING_PROMPT_STATE if is_state else ROLE_MAPPING_PROMPT_CENTRE
             output_json_format = state_json_output if is_state else center_json_output
-            
+
             # Create designation context for the batch
             designation_context = json.dumps({
                 "validated_designations": designations_batch,
@@ -209,7 +188,7 @@ class RoleMappingService:
                     "total_in_batch": len(designations_batch)
                 }
             }, indent=2)
-            
+
             base_prompt = PROMPT.format(
                 pass1_output=designation_context,
                 organization_name=organization_data.get('organization_name'),
@@ -219,35 +198,21 @@ class RoleMappingService:
                 kcm_competencies=json.dumps(COMPETENCY_MAPPING, indent=2),
                 output_json_format=json.dumps(output_json_format, indent=2)
             )
-            
-            contents = [
-                types.Content(
-                    role="user",
-                    parts=[types.Part.from_text(text=base_prompt)]
-                )
-            ]
 
-            generate_content_config = types.GenerateContentConfig(
+            contents = [Message.user(base_prompt)]
+
+            generate_content_config = GenerationConfig(
                 temperature=0.3,
                 top_p=0.90,
-                response_mime_type="application/json",
-                response_schema=FRACBatchResponse.model_json_schema(),
             )
 
-            response = await self.client.aio.models.generate_content(
+            batch_response = await self.llm.generate_structured(
+                contents,
                 model=settings.GEMINI_PRO_MODEL_NAME,
-                contents=contents,
+                schema=FRACBatchResponse,
                 config=generate_content_config,
             )
 
-            # logger.info(f"FRAC Batch {batch_number} Gemini usage: {response.usage_metadata}")
-
-            text_response = response.text
-            if not text_response:
-                logger.warning(f"Batch {batch_number}: Empty response from Gemini")
-                return []
-
-            batch_response = FRACBatchResponse.model_validate_json(text_response)
             validated_response = [record.model_dump() for record in batch_response.mappings]
 
             logger.info(f"Batch {batch_number}: Successfully generated {len(validated_response)} FRAC mappings")
@@ -255,7 +220,7 @@ class RoleMappingService:
         except Exception as e:
             logger.exception(f"Batch {batch_number}: Error generating FRAC mapping")
             return []
-    
+
     async def _process_batches_parallel(
         self,
         all_designations: List[Dict[str, Any]],
@@ -265,23 +230,23 @@ class RoleMappingService:
     ) -> List[Dict[str, Any]]:
         """
         Process designation batches in parallel
-        
+
         Args:
             all_designations: All extracted designations
             organization_data: Organization context
             batch_size: Number of designations per batch
-            
+
         Returns:
             Combined list of all FRAC mappings
         """
         # Split into batches
         batches = [
-            all_designations[i:i + batch_size] 
+            all_designations[i:i + batch_size]
             for i in range(0, len(all_designations), batch_size)
         ]
-        
+
         logger.info(f"Processing {len(all_designations)} designations in {len(batches)} batches of {batch_size}")
-        
+
         # Too Many Parallel Batches Can Hit Rate Limits
         # semaphore = asyncio.Semaphore(max_concurrent)
         # async def limited_batch(batch, idx):
@@ -290,7 +255,7 @@ class RoleMappingService:
         #             batch, organization_data, batch_number=idx + 1
         #         )
         # tasks = [limited_batch(batch, idx) for idx, batch in enumerate(batches)]
-        
+
         # Create tasks for parallel processing
         tasks = [
             self._generate_frac_for_batch(
@@ -300,10 +265,10 @@ class RoleMappingService:
             )
             for idx, batch in enumerate(batches)
         ]
-        
+
         # Execute all batches in parallel
         batch_results = await asyncio.gather(*tasks, return_exceptions=False)
-        
+
         # Combine all results (empty arrays are handled gracefully)
         combined_results = []
         for batch_num, result in enumerate(batch_results, 1):
@@ -312,40 +277,40 @@ class RoleMappingService:
                 logger.info(f"Batch {batch_num}: Added {len(result)} mappings to final result")
             else:
                 logger.warning(f"Batch {batch_num}: Unexpected result type, skipping")
-        
+
         logger.info(f"Total FRAC mappings generated: {len(combined_results)}")
         return combined_results
-    
+
     async def get_documents_summary(self, user_id, state_center_id, department_id=None, document_type: str | None = None) -> str:
         """Get document summaries for the organization formatted as numbered document_summary tags
-        
+
         Args:
             user_id: User ID
             state_center_id: State center ID
             department_id: Optional department ID
             document_type: Optional filter for document type (e.g., 'Work Allocation Order')
-            
+
         Returns:
             Formatted document summaries
         """
         _, retrieved_docs = await crud_document.get_all_documents_async(user_id, state_center_id, department_id, document_type=document_type)
         if not retrieved_docs:
             return ""
-        
+
         parts = []
         for idx, doc in enumerate(retrieved_docs, start=1):
             summary = (doc.summary_text or "").strip()
             parts.append(f"<document_summary_{idx}>\n Document Type: {doc.document_type} \n Summary: {summary}\n</document_summary_{idx}>")
-        
+
         return "\n\n".join(parts)
-    
+
     async def _get_wao_pdf_parts(
         self, user_id, state_center_id, department_id=None,
         document_type: str | None = "Work Allocation Order"
-    ) -> List[types.Part]:
-        """Read the WAO document(s) from storage as Gemini PDF Parts.
+    ) -> List[Part]:
+        """Read the WAO document(s) from storage as neutral PDF Parts.
 
-        The PDF bytes are sent to Gemini directly (native PDF understanding), so scanned/image
+        The PDF bytes are sent to the LLM directly (native PDF understanding), so scanned/image
         pages, tables and column layouts are handled — mirroring how the summary is generated
         (Part.from_bytes(application/pdf)). Returns [] on any failure so PASS 3 falls back to the
         summary-based domain competencies (non-breaking).
@@ -361,7 +326,7 @@ class RoleMappingService:
                 try:
                     pdf_bytes = storage.read_file(doc.stored_path)
                     if pdf_bytes:
-                        parts.append(types.Part.from_bytes(data=pdf_bytes, mime_type="application/pdf"))
+                        parts.append(Part.from_bytes(data=pdf_bytes, mime_type="application/pdf"))
                 except Exception as e:
                     logger.warning(f"WAO PDF read failed for '{getattr(doc, 'stored_path', '?')}': {e}")
             return parts
@@ -369,39 +334,9 @@ class RoleMappingService:
             logger.warning(f"_get_wao_pdf_parts failed: {e}")
             return []
 
-    async def _create_wao_cache(self, pdf_parts: List[types.Part]) -> Optional[str]:
-        """Create a Gemini context cache holding the WAO PDF(s), reused across the per-designation
-        domain calls (the PDF is uploaded/charged once, not per call). Returns the cache name, or
-        None if caching is disabled (DOMAIN_FROM_WAO_CACHE_TTL_SECONDS <= 0) or unavailable (e.g.
-        the doc is below the model's minimum cacheable size) — the caller then sends the PDF inline
-        on each call (still correct, just less token-efficient)."""
-        ttl = settings.DOMAIN_FROM_WAO_CACHE_TTL_SECONDS
-        if not ttl or ttl <= 0:
-            logger.info("WAO context caching disabled (DOMAIN_FROM_WAO_CACHE_TTL_SECONDS<=0); sending PDF inline per call")
-            return None
-        try:
-            cache = await self.client.aio.caches.create(
-                model="gemini-3.1-pro-preview",
-                config=types.CreateCachedContentConfig(
-                    display_name="wao-domain",
-                    contents=[types.Content(role="user", parts=pdf_parts)],
-                    ttl=f"{ttl}s"))
-            logger.info(f"WAO context cache created ({cache.name}, ttl={ttl}s) — reused across designations")
-            return cache.name
-        except Exception as e:
-            logger.warning(f"WAO context cache unavailable ({e}); sending PDF inline per call")
-            return None
-
-    async def _delete_wao_cache(self, cache_name: str):
-        """Best-effort cache cleanup (it would otherwise expire via TTL)."""
-        try:
-            await self.client.aio.caches.delete(name=cache_name)
-        except Exception as e:
-            logger.warning(f"WAO cache delete failed for {cache_name}: {e} (will expire via TTL)")
-
     async def _generate_domain_from_wao(
         self, organization_data: Dict[str, Any], designation: str, wing: str,
-        pdf_parts: List[types.Part], cache_name: Optional[str] = None
+        cache: CacheHandle
     ) -> List[Dict[str, Any]]:
         """PASS 3 (per designation): derive Domain competencies from the WAO PDF. Uses the shared
         context cache when available, else sends the PDF inline. Returns a list of
@@ -412,19 +347,16 @@ class RoleMappingService:
             designation=designation,
             wing=wing or "N/A",
         )
-        gen_kwargs = dict(
-            temperature=0.3, top_p=0.90, max_output_tokens=32768,
-            response_mime_type="application/json", response_schema=DOMAIN_FROM_WAO_SCHEMA)
-        if cache_name:
-            contents = [types.Content(role="user", parts=[types.Part.from_text(text=prompt)])]
-            config = types.GenerateContentConfig(cached_content=cache_name, **gen_kwargs)
+        config = GenerationConfig(temperature=0.3, top_p=0.90, max_output_tokens=32768)
+        if cache.name:
+            contents = [Message.user(prompt)]
+            config = config.copy(cache=cache)
         else:
-            contents = [types.Content(role="user",
-                                      parts=list(pdf_parts) + [types.Part.from_text(text=prompt)])]
-            config = types.GenerateContentConfig(**gen_kwargs)
-        resp = await self.client.aio.models.generate_content(
-            model="gemini-3.1-pro-preview", contents=contents, config=config)
-        data = json.loads(resp.text or "[]")
+            contents = [Message.user(*cache.parts, prompt)]
+
+        data = await self.llm.generate_structured(
+            contents, model=DOMAIN_FROM_WAO_MODEL, schema=DOMAIN_FROM_WAO_SCHEMA, config=config
+        )
         out = []
         for d in data:
             theme, sub_theme = (d or {}).get("theme"), (d or {}).get("sub_theme")
@@ -435,7 +367,7 @@ class RoleMappingService:
 
     async def _apply_wao_domain(
         self, frac_mappings: List[Dict[str, Any]], organization_data: Dict[str, Any],
-        pdf_parts: List[types.Part], cache_name: Optional[str] = None
+        cache: CacheHandle
     ) -> List[Dict[str, Any]]:
         """Replace each mapping's Domain competencies with WAO-derived ones (Behavioural and
         Functional kept as-is). Per-designation, concurrency-limited.
@@ -455,7 +387,7 @@ class RoleMappingService:
                         organization_data,
                         mapping.get("designation_name", ""),
                         mapping.get("wing_division_section", ""),
-                        pdf_parts, cache_name)
+                        cache)
                 except Exception as e:
                     logger.warning(f"WAO domain pass failed for '{mapping.get('designation_name')}': {e}; keeping original domain")
                     stats["kept_original"] += 1
@@ -625,7 +557,7 @@ class RoleMappingService:
         Generate role mapping with two-pass approach:
         PASS 1: Extract all designations
         PASS 2: Generate FRAC mappings in batches
-        
+
         Args:
             user_id: User ID
             state_center_id: ID of associated state/center instance
@@ -633,17 +565,17 @@ class RoleMappingService:
             department_name: Department name (optional)
             department_id: Department ID (optional)
             instruction: Additional instructions (optional)
-            
+
         Returns:
             Dictionary containing:
                 - designations_extracted: List of extracted designations
         """
         try:
             logger.info(f"Starting two-pass role mapping generation for user {user_id}, state_center_id {state_center_id}, department_id {department_id}")
-            
+
             # Fetch document summaries for PASS 1 (only Work Allocation Order type)
             wao_summary = await self.get_documents_summary(user_id, state_center_id, department_id, document_type="Work Allocation Order")
-            
+
             # Prepare organization data for PASS 1 with filtered summaries
             organization_data_pass1 = {
                 "org_type": org_type.value,
@@ -654,11 +586,11 @@ class RoleMappingService:
                 "docs_summary": wao_summary if wao_summary else 'N/A',
                 "instruction": instruction if instruction else "N/A"
             }
-            
+
             # ============ PASS 1: DESIGNATION EXTRACTION ============
             logger.info("STARTING PASS 1: DESIGNATION EXTRACTION")
             logger.info("PASS 1 will use only Work Allocation Order document summaries")
-            
+
             extraction_result = await self._extract_designations(
                 organization_data_pass1
             )
@@ -666,15 +598,15 @@ class RoleMappingService:
             designations = extraction_result.get('designations', [])
             if not designations:
                 raise Exception("No designations extracted in PASS 1; cannot proceed to PASS 2")
-            
+
             logger.info(f"PASS 1 SUCCESS: {len(designations)} designations extracted")
 
             # ============ PASS 2: FRAC GENERATION IN BATCHES ============
             logger.info("STARTING PASS 2: FRAC GENERATION")
-            
+
             # Fetch all document summaries for PASS 2 (no type filter)
             all_docs_summary = await self.get_documents_summary(user_id, state_center_id, department_id)
-            
+
             # Prepare organization data for PASS 2 with all summaries
             organization_data_pass2 = {
                 "org_type": org_type.value,
@@ -686,7 +618,7 @@ class RoleMappingService:
                 "instruction": instruction if instruction else "N/A"
             }
             logger.info("PASS 2 will use all document summaries")
-            
+
             frac_mappings = await self._process_batches_parallel(
                 designations,
                 organization_data_pass2,
@@ -704,13 +636,12 @@ class RoleMappingService:
                     if pdf_parts:
                         logger.info(f"STARTING PASS 3: DOMAIN FROM WAO PDF ({len(pdf_parts)} doc(s)) "
                                     f"for {len(frac_mappings)} designations")
-                        cache_name = await self._create_wao_cache(pdf_parts)
-                        try:
+                        async with self.llm.cached_context(
+                            pdf_parts, model=DOMAIN_FROM_WAO_MODEL,
+                            ttl_seconds=settings.DOMAIN_FROM_WAO_CACHE_TTL_SECONDS,
+                        ) as cache:
                             frac_mappings = await self._apply_wao_domain(
-                                frac_mappings, organization_data_pass2, pdf_parts, cache_name)
-                        finally:
-                            if cache_name:
-                                await self._delete_wao_cache(cache_name)
+                                frac_mappings, organization_data_pass2, cache)
                         logger.info("PASS 3 SUCCESS: WAO-derived domain competencies applied")
                     else:
                         logger.info("PASS 3 skipped: no WAO PDF available; keeping summary-based domain competencies")

@@ -1,24 +1,22 @@
 from typing import Any, Dict, List
 
-from google import genai
-from google.genai import types
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text
 
 from ..core.configs import settings
 from ..core.logger import logger
+from .llm import get_embedder
 from .redis_service import redis_service
 from .designation_service import designation_service
 
-
-_genai_client: genai.Client | None = None
-
-
-def _get_genai_client() -> genai.Client:
-    global _genai_client
-    if _genai_client is None:
-        _genai_client = genai.Client(api_key=settings.GOOGLE_API_KEY, vertexai=False)
-    return _genai_client
+logger.warning(
+    f"designation_embeddings table was populated with '{settings.DESIGNATION_EMBEDDING_MODEL}' "
+    f"but is queried with embedding model '{settings.GOOGLE_EMBEDDING_MODEL}' "
+    f"({settings.DESIGNATION_EMBEDDING_DIMENSIONS}-dim). Cosine similarity across two different "
+    "embedding models' vector spaces is not meaningful — DESIGNATION_SIMILARITY_THRESHOLD was "
+    "tuned empirically around this mismatch, not derived from a principled value. Re-ingest "
+    "designation_embeddings with a consistent model to fix properly."
+)
 
 
 def _cache_key(designation: str) -> str:
@@ -32,7 +30,7 @@ def _format_for_matching(designation: str) -> str:
 async def _get_embeddings(texts: List[str]) -> List[List[float]]:
     """
     Return embeddings for texts, serving from Redis cache where available.
-    Only calls Gemini API for cache misses.
+    Only calls the embedding provider for cache misses.
     """
     keys = [_cache_key(t) for t in texts]
     cached_values = await redis_service.mget_json(keys)
@@ -48,22 +46,21 @@ async def _get_embeddings(texts: List[str]) -> List[List[float]]:
 
     if uncached_indices:
         uncached_texts = [texts[i] for i in uncached_indices]
-        logger.info(f"Embedding cache miss: {len(uncached_texts)}/{len(texts)} — calling Gemini API")
+        logger.info(f"Embedding cache miss: {len(uncached_texts)}/{len(texts)} — calling embedding provider")
 
-        client = _get_genai_client()
-        fresh_embeddings: List[List[float]] = []
-        for i in range(0, len(uncached_texts), settings.DESIGNATION_EMBED_BATCH_SIZE):
-            batch = uncached_texts[i: i + settings.DESIGNATION_EMBED_BATCH_SIZE]
-            contents = [_format_for_matching(t) for t in batch]
-            response = await client.aio.models.embed_content(
-                model=settings.GOOGLE_EMBEDDING_MODEL,
-                contents=contents,
-                config=types.EmbedContentConfig(output_dimensionality=768),
-            )
-            fresh_embeddings.extend(e.values for e in response.embeddings)
+        formatted = [_format_for_matching(t) for t in uncached_texts]
+        fresh_embeddings = await get_embedder().embed(
+            formatted,
+            model=settings.GOOGLE_EMBEDDING_MODEL,
+            dimensions=settings.DESIGNATION_EMBEDDING_DIMENSIONS,
+            batch_size=settings.DESIGNATION_EMBED_BATCH_SIZE,
+        )
 
         to_cache = {}
         for idx, emb in zip(uncached_indices, fresh_embeddings):
+            if emb is None:
+                logger.warning(f"Embedding provider returned no embedding for '{texts[idx]}'; skipping (not cached)")
+                continue
             results[idx] = emb
             to_cache[keys[idx]] = emb
         await redis_service.mset_json(to_cache)
@@ -79,7 +76,7 @@ class DesignationMatcherService:
 
     Two strategies:
       1. Exact   — case-insensitive match using LOWER index (single query).
-      2. Semantic — gemini-embedding-2 + pgvector cosine similarity fallback.
+      2. Semantic — embedding + pgvector cosine similarity fallback.
     """
 
     async def match_exact(
@@ -130,7 +127,7 @@ class DesignationMatcherService:
         self, db: AsyncSession, designation_names: List[str]
     ) -> List[Dict[str, Any]]:
         """
-        Semantic match using gemini-embedding-2 + pgvector cosine similarity.
+        Semantic match using an embedding provider + pgvector cosine similarity.
         Only returns matches with similarity >= SIMILARITY_THRESHOLD (0.92).
 
         Returns list of dicts: input_designation, designation, id, similarity_score, match_type.
@@ -143,6 +140,9 @@ class DesignationMatcherService:
 
         results = []
         for name, emb in zip(designation_names, embeddings):
+            if emb is None:
+                logger.warning(f"No embedding available for designation '{name}'; skipping semantic match")
+                continue
             emb_str = "[" + ",".join(f"{x:.6f}" for x in emb) + "]"
 
             row = (

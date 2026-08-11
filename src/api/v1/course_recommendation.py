@@ -1,14 +1,10 @@
 import asyncio
 import json
-import os
 import uuid
 from typing import Any, Dict, List
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Path, Query, status
 from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
-
-from google import genai
-from google.genai import types
 
 from ...prompts.prompts import COURSE_SELECTION_SYSTEM_PROMPT, DESIGNNATION_GROUP_SYSTEM_PROMPT, VECTOR_QUERY_SYSTEM_PROMPT
 
@@ -26,22 +22,14 @@ from ...crud.course_suggestion import crud_suggested_course
 from ...crud.user_added_course import crud_user_added_course
 
 from ...api.dependencies import get_current_active_user
+from ...services.llm import GenerationConfig, Message, SafetyPolicy, Tool, get_embedder, get_llm
 
 router = APIRouter(tags=["Course Recommendations"])
 
-os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = settings.GOOGLE_APPLICATION_CREDENTIALS
-client = genai.Client(
-    project=settings.GOOGLE_PROJECT_ID,
-    location=settings.GOOOGLE_PROJECT_LOCATION_GLOBAL,
-    vertexai=settings.GOOGLE_GENAI_USE_VERTEXAI,
-    http_options=settings.GEMINI_HTTP_OPTIONS
-)
+llm = get_llm()
+embedder = get_embedder()
 
-embedding_client = genai.Client(
-    api_key=settings.GOOGLE_API_KEY,
-    vertexai=False,
-    http_options=settings.GEMINI_HTTP_OPTIONS
-)
+_PERMISSIVE_SAFETY = SafetyPolicy.PERMISSIVE
 
 # Curse Recommendation APIs
 async def get_embedding(text: str) -> list:
@@ -51,17 +39,15 @@ async def get_embedding(text: str) -> list:
     if not text.strip():
         print("Warning: Attempted to get embedding for empty text. Returning empty list.")
         return []
-    
+
     vector_query = f"task: search result | query: {text}"
 
     try:
-        response = await embedding_client.aio.models.embed_content(
+        return await embedder.embed_batch(
+            [vector_query],
             model=settings.GOOGLE_EMBEDDING_MODEL,
-            contents=vector_query,
-            config=types.EmbedContentConfig(output_dimensionality=settings.EMBEDDING_OUTPUT_DIMENSIONALITY)
+            dimensions=settings.EMBEDDING_OUTPUT_DIMENSIONALITY,
         )
-        
-        return response.embeddings
     except Exception as e:
         logger.exception(f"Error generating embedding for text '{text[:50]}...': {e}")
         return []
@@ -78,43 +64,31 @@ async def generate_contextual_queries(user_profile: str) -> Dict[str, Any]:
     """
     logger.info("Generating contextual queries from user profile")
 
-    user_part = types.Part.from_text(text=f"Role Profile:\n{user_profile}")
-    contents = [types.Content(role="user", parts=[user_part])]
+    contents = [Message.user(f"Role Profile:\n{user_profile}")]
 
-    config = types.GenerateContentConfig(
+    schema = {
+        "type": "OBJECT",
+        "properties": {
+            "keyword_query":     {"type": "STRING"},
+            "description_query": {"type": "STRING"},
+            "combined_query":    {"type": "STRING"},
+            "search_keywords":   {"type": "ARRAY", "items": {"type": "STRING"}},
+        },
+        "required": ["keyword_query", "description_query", "combined_query", "search_keywords"],
+    }
+    config = GenerationConfig(
         temperature=0.4,
         top_p=0.95,
         # max_output_tokens=2048,
-        safety_settings=[
-            types.SafetySetting(category="HARM_CATEGORY_HATE_SPEECH", threshold="OFF"),
-            types.SafetySetting(category="HARM_CATEGORY_DANGEROUS_CONTENT", threshold="OFF"),
-            types.SafetySetting(category="HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold="OFF"),
-            types.SafetySetting(category="HARM_CATEGORY_HARASSMENT", threshold="OFF"),
-        ],
-        response_mime_type="application/json",
-        response_schema={
-            "type": "OBJECT",
-            "properties": {
-                "keyword_query":     {"type": "STRING"},
-                "description_query": {"type": "STRING"},
-                "combined_query":    {"type": "STRING"},
-                "search_keywords":   {"type": "ARRAY", "items": {"type": "STRING"}},
-            },
-            "required": ["keyword_query", "description_query", "combined_query", "search_keywords"],
-        },
-        system_instruction=[types.Part.from_text(text=VECTOR_QUERY_SYSTEM_PROMPT)],
+        safety=_PERMISSIVE_SAFETY,
+        system_instruction=VECTOR_QUERY_SYSTEM_PROMPT,
     )
 
-    response = await client.aio.models.generate_content(
-        model=settings.GEMINI_PRO_MODEL_NAME,
-        contents=contents,
-        config=config,
+    result = await llm.generate_structured(
+        contents, model=settings.GEMINI_PRO_MODEL_NAME, schema=schema, config=config,
     )
     logger.info("Contextual queries generated successfully")
-    if not response.text:
-        logger.error(f"LLM returned empty response for contextual queries: {response}")
-        raise Exception("generate_contextual_queries: LLM returned empty response")
-    return json.loads(response.text)
+    return result
 
 async def infer_designation_group(user_profile: str) -> str:
     """
@@ -122,38 +96,26 @@ async def infer_designation_group(user_profile: str) -> str:
     into Group A/B (senior/gazetted officers) or Group C/D (supporting/clerical staff).
     Returns 'AB' or 'CD'.
     """
-    user_part = types.Part.from_text(text=f"Role Profile:\n{user_profile}")
+    contents = [Message.user(f"Role Profile:\n{user_profile}")]
 
-    config = types.GenerateContentConfig(
+    schema = {
+        "type": "OBJECT",
+        "properties": {"group": {"type": "STRING", "enum": ["AB", "CD"]}},
+        "required": ["group"],
+    }
+    config = GenerationConfig(
         temperature=0,
         max_output_tokens=256,
-        safety_settings=[
-            types.SafetySetting(category="HARM_CATEGORY_HATE_SPEECH", threshold="OFF"),
-            types.SafetySetting(category="HARM_CATEGORY_DANGEROUS_CONTENT", threshold="OFF"),
-            types.SafetySetting(category="HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold="OFF"),
-            types.SafetySetting(category="HARM_CATEGORY_HARASSMENT", threshold="OFF"),
-        ],
-        response_mime_type="application/json",
-        response_schema={
-            "type": "OBJECT",
-            "properties": {"group": {"type": "STRING", "enum": ["AB", "CD"]}},
-            "required": ["group"],
-        },
-        system_instruction=[types.Part.from_text(text=DESIGNNATION_GROUP_SYSTEM_PROMPT)],
+        safety=_PERMISSIVE_SAFETY,
+        system_instruction=DESIGNNATION_GROUP_SYSTEM_PROMPT,
     )
 
     try:
-        response = await client.aio.models.generate_content(
-            model=settings.GEMINI_FLASH_MODEL_NAME,
-            contents=[types.Content(role="user", parts=[user_part])],
-            config=config,
+        result = await llm.generate_structured(
+            contents, model=settings.GEMINI_FLASH_MODEL_NAME, schema=schema, config=config,
         )
-        if not response.text:
-            logger.warning("Designation group LLM returned empty response, defaulting to AB")
-            return "AB"
-        result = json.loads(response.text)
         group = result.get("group", "AB")
-        
+
         logger.info(f"LLM classified designation group as: {group}")
         return group
     except Exception as e:
@@ -181,7 +143,7 @@ async def get_filtered_courses_by_llm(
     # selection made the model under-pick Domain courses (the total is capped, so more B/F means
     # fewer Domain). Domain selection must stay identical to the pre-change behaviour, so the B/F
     # guarantee is enforced ONLY in code (deterministic pure-B/F top-up), never via the prompt.
-    user_part = types.Part.from_text(text=f"""
+    contents = [Message.user(f"""
 Role Profile:
 {user_profile}
 
@@ -189,7 +151,7 @@ Own Organisation: {organisation or 'N/A'}
 
 Candidate Courses:
 {courses_prompt}
-""")
+""")]
 
     response_schema = {
         "type": "ARRAY",
@@ -205,29 +167,21 @@ Candidate Courses:
         },
     }
 
-    config = types.GenerateContentConfig(
+    config = GenerationConfig(
         temperature=0,
         top_p=1,
         # max_output_tokens=8192,
-        safety_settings=[
-            types.SafetySetting(category="HARM_CATEGORY_HATE_SPEECH", threshold="OFF"),
-            types.SafetySetting(category="HARM_CATEGORY_DANGEROUS_CONTENT", threshold="OFF"),
-            types.SafetySetting(category="HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold="OFF"),
-            types.SafetySetting(category="HARM_CATEGORY_HARASSMENT", threshold="OFF"),
-        ],
-        response_mime_type="application/json",
+        safety=_PERMISSIVE_SAFETY,
+        json_output=True,
         response_schema=response_schema,
-        system_instruction=[types.Part.from_text(text=COURSE_SELECTION_SYSTEM_PROMPT)],
-        thinking_config=types.ThinkingConfig(include_thoughts=False, thinking_budget=2048),
+        system_instruction=COURSE_SELECTION_SYSTEM_PROMPT,
+        thinking_budget=2048,
+        include_thoughts=False,
     )
 
-    response = await client.aio.models.generate_content(
-        model=settings.GEMINI_PRO_MODEL_NAME,
-        contents=[types.Content(role="user", parts=[user_part])],
-        config=config,
-    )
+    response = await llm.generate(contents, model=settings.GEMINI_PRO_MODEL_NAME, config=config)
     if not response.text:
-        logger.error(f"LLM filtering empty response — failed to inspect:  {response}")
+        logger.error(f"LLM filtering empty response — failed to inspect:  {response.raw}")
         return "[]"
     return response.text
 
@@ -235,10 +189,10 @@ async def get_general_courses_from_gemini(user_profile) -> List[Dict[str, Any]]:
     """
     Fetches general courses from Gemini based on the designation and department.
     """
-    # Disabled for temporary reasons. Remove below line to enable Gemini fetching of general courses. 
+    # Disabled for temporary reasons. Remove below line to enable Gemini fetching of general courses.
     return []
     logger.info("Fetching the general courses across the learning platforms")
-    generate_content_config = types.GenerateContentConfig(
+    generate_content_config = GenerationConfig(
         system_instruction=f"""
         You are an expert in civil service training and development.
         Your role is to recommend highly relevant and foundational courses that would help professionals excel in their designation within government/administrative organizations.
@@ -278,27 +232,21 @@ async def get_general_courses_from_gemini(user_profile) -> List[Dict[str, Any]]:
         """,
         temperature=0.5,
         # Remove tools unless you really want google_search
-        tools=[{"google_search": {}}],
-
-        safety_settings=[
-            types.SafetySetting(category="HARM_CATEGORY_HATE_SPEECH", threshold="OFF")
-        ],
-        # response_mime_type="application/json",
+        tools=[Tool.WEB_SEARCH],
+        safety=_PERMISSIVE_SAFETY,
+        # json_output=True,
         # response_schema=schema,
     )
 
     try:
-        msg1_text1 = types.Part.from_text(
-            text=f"Here's the user role context: {user_profile}"
-        )
-        contents = [types.Content(role="user", parts=[msg1_text1])]
+        contents = [Message.user(f"Here's the user role context: {user_profile}")]
 
-        response = await client.aio.models.generate_content(
+        response = await llm.generate(
+            contents,
             model=settings.GEMINI_PRO_MODEL_NAME,
-            contents=contents,
             config=generate_content_config,
         )
-        
+
         text_response = response.text
         if not text_response:
             print("Gemini response was empty or not in text format.")
@@ -581,11 +529,11 @@ async def process_recommendation_task(
         if not kw_emb_list or not desc_emb_list or not comb_emb_list:
             raise Exception("Failed to generate one or more embeddings")
 
-        kw_emb   = kw_emb_list[0].values
-        desc_emb = desc_emb_list[0].values
-        comb_emb = comb_emb_list[0].values
-        func_comp_emb  = func_comp_emb_list[0].values if func_comp_emb_list else None
-        behav_comp_emb = behav_comp_emb_list[0].values if behav_comp_emb_list else None
+        kw_emb   = kw_emb_list[0]
+        desc_emb = desc_emb_list[0]
+        comb_emb = comb_emb_list[0]
+        func_comp_emb  = func_comp_emb_list[0] if func_comp_emb_list else None
+        behav_comp_emb = behav_comp_emb_list[0] if behav_comp_emb_list else None
 
         # 4. Vector search + Postgres keyword search + competency-typed searches in parallel
         vector_results, kw_results, func_results, behav_results = await asyncio.gather(

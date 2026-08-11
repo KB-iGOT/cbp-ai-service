@@ -1,14 +1,10 @@
 import asyncio
 import json
-import os
 from typing import Dict, List, Optional
 import uuid
 from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, UploadFile, status
 from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
-
-from google import genai
-from google.genai import types
 
 from ...models.role_mapping import ProcessingStatus, RoleMapping
 from ...models.user import User
@@ -17,6 +13,7 @@ from ...prompts.v2.prompts import DESIGNATION_ROLE_MAPPING_PROMPT
 from ...schemas.role_mapping import AddDesignationToRoleMappingRequest, OrgType, RoleMappingBackgroundResponse, RoleMappingResponse, RoleMappingUpdate, RoleMappingWithoutCBP
 from ...services.v2.role_mapping_service import role_mapping_service
 from ...services.v3.role_mapping_service import role_mapping_service as role_mapping_service_v3
+from ...services.llm import GenerationConfig, Message, get_llm
 
 from ...core.database import get_db_session
 from ...core.logger import logger
@@ -30,14 +27,6 @@ router = APIRouter(tags=["Role Mappings"])
 
 with open("data/competencies.json") as f:
     COMPETENCY_MAPPING = json.load(f)
-
-os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = settings.GOOGLE_APPLICATION_CREDENTIALS
-client = genai.Client(
-    project=settings.GOOGLE_PROJECT_ID,
-    location=settings.GOOOGLE_PROJECT_LOCATION_GLOBAL,
-    vertexai=settings.GOOGLE_GENAI_USE_VERTEXAI,
-    http_options=settings.GEMINI_HTTP_OPTIONS
-)
 
 async def process_role_mapping_task(
     placeholder_id: uuid.UUID,
@@ -279,35 +268,18 @@ async def generate_role_and_competencies(input_data):
             output_json_format=json.dumps(output_json_format, indent=None, separators=(',', ':'))
         )
 
-        generate_content_config = types.GenerateContentConfig(
-            temperature=0.5,
-            # safety_settings=[
-            #     types.SafetySetting(category="HARM_CATEGORY_HATE_SPEECH", threshold="OFF")
-            # ],
-            response_mime_type="application/json",
-            response_schema={"type":"OBJECT","properties":{"designation_name":{"type":"STRING","description":"The official designation or job title for the role."},"wing_division_section":{"type":"STRING","description":"The organizational unit (wing, division, or section) where the role is situated."},"role_responsibilities":{"type":"ARRAY","items":{"type":"STRING"},"description":"A list of 5-8 concise, action-oriented role responsibilities."},"activities":{"type":"ARRAY","items":{"type":"STRING"},"description":"A list of 5–8 activities or tasks aligned to the role responsibilities."},"competencies":{"type":"ARRAY","items":{"type":"OBJECT","properties":{"type":{"type":"STRING","enum":["Behavioural","Functional","Domain"],"description":"The category of competency as per Karmayogi framework."},"theme":{"type":"STRING","description":"The parent theme of the competency (must come from dataset)."},"sub_theme":{"type":"STRING","description":"The sub-theme of the competency (must come from dataset)."}},"required":["type","theme","sub_theme"]},"description":"A list of competencies relevant to the role. Must include at least one Behavioural, one Functional, and one Domain competency."}},"required":["designation_name","wing_division_section","role_responsibilities","activities","competencies"]},
-        )
+        schema = {"type":"OBJECT","properties":{"designation_name":{"type":"STRING","description":"The official designation or job title for the role."},"wing_division_section":{"type":"STRING","description":"The organizational unit (wing, division, or section) where the role is situated."},"role_responsibilities":{"type":"ARRAY","items":{"type":"STRING"},"description":"A list of 5-8 concise, action-oriented role responsibilities."},"activities":{"type":"ARRAY","items":{"type":"STRING"},"description":"A list of 5–8 activities or tasks aligned to the role responsibilities."},"competencies":{"type":"ARRAY","items":{"type":"OBJECT","properties":{"type":{"type":"STRING","enum":["Behavioural","Functional","Domain"],"description":"The category of competency as per Karmayogi framework."},"theme":{"type":"STRING","description":"The parent theme of the competency (must come from dataset)."},"sub_theme":{"type":"STRING","description":"The sub-theme of the competency (must come from dataset)."}},"required":["type","theme","sub_theme"]},"description":"A list of competencies relevant to the role. Must include at least one Behavioural, one Functional, and one Domain competency."}},"required":["designation_name","wing_division_section","role_responsibilities","activities","competencies"]}
 
-        contents = [   
-            types.Content(
-                role="user", 
-                parts=[
-                    types.Part.from_text(text=prompt)
-                ]
-            )
-        ]
+        contents = [Message.user(prompt)]
 
-        response = await client.aio.models.generate_content(
+        generate_content_config = GenerationConfig(temperature=0.5)
+
+        parsed_response = await get_llm().generate_structured(
+            contents,
             model=settings.GEMINI_PRO_MODEL_NAME,
-            contents=contents,
+            schema=schema,
             config=generate_content_config,
         )
-        
-        text_response = response.text
-        if not text_response:
-            logger.warning(f"Empty response from Gemini for designation: {input_data.get('designation')}")
-            return []
-        parsed_response = json.loads(text_response)
         return parsed_response
     except Exception as e:
         logger.exception(f"Background task failed for designation: {input_data.get('designation')}")

@@ -1,10 +1,6 @@
-# Create a new file: src/role_mapping_service.py
-
 import json
 from typing import Dict, Any, List, Optional
 import uuid
-from google import genai
-from google.genai import types
 
 from ...schemas.role_mapping import OrgType
 
@@ -12,6 +8,7 @@ from ...core.configs import settings
 from ...prompts.v2.prompts import ROLE_MAPPING_PROMPT_V2, ROLE_MAPPING_PROMPT_V5_STATE
 from ...crud.document import crud_document
 from ...core.logger import logger
+from ..llm import GenerationConfig, Message, get_llm
 
 with open("data/competencies.json") as f:
     COMPETENCY_MAPPING = json.load(f)
@@ -21,7 +18,7 @@ center_json_output = [{
   "wing_division_section": "string",
   "role_responsibilities": ["string", "string"],
   "activities": ["string", "string"],
-  "sort_order": "integer", 
+  "sort_order": "integer",
   "competencies": [
     {
       "type": "Behavioral | Functional | Domain",
@@ -51,28 +48,18 @@ state_json_output = [{
 }]
 
 class RoleMappingService:
-    """Service for generating role mappings using Google AI"""
-    
+    """Service for generating role mappings using an LLM"""
+
     def __init__(self):
-        """Initialize the role mapping service with Google AI configuration"""
-        try:
-            self.client = genai.Client(
-                project=settings.GOOGLE_PROJECT_ID,
-                location="us-central1",
-                vertexai=True
-            )
-            logger.info("Google AI service for role mapping initialized successfully")
-        except Exception as e:
-            logger.error(f"Failed to initialize Google AI service for role mapping: {str(e)}")
-            raise
-    
+        self.llm = get_llm()
+
     async def _call_gemini(
-        self, 
+        self,
         organization_data: Dict[str, Any]
     ) -> Dict[str, Any]:
         """
-        Call Google Gemini to generate role mapping
-        
+        Generate role mapping via the configured LLM
+
         Args:
             organization_data: Dictionary containing ACBP and work allocation summaries
 
@@ -81,22 +68,7 @@ class RoleMappingService:
         """
         try:
             logger.info(f"Generating role mapping for {organization_data.get('organization_name')}")
-            output_json_format = [{
-                "designation_name": "[Designation Name]",
-                "wing_division_section": "[Wing/Division/Section]",
-                "role_responsibilities": "[List of Role Responsibilities]",
-                "activities": "[List of Activities]",
-                "competencies": [
-                    {
-                        "type": "[Behavioral/Functional/Domain]",
-                        "theme": "[Competency Theme]",
-                        "sub_theme": "[Competency Sub-theme]",
-                    }
-                ],
-                "source": "[ACBP, Work Allocation Order, KCM, AI Suggested]"
-            },
-            ]
-            
+
             logger.info(f"Role Mapping is using prompt :: {'STATE_PROMPT' if organization_data["org_type"] == OrgType.state.value else "CENTER_PROMPT"}")
             PROMPT = ROLE_MAPPING_PROMPT_V5_STATE if organization_data["org_type"] == OrgType.state.value else ROLE_MAPPING_PROMPT_V2
             output_json_format = state_json_output if organization_data["org_type"] == OrgType.state.value else center_json_output
@@ -108,103 +80,39 @@ class RoleMappingService:
                 kcm_competencies=json.dumps(COMPETENCY_MAPPING, indent=2),
                 output_json_format=json.dumps(output_json_format, indent=2)
             )
-            
-            
-            contents = [
-                types.Content(
-                    role="user",
-                    parts=[types.Part.from_text(text=base_prompt)]
-                )
-            ]
-            
-            # Configure the generation
-            generate_content_config = types.GenerateContentConfig(
-                temperature=0.5,
-                # response_mime_type="application/json",
-                # response_schema= {
-                #     "type": "ARRAY",
-                #     "items": {
-                #         "type": "OBJECT",
-                #         "properties": {
-                #             "designation_name": {
-                #                 "type": "STRING",
-                #                 "description": "The official designation or job title for the role."
-                #             },
-                #             "wing_division_section": {
-                #                 "type": "STRING",
-                #                 "description": "The organizational unit (wing, division, or section) where the role is situated."
-                #             },
-                #             "role_responsibilities": {
-                #                 "type": "ARRAY",
-                #                 "items": {"type": "STRING"},
-                #                 "description": "A list of 3–6 concise, action-oriented role responsibilities."
-                #             },
-                #             "activities": {
-                #                 "type": "ARRAY",
-                #                 "items": {"type": "STRING"},
-                #                 "description": "A list of 4–8 activities or tasks aligned to the role responsibilities."
-                #             },
-                #             "competencies": {
-                #                 "type": "ARRAY",
-                #                 "items": {
-                #                     "type": "OBJECT",
-                #                     "properties": {
-                #                         "type": {
-                #                             "type": "STRING",
-                #                             "enum": ["Behavioral", "Functional", "Domain"],
-                #                             "description": "The category of competency as per Karmayogi framework."
-                #                         },
-                #                         "theme": {
-                #                             "type": "STRING",
-                #                             "description": "The parent theme of the competency (must come from dataset)."
-                #                         },
-                #                         "sub_theme": {
-                #                             "type": "STRING",
-                #                             "description": "The sub-theme of the competency (must come from dataset)."
-                #                         }
-                #                     },
-                #                     "required": ["type", "theme", "sub_theme"]
-                #                 },
-                #                 "description": "A list of competencies relevant to the role. Must include at least one Behavioral, one Functional, and one Domain competency."
-                #             }
-                #         },
-                #         "required": ["designation_name", "wing_division_section", "role_responsibilities", "activities", "competencies"]
-                #     }
-                # }   
-            )
-            
-            # Generate content
-            response = await self.client.aio.models.generate_content(
+
+            contents = [Message.user(base_prompt)]
+
+            generate_content_config = GenerationConfig(temperature=0.5)
+
+            response = await self.llm.generate(
+                contents,
                 model="gemini-2.5-pro",
-                contents=contents,
                 config=generate_content_config,
             )
-            
-            logger.info(f"Role Mapping Gemini usage metadata: {response.usage_metadata}")
-            
+
             text_response = response.text
 
             if not text_response:
-                logger.error("Gemini response was empty or not in text format")
-                raise Exception("Empty response from Gemini")
-            
+                logger.error("LLM response was empty or not in text format")
+                raise Exception("Empty response from LLM")
+
             text_response = text_response.replace("```json", '')
             text_response = text_response.replace("```", '')
             parsed_response = json.loads(text_response)
-            # logger.info(f"Successfully generated role mapping with {len(parsed_response.get('role_responsibilities', []))} responsibilities, {len(parsed_response.get('activities', []))} activities, and {len(parsed_response.get('competencies', []))} competencies")
-            
+
             return parsed_response
-            
+
         except Exception as e:
-            logger.exception(f"Error generating role mapping from Gemini")
+            logger.exception(f"Error generating role mapping from LLM")
             raise e
-    
+
     async def get_documents_summary(self, user_id, state_center_id, department_id = None) -> str:
         # Start with base query
         _, retrieved_docs = await crud_document.get_all_documents_async(user_id, state_center_id, department_id)
         if not retrieved_docs:
             return []
-        
+
         docs_content = "\n\n".join(doc.summary_text for doc in retrieved_docs)
         return docs_content
 
@@ -220,7 +128,7 @@ class RoleMappingService:
     ) -> Dict[str, Any]:
         """
         Generate role mapping asynchronously
-        
+
         Args:
             state_center_id : ID of associated state/center instance.
             state_center_name:  Name of associated state/center
@@ -229,21 +137,21 @@ class RoleMappingService:
             department_name (optional): The name of associated department. Defaults to None.
             instruction (Optional[str], optional): Additional instructions. Defaults to None.
 
-            
+
         Returns:
             Dictionary containing generated role mapping data
         """
         try:
 
             logger.info(f"Starting role mapping generation for state_center_id: {state_center_id}")
-            
+
             # Fetch state center data
             docs_summary = await self.get_documents_summary(user_id,state_center_id, department_id)
-            
+
             # if not docs_summary:
             #     logger.warning(f"No document data found for ID: {state_center_id}")
             #     raise Exception("No document data found for this state/center")
-            
+
             # Prepare organization data
             organization_data = {
                 "org_type": org_type.value,
@@ -254,13 +162,13 @@ class RoleMappingService:
                 "docs_summary": docs_summary if docs_summary else 'N/A',
                 "instruction": instruction if instruction else "N/A"
             }
-            
+
             # Generate role mapping using thread pool for blocking call
             result = await self._call_gemini(organization_data)
 
             logger.info("Role mapping generation completed successfully")
             return result
-            
+
         except Exception as e:
             logger.exception(f"Error in role mapping generation:")
             raise

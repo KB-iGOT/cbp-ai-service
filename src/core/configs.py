@@ -2,7 +2,6 @@ from enum import Enum
 from typing import Union
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from google.genai import types
 
 class EnvironmentOption(str, Enum):
     LOCAL = "local"
@@ -12,6 +11,10 @@ class EnvironmentOption(str, Enum):
 class DocumentStorageOption(str, Enum):
     LOCAL = "local"
     GCP = "gcp"
+
+class LLMProviderOption(str, Enum):
+    GEMINI = "gemini"
+    LANGCHAIN = "langchain"
 
 class Settings(BaseSettings):
     """
@@ -34,6 +37,20 @@ class Settings(BaseSettings):
     REDIS_DESIG_EMB_PREFIX: str = Field(default="cbp_desig_emb", description="Redis key prefix for designation embeddings cache")
     DESIGNATION_SIMILARITY_THRESHOLD: float = Field(default=0.93, description="Minimum cosine similarity score for semantic designation match")
     DESIGNATION_EMBED_BATCH_SIZE: int = Field(default=100, description="Max designations per Gemini embedding API call")
+    DESIGNATION_EMBEDDING_DIMENSIONS: int = Field(
+        default=768,
+        description="Vector width of the designation_embeddings.embedding pgvector column. "
+                    "Independent of EMBEDDING_OUTPUT_DIMENSIONALITY (1536, used for course search) "
+                    "— the two must not be conflated."
+    )
+    DESIGNATION_EMBEDDING_MODEL: str = Field(
+        default="BAAI/bge-base-en-v1.5 (local sentence-transformers, via scripts/ingest_designation_embeddings.py)",
+        description="Model that actually populated the designation_embeddings table. Documented here "
+                    "so DesignationMatcherService can warn that it queries with a different model "
+                    "(GOOGLE_EMBEDDING_MODEL) — cosine similarity across two different embedding "
+                    "models' vector spaces is not meaningful; DESIGNATION_SIMILARITY_THRESHOLD was "
+                    "tuned empirically around this mismatch, not derived from a principled value."
+    )
 
     @property
     def REDIS_URL(self) -> str:
@@ -58,16 +75,10 @@ class Settings(BaseSettings):
 
     ROLE_MAPPING_BATCH_SIZE: int = Field(default=30, description="Number of designations per batch when processing PASS 2 role mapping generation in parallel")
 
-    @property
-    def GEMINI_HTTP_OPTIONS(self) -> types.HttpOptions:
-        return types.HttpOptions(
-            retry_options=types.HttpRetryOptions(
-                initial_delay=self.GEMINI_RETRY_INITIAL_DELAY,
-                attempts=self.GEMINI_RETRY_ATTEMPTS,
-                exp_base=self.GEMINI_RETRY_EXP_BASE,
-                http_status_codes=self.GEMINI_RETRY_HTTP_STATUS_CODES,
-            )
-        )
+    # LLM provider selection — swap the backing adapter without touching call sites.
+    # See src/services/llm/ for the provider-agnostic interface.
+    LLM_PROVIDER: LLMProviderOption = Field(default=LLMProviderOption.GEMINI, description="Provider backing src.services.llm.get_llm()")
+    LLM_EMBEDDING_PROVIDER: LLMProviderOption = Field(default=LLMProviderOption.GEMINI, description="Provider backing src.services.llm.get_embedder()")
 
     KB_BASE_URL: str
     KB_AUTH_TOKEN: str

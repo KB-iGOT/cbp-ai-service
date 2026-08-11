@@ -10,10 +10,9 @@ from ...models.meta_summary import MetaSummary
 from ...schemas.meta_summary import MetaSummaryCreateRequest, MetaSummaryDeleteResponse, MetaSummaryListResponse, MetaSummaryResponse
 from ...crud.document import crud_document
 from ...crud.meta_summary import crud_meta_summary
-from .document_routes import get_genai_client, _run_document_summary
+from .document_routes import _run_document_summary
 from ...prompts.prompts import META_SUMMARY_PROMPT
-
-from google.genai import types
+from ...services.llm import GenerationConfig, Message, SafetyPolicy, get_llm
 
 from ...core.logger import logger
 
@@ -58,29 +57,18 @@ async def _run_meta_summary(request_id: uuid.UUID):
         joined = "\n".join(summaries_text_parts)
         prompt_text = META_SUMMARY_PROMPT.format(payload=joined)
 
-        client = get_genai_client()
-        contents = [
-            types.Content(
-                role="user",
-                parts=[types.Part.from_text(text=prompt_text)]
-            )
-        ]
-        generate_content_config = types.GenerateContentConfig(
+        contents = [Message.user(prompt_text)]
+        generate_content_config = GenerationConfig(
             temperature=0.6,
             top_p=0.95,
             max_output_tokens=8192,
-            safety_settings=[
-                types.SafetySetting(category="HARM_CATEGORY_HATE_SPEECH", threshold="OFF"),
-                types.SafetySetting(category="HARM_CATEGORY_DANGEROUS_CONTENT", threshold="OFF"),
-                types.SafetySetting(category="HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold="OFF"),
-                types.SafetySetting(category="HARM_CATEGORY_HARASSMENT", threshold="OFF"),
-            ],
+            safety=SafetyPolicy.PERMISSIVE,
         )
         try:
-            response = client.models.generate_content(
+            response = await get_llm().generate(
+                contents,
                 model="gemini-2.5-pro",
-                contents=contents,
-                config=generate_content_config
+                config=generate_content_config,
             )
             meta_text = response.text
             if not meta_text:

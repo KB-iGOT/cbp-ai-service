@@ -212,11 +212,5 @@ __marimo__/
 curl
 
 .vscode/
-approaches/
-data/
-logs/
-outputs/
-scripts/
-docs/
-database_data/
-new_logs/
+
+*.csv

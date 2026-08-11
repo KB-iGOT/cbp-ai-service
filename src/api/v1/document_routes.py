@@ -15,32 +15,12 @@ from ...core.database import get_db_session
 
 from ...schemas.document import BatchUploadResponse, DocumentResponse, DocumentListResponse, SummaryTriggerResponse, DocumentDeleteResponse, SummaryDeleteResponse, UploadFailure, DocumentType
 from ...services.storage_service import get_storage_service
+from ...services.llm import GenerationConfig, Message, Part, SafetyPolicy, get_llm
 from ...prompts.prompts import DOCUMENT_SUMMARY_PROMPT
 from ...crud.document import crud_document
 from ...crud.meta_summary import crud_meta_summary
 
-from google import genai
-from google.genai import types
-
 from ...core.logger import logger
-
-# Lazy Gemini client init (reuse creds through GOOGLE_APPLICATION_CREDENTIALS env var)
-_genai_client = None
-
-def get_genai_client():
-    global _genai_client
-    if _genai_client is None:
-        try:
-            _genai_client = genai.Client(
-                project=settings.GOOGLE_PROJECT_ID,
-                location=settings.GOOOGLE_PROJECT_LOCATION_GLOBAL,
-                vertexai=settings.GOOGLE_GENAI_USE_VERTEXAI,
-                http_options=settings.GEMINI_HTTP_OPTIONS
-            )
-        except Exception as e:
-            logger.error(f"Failed to init genai client: {e}")
-            raise
-    return _genai_client
 
 router = APIRouter(prefix="/files", tags=["Documents"])
 
@@ -250,35 +230,24 @@ async def _run_document_summary(document_id: uuid.UUID):
             await crud_document.update(document_id, update_records)
             return
 
-        client = get_genai_client()
         try:
-            contents = [
-                types.Content(
-                    role="user",
-                    parts=[
-                        types.Part.from_bytes(data=pdf_bytes, mime_type="application/pdf"),
-                        types.Part.from_text(text=DOCUMENT_SUMMARY_PROMPT)
-                    ]
-                )
-            ]
+            contents = [Message.user(
+                Part.from_bytes(data=pdf_bytes, mime_type="application/pdf"),
+                DOCUMENT_SUMMARY_PROMPT,
+            )]
 
-            generate_content_config = types.GenerateContentConfig(
+            generate_content_config = GenerationConfig(
                 temperature=0,
                 top_p=1,
-                safety_settings=[
-                    types.SafetySetting(category="HARM_CATEGORY_HATE_SPEECH", threshold="OFF"),
-                    types.SafetySetting(category="HARM_CATEGORY_DANGEROUS_CONTENT", threshold="OFF"),
-                    types.SafetySetting(category="HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold="OFF"),
-                    types.SafetySetting(category="HARM_CATEGORY_HARASSMENT", threshold="OFF"),
-                ],
+                safety=SafetyPolicy.PERMISSIVE,
             )
 
-            response = await client.aio.models.generate_content(
+            response = await get_llm().generate(
+                contents,
                 model=settings.GEMINI_PRO_MODEL_NAME,
-                contents=contents,
-                config=generate_content_config
+                config=generate_content_config,
             )
-            
+
             summary_text = response.text
             if not summary_text:
                 raise RuntimeError("Empty summary returned by model")
