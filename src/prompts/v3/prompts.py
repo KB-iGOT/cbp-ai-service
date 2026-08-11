@@ -419,14 +419,18 @@ You will be provided with the following inputs:
 - **Domain:** MINIMUM 8, MAXIMUM 10 competencies per designation.
 - Do not exceed these ceilings. Prioritise the most critical competencies for the designation’s actual role rather than mapping exhaustively.
 
-2.2. **Behavioural & Functional Competencies**
-- ⚠️ **ABSOLUTE RULE — KCM-ONLY:** Every single Behavioural and Functional competency you output MUST exist verbatim in the provided KCM Dataset. This is a hard constraint with zero exceptions.
-- Before writing any Behavioural or Functional competency, locate its exact `type`, `theme`, and `sub_theme` in the KCM Dataset. If you cannot find it there, do NOT include it.
-- Do NOT invent, paraphrase, rename, or approximate any Behavioural or Functional competency. If the exact text is not in the KCM Dataset, it is forbidden.
-- Do NOT use your general knowledge to generate Behavioural or Functional competency names — the KCM Dataset is the only permitted source.
-- Copy the `type`, `theme`, and `sub_theme` character-for-character from the KCM Dataset entry.
-- ⚠️ **NO CROSS-MIXING BETWEEN KCM ENTRIES:** The `type`, `theme`, and `sub_theme` you output for a single competency MUST all be copied from the **same object/row** in the KCM Dataset. Never pair a `theme` from one KCM entry with a `sub_theme` from a different entry, and never swap the `type`/`theme`/`sub_theme` values across two different entries — even if each value individually exists somewhere in the dataset. Before finalising each competency, verify that the exact combination of `type` + `theme` + `sub_theme` appears together in one single KCM Dataset entry.
-- ⚠️ **NO FIELD-SWAPPING WITHIN THE SAME KCM ENTRY:** Even when the `type`, `theme`, and `sub_theme` all come from one single KCM entry, each value MUST be placed in its own matching field. Do NOT put the `theme` value into the `sub_theme` output field, do NOT put the `sub_theme` value into the `theme` output field, and do NOT put a `theme` or `sub_theme` value into the `type` output field (or vice versa). Map `type`→`type`, `theme`→`theme`, `sub_theme`→`sub_theme` exactly as labelled in the KCM Dataset — never interchange them.
+2.2. **Behavioural & Functional Competencies — SELECT BY ID**
+- ⚠️ **ABSOLUTE RULE — KCM-ONLY:** Every Behavioural and Functional competency you output MUST be one you SELECTED from the provided KCM Dataset by its `competency_id`. This is a hard constraint with zero exceptions.
+- **How to select:** read the `type`, `theme`, `theme_description`, `sub_theme`, and `sub_theme_description` of the KCM entries and decide which genuinely fit the designation's role and activities. Selection is a judgement over the descriptions — read them carefully.
+- **How to output:** for each competency you select, output its `competency_id` exactly as written in the dataset (e.g. `BEH-007`, `FUN-045`), and copy the `type`, `theme`, and `sub_theme` from the SAME entry as that id. The id and the three fields must all come from ONE entry — never combine a theme from one entry with a sub_theme from another.
+- Do NOT invent, paraphrase, rename, shorten, or lengthen any Behavioural or Functional competency, and do NOT emit a `competency_id` that is not in the dataset. Anything not selectable by a real KCM id will be discarded downstream.
+- Do NOT use your general knowledge to generate Behavioural or Functional competencies — the KCM Dataset is the only permitted source.
+- (Domain competencies have NO `competency_id` — leave that field out for Domain.)
+
+**Relevance guardrails — pick for THIS role, not just any valid entry:**
+- **Ground every pick.** Select a Behavioural/Functional competency ONLY if you can tie it to a specific listed Role/Responsibility or Activity of THIS designation. Silently ask yourself "which duty of this role needs this competency?" — if you cannot answer, do NOT select it. A valid KCM entry that is irrelevant to the role is still a WRONG selection.
+- **Do not pad to a count.** Choose the most relevant entries first. Aim for at least the minimum, but NEVER add a clearly-irrelevant competency just to reach the minimum or approach the maximum. Fewer, genuinely-relevant competencies are better than padded ones.
+- **Administrative/office guardrail.** Administrative or office-function competencies (e.g. Office Management, Establishment & HR, Handling Leave & Travel, Financial/Expenditure Management, Procurement, File/Records management) may be assigned ONLY to designations whose actual duties include those administrative functions (e.g. clerical, HR, accounts, secretariat roles). Do NOT assign them to purely field, operational, security, or technical roles (e.g. Constable, Driver, Sweeper, Cleaner, Technician, Guard) unless that role genuinely performs office/admin work. For such field/operational roles, prefer functional competencies that match their actual on-ground work.
 
 2.3. **Domain Competencies**
 - **Mandatory Scheme & Policy Coverage:** All significant missions, schemes, flagship programs, acts, and policies mentioned in the source documents MUST be reflected as specific domain competencies for the relevant designations. No major initiative should be left unmapped.
@@ -453,8 +457,8 @@ You will be provided with the following inputs:
 
 ⚠️ CRITICAL OUTPUT FORMAT RULES — VIOLATIONS WILL CAUSE SYSTEM FAILURE:
 1. `competencies` MUST be a **flat JSON array** of objects. Do NOT group by type. The following structure is STRICTLY FORBIDDEN:
-   {{"Behavioural": [...], "functional": [...], "domain": [...]}}
-   The ONLY valid structure is: [{{"type": "Behavioural", "theme": "...", "sub_theme": "..."}}, ...]
+   {{"behavioural": [...], "functional": [...], "domain": [...]}}
+   The ONLY valid structure is: [{{"competency_id": "BEH-007", "type": "Behavioural", "theme": "...", "sub_theme": "..."}}, ...]  (competency_id required for Behavioural/Functional; omit it for Domain)
 2. `role_responsibilities` MUST be a **flat array of strings** at the top level of each object. Do NOT nest it inside roles or any other key.
 3. `activities` MUST be a **flat array of strings** at the top level of each object. Do NOT nest it inside roles or any other key.
 4. These rules apply to EVERY object in the output array — including lower-rank and support staff designations.
@@ -471,13 +475,14 @@ You will be provided with the following inputs:
 The dataset below is a flat list of ALL valid Behavioural and Functional competencies. Each entry is one complete, selectable competency.
 
 Field usage:
-- `type`: "Behavioural" or "Functional" — identifies the competency category
-- `theme`: The competency theme name — **copy this character-for-character into your output**
+- `competency_id`: The stable KCM id (e.g. `BEH-007`, `FUN-045`) — **this is what you select and MUST output** for every Behavioural/Functional competency. Output it exactly as written.
+- `type`: "Behavioural" or "Functional" — identifies the competency category. Copy from the selected entry.
+- `theme`: The competency theme name — copy from the SAME entry as the `competency_id`.
 - `theme_description`: What the theme means — use this to judge whether the theme is relevant to the designation's overall role. Do NOT output this field.
-- `sub_theme`: The competency sub-theme name — **copy this character-for-character into your output**
+- `sub_theme`: The competency sub-theme name — copy from the SAME entry as the `competency_id`.
 - `sub_theme_description`: What the sub-theme means — use this to judge whether it fits the designation's specific activities. Do NOT output this field.
 
-Selection process: For each designation, read the `theme_description` and `sub_theme_description` of candidate entries to assess fit against the designation's actual roles and activities. Only select entries where the description genuinely matches the role context. Copy the `type`, `theme`, and `sub_theme` values verbatim — no paraphrasing, no renaming, no approximation.
+Selection process: For each designation, read the `theme_description` and `sub_theme_description` of candidate entries to assess fit against the designation's actual roles and activities. Only select entries where the description genuinely matches the role context. Output the chosen entry's `competency_id` and copy its `type`, `theme`, and `sub_theme` verbatim from that one entry — no paraphrasing, no renaming, no mixing fields across entries.
 
 {kcm_competencies}
 
@@ -550,14 +555,18 @@ You will be provided with the following inputs:
 - **Domain:** MINIMUM 8, MAXIMUM 10 competencies per designation.
 - Do not exceed these ceilings. Prioritise the most critical competencies for the designation’s actual role rather than mapping exhaustively.
 
-2.2. **Behavioural & Functional Competencies**
-- ⚠️ **ABSOLUTE RULE — KCM-ONLY:** Every single Behavioural and Functional competency you output MUST exist verbatim in the provided KCM Dataset. This is a hard constraint with zero exceptions.
-- Before writing any Behavioural or Functional competency, locate its exact `type`, `theme`, and `sub_theme` in the KCM Dataset. If you cannot find it there, do NOT include it.
-- Do NOT invent, paraphrase, rename, or approximate any Behavioural or Functional competency. If the exact text is not in the KCM Dataset, it is forbidden.
-- Do NOT use your general knowledge to generate Behavioural or Functional competency names — the KCM Dataset is the only permitted source.
-- Copy the `type`, `theme`, and `sub_theme` character-for-character from the KCM Dataset entry.
-- ⚠️ **NO CROSS-MIXING BETWEEN KCM ENTRIES:** The `type`, `theme`, and `sub_theme` you output for a single competency MUST all be copied from the **same object/row** in the KCM Dataset. Never pair a `theme` from one KCM entry with a `sub_theme` from a different entry, and never swap the `type`/`theme`/`sub_theme` values across two different entries — even if each value individually exists somewhere in the dataset. Before finalising each competency, verify that the exact combination of `type` + `theme` + `sub_theme` appears together in one single KCM Dataset entry.
-- ⚠️ **NO FIELD-SWAPPING WITHIN THE SAME KCM ENTRY:** Even when the `type`, `theme`, and `sub_theme` all come from one single KCM entry, each value MUST be placed in its own matching field. Do NOT put the `theme` value into the `sub_theme` output field, do NOT put the `sub_theme` value into the `theme` output field, and do NOT put a `theme` or `sub_theme` value into the `type` output field (or vice versa). Map `type`→`type`, `theme`→`theme`, `sub_theme`→`sub_theme` exactly as labelled in the KCM Dataset — never interchange them.
+2.2. **Behavioural & Functional Competencies — SELECT BY ID**
+- ⚠️ **ABSOLUTE RULE — KCM-ONLY:** Every Behavioural and Functional competency you output MUST be one you SELECTED from the provided KCM Dataset by its `competency_id`. This is a hard constraint with zero exceptions.
+- **How to select:** read the `type`, `theme`, `theme_description`, `sub_theme`, and `sub_theme_description` of the KCM entries and decide which genuinely fit the designation's role and activities. Selection is a judgement over the descriptions — read them carefully.
+- **How to output:** for each competency you select, output its `competency_id` exactly as written in the dataset (e.g. `BEH-007`, `FUN-045`), and copy the `type`, `theme`, and `sub_theme` from the SAME entry as that id. The id and the three fields must all come from ONE entry — never combine a theme from one entry with a sub_theme from another.
+- Do NOT invent, paraphrase, rename, shorten, or lengthen any Behavioural or Functional competency, and do NOT emit a `competency_id` that is not in the dataset. Anything not selectable by a real KCM id will be discarded downstream.
+- Do NOT use your general knowledge to generate Behavioural or Functional competencies — the KCM Dataset is the only permitted source.
+- (Domain competencies have NO `competency_id` — leave that field out for Domain.)
+
+**Relevance guardrails — pick for THIS role, not just any valid entry:**
+- **Ground every pick.** Select a Behavioural/Functional competency ONLY if you can tie it to a specific listed Role/Responsibility or Activity of THIS designation. Silently ask yourself "which duty of this role needs this competency?" — if you cannot answer, do NOT select it. A valid KCM entry that is irrelevant to the role is still a WRONG selection.
+- **Do not pad to a count.** Choose the most relevant entries first. Aim for at least the minimum, but NEVER add a clearly-irrelevant competency just to reach the minimum or approach the maximum. Fewer, genuinely-relevant competencies are better than padded ones.
+- **Administrative/office guardrail.** Administrative or office-function competencies (e.g. Office Management, Establishment & HR, Handling Leave & Travel, Financial/Expenditure Management, Procurement, File/Records management) may be assigned ONLY to designations whose actual duties include those administrative functions (e.g. clerical, HR, accounts, secretariat roles). Do NOT assign them to purely field, operational, security, or technical roles (e.g. Constable, Driver, Sweeper, Cleaner, Technician, Guard) unless that role genuinely performs office/admin work. For such field/operational roles, prefer functional competencies that match their actual on-ground work.
 
 2.3. **Domain Competencies**
 - **Exhaustive Scheme & Policy Coverage:** Every significant mission, scheme, flagship programme, statute, regulation, or policy explicitly or implicitly referenced in the source documents must be captured as a specific domain competency tied to the relevant designation(s). No major initiative should be left unmapped.
@@ -592,8 +601,8 @@ You will be provided with the following inputs:
 
 ⚠️ CRITICAL OUTPUT FORMAT RULES — VIOLATIONS WILL CAUSE SYSTEM FAILURE:
 1. `competencies` MUST be a **flat JSON array** of objects. Do NOT group by type. The following structure is STRICTLY FORBIDDEN:
-   {{"Behavioural": [...], "functional": [...], "domain": [...]}}
-   The ONLY valid structure is: [{{"type": "Behavioural", "theme": "...", "sub_theme": "..."}}, ...]
+   {{"behavioural": [...], "functional": [...], "domain": [...]}}
+   The ONLY valid structure is: [{{"competency_id": "BEH-007", "type": "Behavioural", "theme": "...", "sub_theme": "..."}}, ...]  (competency_id required for Behavioural/Functional; omit it for Domain)
 2. `role_responsibilities` MUST be a **flat array of strings** at the top level of each object. Do NOT nest it inside roles or any other key.
 3. `activities` MUST be a **flat array of strings** at the top level of each object. Do NOT nest it inside roles or any other key.
 4. These rules apply to EVERY object in the output array — including lower-rank and support staff designations.
@@ -610,13 +619,14 @@ You will be provided with the following inputs:
 The dataset below is a flat list of ALL valid Behavioural and Functional competencies. Each entry is one complete, selectable competency.
 
 Field usage:
-- `type`: "Behavioural" or "Functional" — identifies the competency category
-- `theme`: The competency theme name — **copy this character-for-character into your output**
+- `competency_id`: The stable KCM id (e.g. `BEH-007`, `FUN-045`) — **this is what you select and MUST output** for every Behavioural/Functional competency. Output it exactly as written.
+- `type`: "Behavioural" or "Functional" — identifies the competency category. Copy from the selected entry.
+- `theme`: The competency theme name — copy from the SAME entry as the `competency_id`.
 - `theme_description`: What the theme means — use this to judge whether the theme is relevant to the designation's overall role. Do NOT output this field.
-- `sub_theme`: The competency sub-theme name — **copy this character-for-character into your output**
+- `sub_theme`: The competency sub-theme name — copy from the SAME entry as the `competency_id`.
 - `sub_theme_description`: What the sub-theme means — use this to judge whether it fits the designation's specific activities. Do NOT output this field.
 
-Selection process: For each designation, read the `theme_description` and `sub_theme_description` of candidate entries to assess fit against the designation's actual roles and activities. Only select entries where the description genuinely matches the role context. Copy the `type`, `theme`, and `sub_theme` values verbatim — no paraphrasing, no renaming, no approximation.
+Selection process: For each designation, read the `theme_description` and `sub_theme_description` of candidate entries to assess fit against the designation's actual roles and activities. Only select entries where the description genuinely matches the role context. Output the chosen entry's `competency_id` and copy its `type`, `theme`, and `sub_theme` verbatim from that one entry — no paraphrasing, no renaming, no mixing fields across entries.
 
 {kcm_competencies}
 

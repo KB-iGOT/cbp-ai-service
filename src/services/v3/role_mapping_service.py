@@ -17,8 +17,135 @@ from ...prompts.v3.prompts import (
 from ...crud.document import crud_document
 from ...core.logger import logger
 
-with open("data/competencies.json") as f:
+with open("data/withidentifier_competencies.json") as f:
     COMPETENCY_MAPPING = json.load(f)
+
+# Deterministic KCM canonicalization index (id -> exact {type, theme, sub_theme}).
+# The LLM selects a `competency_id`; the server rebuilds the authoritative name from
+# this table, so a Behavioural/Functional competency can never be mixed, type-swapped,
+# renamed, or invented outside KCM. Domain competencies are outside KCM and untouched.
+KCM_BY_ID = {
+    e["competency_id"]: {
+        "competency_id": e["competency_id"],
+        "type": e["type"],
+        "theme": e["theme"],
+        "sub_theme": e["sub_theme"],
+    }
+    for e in COMPETENCY_MAPPING
+}
+# Fallback index for competencies that arrive without a (valid) id: exact (type, theme,
+# sub_theme) match snaps back to canonical; a paired (theme, sub_theme) match recovers a
+# swapped type. Keyed by casefolded strings to tolerate whitespace/case drift only.
+_KCM_BY_TRIPLE = {
+    (e["type"].casefold(), e["theme"].casefold(), e["sub_theme"].casefold()): e["competency_id"]
+    for e in COMPETENCY_MAPPING
+}
+_KCM_BY_PAIR = {
+    (e["theme"].casefold(), e["sub_theme"].casefold()): e["competency_id"]
+    for e in COMPETENCY_MAPPING
+}
+
+
+def _norm_type(t: str) -> str:
+    """Map model/KCM type spellings to the KCM canonical ('Behavioural'/'Functional'/'Domain')."""
+    t = (t or "").strip().casefold()
+    if t.startswith("behav"):
+        return "Behavioural"
+    if t.startswith("func"):
+        return "Functional"
+    return "Domain"
+
+
+def canonicalize_competencies(raw_competencies: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """Snap every Behavioural/Functional competency back to its exact KCM entry.
+
+    Resolution order per B/F competency:
+      1. valid `competency_id` -> use it (id is authoritative).
+      2. exact (type, theme, sub_theme) match -> recover id.
+      3. exact (theme, sub_theme) pair match -> recover id AND correct a swapped type.
+      4. none -> DROP (out-of-KCM hallucination) and record it.
+    Domain competencies pass through unchanged. Duplicates (same canonical id) are removed.
+
+    Returns {"competencies": [...canonical...], "metrics": {...}} where metrics measure
+    what the OLD (name-copy) system would have leaked: name/type/id mismatches and drops.
+    """
+    kept: List[Dict[str, Any]] = []
+    seen_ids: set = set()
+    metrics = {
+        "bf_total": 0, "resolved": 0, "dropped": 0,
+        "name_mismatch": 0, "type_mismatch": 0, "id_missing_or_bad": 0,
+        "clean": 0,            # LLM emitted a valid id AND echoed type/theme/sub exactly (no LLM error)
+        "dropped_items": [],
+        "records": [],         # per-competency raw-LLM-output vs canonical decision (for the hallucination report)
+    }
+    for c in (raw_competencies or []):
+        ctype = _norm_type(c.get("type", ""))
+        if ctype == "Domain":
+            kept.append({k: v for k, v in c.items() if k != "competency_id"})
+            continue
+        metrics["bf_total"] += 1
+        llm_id = (c.get("competency_id") or "").strip()
+        llm_theme = (c.get("theme") or "").strip()
+        llm_sub = (c.get("sub_theme") or "").strip()
+
+        id_valid = llm_id in KCM_BY_ID
+        cid = None
+        if id_valid:
+            cid = llm_id
+        else:
+            if llm_id:
+                metrics["id_missing_or_bad"] += 1
+            cid = _KCM_BY_TRIPLE.get((ctype.casefold(), llm_theme.casefold(), llm_sub.casefold())) \
+                or _KCM_BY_PAIR.get((llm_theme.casefold(), llm_sub.casefold()))
+
+        # --- classify the RAW LLM output (before we fix anything) ---
+        if not cid:
+            status = "hallucinated_dropped"          # LLM output not resolvable to any KCM entry
+        else:
+            canon = KCM_BY_ID[cid]
+            name_bad = (llm_theme != canon["theme"] or llm_sub != canon["sub_theme"])
+            type_bad = (ctype != canon["type"])
+            if id_valid and not name_bad and not type_bad:
+                status = "clean"                     # LLM fully correct on its own
+            elif id_valid and type_bad:
+                status = "type_swapped"              # valid id but LLM wrote wrong type
+            elif id_valid and name_bad:
+                status = "renamed"                   # valid id but LLM altered/paraphrased the name
+            elif type_bad:
+                status = "no_id_type_recovered"      # no valid id; recovered via name, type was wrong
+            elif name_bad:
+                status = "no_id_recovered"           # no valid id; recovered via (theme,sub) pair
+            else:
+                status = "no_id_named_correct"       # LLM named a real entry correctly but omitted the id
+
+        rec = {"raw_id": llm_id, "raw_type": c.get("type", ""), "raw_theme": llm_theme,
+               "raw_sub": llm_sub, "final_id": cid or "", "status": status}
+        metrics["records"].append(rec)
+
+        if not cid:
+            metrics["dropped"] += 1
+            metrics["dropped_items"].append({"type": ctype, "theme": llm_theme, "sub_theme": llm_sub, "competency_id": llm_id})
+            continue
+
+        canon = KCM_BY_ID[cid]
+        if status == "clean":
+            metrics["clean"] += 1
+        if llm_theme != canon["theme"] or llm_sub != canon["sub_theme"]:
+            metrics["name_mismatch"] += 1
+        if ctype != canon["type"]:
+            metrics["type_mismatch"] += 1
+
+        if cid in seen_ids:
+            continue
+        seen_ids.add(cid)
+        metrics["resolved"] += 1
+        out = {"type": canon["type"], "theme": canon["theme"], "sub_theme": canon["sub_theme"], "competency_id": cid}
+        if c.get("source") is not None:
+            out["source"] = c["source"]
+        kept.append(out)
+
+    return {"competencies": kept, "metrics": metrics}
+
 
 # src/prompts/v2/prompts.py (add this to your existing prompts file)
 
@@ -31,6 +158,7 @@ center_json_output = {
         "sort_order": "integer",
         "competencies": [
             {
+                "competency_id": "KCM id e.g. BEH-07 / FUN-23 (REQUIRED for Behavioural & Functional; omit for Domain)",
                 "type": "Behavioural | Functional | Domain",
                 "theme": "string",
                 "sub_theme": "string"
@@ -49,6 +177,7 @@ state_json_output = {
         "sort_order": "integer",
         "competencies": [
             {
+                "competency_id": "KCM id e.g. BEH-07 / FUN-23 (REQUIRED for Behavioural & Functional; omit for Domain)",
                 "type": "Behavioural | Functional | Domain",
                 "theme": "string",
                 "sub_theme": "string"
@@ -72,6 +201,7 @@ class DesignationExtractionResponse(BaseModel):
         description="List of extracted unique designations sorted by hierarchy"
     )
 class FRACCompetency(BaseModel):
+    competency_id: Optional[str] = Field(default=None, description="KCM competency id (e.g. BEH-07 / FUN-23). REQUIRED for Behavioural & Functional; omit for Domain.")
     type: Literal["Behavioural", "Functional", "Domain"] = Field(description="Competency type: Behavioural, Functional, or Domain")
     theme: str = Field(description="Competency theme")
     sub_theme: str = Field(description="Competency sub theme")
@@ -326,92 +456,111 @@ class RoleMappingService:
             parts.append(f"<document_summary_{idx}>\n Document Type: {doc.document_type} \n Summary: {summary}\n</document_summary_{idx}>")
         
         return "\n\n".join(parts)
-    
+
     @staticmethod
     def _normalize(text: Optional[str]) -> str:
         """Lowercase/trim for tolerant comparison"""
         return (text or "").strip().lower()
+    
+    @staticmethod
+    def _norm_type(t: str) -> str:
+        """Map model/KCM type spellings to the KCM canonical ('Behavioural'/'Functional'/'Domain')."""
+        t = (t or "").strip().casefold()
+        if t.startswith("behav"):
+            return "Behavioural"
+        if t.startswith("func"):
+            return "Functional"
+        return "Domain"
 
-    def _reconcile_competency_against_kcm(
-        self, competency: Dict[str, Any]
-    ) -> Optional[Dict[str, Any]]:
-        """Cross-verify one Behavioural/Functional competency against the KCM dataset
-        (data/competencies.json), correcting LLM drift instead of trusting it blindly.
+    def _reconcile_competency_against_kcm( self, raw_competencies: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """Snap every Behavioural/Functional competency back to its exact KCM entry.
 
-        Rules (in priority order):
-        - type + theme + sub_theme all match a KCM row       -> keep as-is
-        - theme + sub_theme match, type differs               -> LLM swapped type; fix type only
-        - type + sub_theme match, theme differs                -> LLM swapped theme; fix theme
-        - only sub_theme matches (type and theme differ)      -> fix both type and theme from KCM
-        - theme and sub_theme values are swapped with each other (no sub_theme match, but a KCM
-          row's theme==comp's sub_theme AND that row's sub_theme==comp's theme) -> swap back, fix type
-        - sub_theme matches no KCM row at all                  -> drop (unrecoverable, return None)
+        Resolution order per B/F competency:
+        1. valid `competency_id` -> use it (id is authoritative).
+        2. exact (type, theme, sub_theme) match -> recover id.
+        3. exact (theme, sub_theme) pair match -> recover id AND correct a swapped type.
+        4. none -> DROP (out-of-KCM hallucination) and record it.
+        Domain competencies pass through unchanged. Duplicates (same canonical id) are removed.
+
+        Returns {"competencies": [...canonical...], "metrics": {...}} where metrics measure
+        what the OLD (name-copy) system would have leaked: name/type/id mismatches and drops.
         """
-        comp_type = competency.get("type")
-        comp_theme = competency.get("theme")
-        comp_sub_theme = competency.get("sub_theme")
+        kept: List[Dict[str, Any]] = []
+        seen_ids: set = set()
+        metrics = {
+            "bf_total": 0, "resolved": 0, "dropped": 0,
+            "name_mismatch": 0, "type_mismatch": 0, "id_missing_or_bad": 0,
+            "clean": 0,            # LLM emitted a valid id AND echoed type/theme/sub exactly (no LLM error)
+            "dropped_items": [],
+            "records": [],         # per-competency raw-LLM-output vs canonical decision (for the hallucination report)
+        }
+        for c in (raw_competencies or []):
+            ctype = self._norm_type(c.get("type", ""))
+            if ctype == "Domain":
+                kept.append({k: v for k, v in c.items() if k != "competency_id"})
+                continue
+            metrics["bf_total"] += 1
+            llm_id = (c.get("competency_id") or "").strip()
+            llm_theme = (c.get("theme") or "").strip()
+            llm_sub = (c.get("sub_theme") or "").strip()
 
-        norm_type = self._normalize(comp_type)
-        norm_theme = self._normalize(comp_theme)
-        norm_sub_theme = self._normalize(comp_sub_theme)
+            id_valid = llm_id in KCM_BY_ID
+            cid = None
+            if id_valid:
+                cid = llm_id
+            else:
+                if llm_id:
+                    metrics["id_missing_or_bad"] += 1
+                cid = _KCM_BY_TRIPLE.get((ctype.casefold(), llm_theme.casefold(), llm_sub.casefold())) \
+                    or _KCM_BY_PAIR.get((llm_theme.casefold(), llm_sub.casefold()))
 
-        sub_theme_matches = [
-            row for row in COMPETENCY_MAPPING
-            if self._normalize(row.get("sub_theme")) == norm_sub_theme
-        ]
-        if not sub_theme_matches:
-            # No row has this value as its sub_theme — check whether the LLM swapped theme and
-            # sub_theme with each other (this competency's sub_theme value is actually a KCM
-            # *theme*, and what the LLM put in the theme field is actually the matching sub_theme).
-            swapped_matches = [
-                row for row in COMPETENCY_MAPPING
-                if self._normalize(row.get("theme")) == norm_sub_theme
-                and self._normalize(row.get("sub_theme")) == norm_theme
-            ]
-            if swapped_matches:
-                row = swapped_matches[0]
-                corrected = {**competency, "type": row.get("type"),
-                             "theme": row.get("theme"), "sub_theme": row.get("sub_theme")}
-                logger.info(
-                    f"KCM reconcile: theme/sub_theme were swapped ('{comp_theme}' <-> '{comp_sub_theme}'); "
-                    f"restored to theme='{row.get('theme')}', sub_theme='{row.get('sub_theme')}', "
-                    f"type='{row.get('type')}'")
-                return corrected
+            # --- classify the RAW LLM output (before we fix anything) ---
+            if not cid:
+                status = "hallucinated_dropped"          # LLM output not resolvable to any KCM entry
+            else:
+                canon = KCM_BY_ID[cid]
+                name_bad = (llm_theme != canon["theme"] or llm_sub != canon["sub_theme"])
+                type_bad = (ctype != canon["type"])
+                if id_valid and not name_bad and not type_bad:
+                    status = "clean"                     # LLM fully correct on its own
+                elif id_valid and type_bad:
+                    status = "type_swapped"              # valid id but LLM wrote wrong type
+                elif id_valid and name_bad:
+                    status = "renamed"                   # valid id but LLM altered/paraphrased the name
+                elif type_bad:
+                    status = "no_id_type_recovered"      # no valid id; recovered via name, type was wrong
+                elif name_bad:
+                    status = "no_id_recovered"           # no valid id; recovered via (theme,sub) pair
+                else:
+                    status = "no_id_named_correct"       # LLM named a real entry correctly but omitted the id
 
-            logger.warning(
-                f"KCM reconcile: dropping competency with no sub_theme match in KCM dataset: {competency}")
-            return None
+            rec = {"raw_id": llm_id, "raw_type": c.get("type", ""), "raw_theme": llm_theme,
+                "raw_sub": llm_sub, "final_id": cid or "", "status": status}
+            metrics["records"].append(rec)
 
-        # Exact match on all three fields -> nothing to do
-        for row in sub_theme_matches:
-            if self._normalize(row.get("type")) == norm_type and self._normalize(row.get("theme")) == norm_theme:
-                return competency
+            if not cid:
+                metrics["dropped"] += 1
+                metrics["dropped_items"].append({"type": ctype, "theme": llm_theme, "sub_theme": llm_sub, "competency_id": llm_id})
+                continue
 
-        # type + sub_theme match -> only theme is wrong (or swapped with sub_theme)
-        for row in sub_theme_matches:
-            if self._normalize(row.get("type")) == norm_type:
-                corrected = {**competency, "theme": row.get("theme")}
-                logger.info(
-                    f"KCM reconcile: fixed theme '{comp_theme}' -> '{row.get('theme')}' "
-                    f"for sub_theme '{comp_sub_theme}'")
-                return corrected
+            canon = KCM_BY_ID[cid]
+            if status == "clean":
+                metrics["clean"] += 1
+            if llm_theme != canon["theme"] or llm_sub != canon["sub_theme"]:
+                metrics["name_mismatch"] += 1
+            if ctype != canon["type"]:
+                metrics["type_mismatch"] += 1
 
-        # theme + sub_theme match -> only type is wrong (e.g. theme/sub_theme swapped by LLM)
-        for row in sub_theme_matches:
-            if self._normalize(row.get("theme")) == norm_theme:
-                corrected = {**competency, "type": row.get("type")}
-                logger.info(
-                    f"KCM reconcile: fixed type '{comp_type}' -> '{row.get('type')}' "
-                    f"for theme/sub_theme '{comp_theme}'/'{comp_sub_theme}'")
-                return corrected
+            if cid in seen_ids:
+                continue
+            seen_ids.add(cid)
+            metrics["resolved"] += 1
+            out = {"type": canon["type"], "theme": canon["theme"], "sub_theme": canon["sub_theme"], "competency_id": cid}
+            if c.get("source") is not None:
+                out["source"] = c["source"]
+            kept.append(out)
 
-        # Only sub_theme matches -> take the type and theme straight from KCM
-        row = sub_theme_matches[0]
-        corrected = {**competency, "type": row.get("type"), "theme": row.get("theme")}
-        logger.info(
-            f"KCM reconcile: fixed type+theme for sub_theme '{comp_sub_theme}' -> "
-            f"type='{row.get('type')}', theme='{row.get('theme')}'")
-        return corrected
+        return {"competencies": kept, "metrics": metrics}
 
     def reconcile_role_mappings_with_kcm(
         self, frac_mappings: List[Dict[str, Any]]
@@ -422,28 +571,23 @@ class RoleMappingService:
         Domain competencies are skipped (not part of the KCM Behavioural/Functional master)
         and passed through unchanged.
         """
-        stats = {"kept": 0, "fixed": 0, "dropped": 0, "domain_skipped": 0}
+        # Deterministic KCM canonicalization: snap every Behavioural/Functional
+        # competency back to its exact KCM entry by id (drops out-of-KCM items,
+        # corrects swapped types, restores altered names). Domain is untouched.
+        agg = {"bf_total": 0, "resolved": 0, "dropped": 0, "name_mismatch": 0, "type_mismatch": 0, "id_missing_or_bad": 0, "clean": 0}
         for mapping in frac_mappings:
-            competencies = mapping.get("competencies") or []
-            reconciled: List[Dict[str, Any]] = []
-            for competency in competencies:
-                if self._normalize(competency.get("type")) not in ("behavioural", "functional"):
-                    reconciled.append(competency)
-                    stats["domain_skipped"] += 1
-                    continue
-                fixed = self._reconcile_competency_against_kcm(competency)
-                if fixed is None:
-                    stats["dropped"] += 1
-                    continue
-                if fixed is competency:
-                    stats["kept"] += 1
-                else:
-                    stats["fixed"] += 1
-                reconciled.append(fixed)
-            mapping["competencies"] = reconciled
+            result = self._reconcile_competency_against_kcm(mapping.get("competencies", []))
+            mapping["competencies"] = result["competencies"]
+            for k in agg:
+                agg[k] += result["metrics"][k]
+            for item in result["metrics"]["dropped_items"]:
+                logger.warning(f"Dropped out-of-KCM competency for '{mapping.get('designation_name')}': {item}")
+
         logger.info(
-            f"KCM reconciliation summary: kept={stats['kept']} fixed={stats['fixed']} "
-            f"dropped={stats['dropped']} domain_skipped={stats['domain_skipped']}")
+            f"KCM canonicalization — B/F={agg['bf_total']} clean(LLM-correct)={agg['clean']} "
+            f"resolved={agg['resolved']} dropped={agg['dropped']} name_mismatch={agg['name_mismatch']} "
+            f"type_mismatch={agg['type_mismatch']} bad_id={agg['id_missing_or_bad']}"
+        )
 
         # DB persists the US spelling "Behavioral" even though the KCM dataset and all
         # reconciliation above use "Behavioural" — normalize only at this final boundary.
