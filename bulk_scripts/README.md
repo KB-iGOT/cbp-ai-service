@@ -186,13 +186,18 @@ A scope-pair row whose source scope has zero documents is reported `status=no_do
 **Env required**: same as script 1 — `DATABASE_URL`, `GCP_STORAGE_BUCKET`, `GCP_STORAGE_PREFIX`,
 `GCP_STORAGE_CREDENTIALS`, `DOCUMENT_STORAGE_TYPE`.
 
-**Input**: `.csv` or `.xlsx`/`.xlsm` with mandatory columns `source_state_center_id,
-source_department_id, target_state_center_id, target_department_id` (the two `*_department_id`
-columns may be blank/empty for a root-level scope). Optional columns `source_state_center_name,
-source_department_name, target_state_center_name, target_department_name` are echoed as-is into
-the outcome CSV if present (purely cosmetic — the `documents` table has no name columns, only
-ids, so these are never looked up, only carried through from the input file). `--sheet` restricts
-an xlsx read to one tab (default: all tabs).
+**Input**: `.csv` or `.xlsx`/`.xlsm`. `--sheet` restricts an xlsx read to one tab (default: all tabs).
+
+| Column | Required | Notes |
+|---|:---:|---|
+| `source_state_center_id` | ✅ | |
+| `source_department_id` | | blank = root-level scope |
+| `target_state_center_id` | ✅ | |
+| `target_department_id` | | blank = root-level scope |
+| `source_state_center_name` | | cosmetic only — echoed as-is into the outcome CSV, never looked up (the `documents` table has no name columns) |
+| `source_department_name` | | cosmetic only, same as above |
+| `target_state_center_name` | | cosmetic only, same as above |
+| `target_department_name` | | cosmetic only, same as above |
 
 **Output**: log at `bulk_scripts/logs/<input-file-name>_<timestamp>.log`; outcome CSV written
 **alongside the input file** at `<input-file-name>_<timestamp>.csv` (one row per source document
@@ -291,10 +296,27 @@ whole run. A designation that already has a mapping is skipped by default (re-ge
 `--force`). Optionally matches designations to the iGOT master (`--igot-match`, on by default).
 
 **Env required**: `DATABASE_URL`, `GOOGLE_APPLICATION_CREDENTIALS`, `GOOGLE_API_KEY`,
-`GOOGLE_PROJECT_ID` (loaded via `src.core.configs.settings`, same as script 2).
+`GOOGLE_PROJECT_ID` (loaded via `src.core.configs.settings`, same as script 2), plus
+`REDIS_HOST`, `REDIS_PORT`, `REDIS_DB`, `REDIS_DESIG_EMB_PREFIX` — needed because `--igot-match`
+(on by default) caches designation embeddings in Redis via `designation_matcher_service`. These
+four have code-level defaults (`localhost`/`6379`/`0`/`cbp_desig_emb`), so the script won't fail
+outright if they're unset, but they must point at the correct Redis instance for this environment
+or the iGOT-match step will silently talk to the wrong (or no) Redis.
 
-**Input**: `.xlsx`/`.csv`; ALL of `state_center_id, department_id, org_type, state_center_name,
-department_name, designation` are mandatory columns — missing any of them aborts the whole run.
+**Input**: `.xlsx`/`.csv`. **ALL** columns below are mandatory — missing any one aborts the whole
+run (not just the affected row):
+
+| Column | Required | Notes |
+|---|:---:|---|
+| `state_center_id` | ✅ | |
+| `department_id` | ✅ | blank = root-level scope (still must be present as a column) |
+| `org_type` | ✅ | must parse to `state` or `ministry` (tolerant of synonyms like `center`/`central`/`union`) |
+| `state_center_name` | ✅ | |
+| `department_name` | ✅ | |
+| `designation` | ✅ | |
+
+No yes/no filter column exists for this script — every row is processed unless it's a duplicate
+scope+designation or its scope has no document summaries yet.
 
 **Output**: plan/result CSV next to source (`--out` to override); per-row status written back to
 the source file (disable with `--no-annotate`); log at
@@ -353,20 +375,45 @@ the target scope has none yet for that user) — never copied from the source.
 
 **Env required**: `DATABASE_URL` only (pure DB script, no GCS/Gemini).
 
-**Input**: `.csv` (tab- or comma-delimited, auto-detected) or `.xlsx`/`.xlsm`, with "From ... / To
-..." headers (case/space-insensitive): `From Center State ID` (required), `From Department ID`
-(optional, blank = root scope), `From Designation Name` (required), `To Center State ID`
-(required), `To Center state name` (required), `To Department ID` (optional, blank = root scope),
-`To Designation Name` (required). The user id is **not** in the file — every copy is created under
-`--user-id`. An ID cell pasted in scientific notation (e.g. `1.36E+18`) is rejected
-(`id_scientific_notation`) rather than silently mismatched — format ID columns as Text before
-pasting.
+**Input**: `.csv` (tab- or comma-delimited, auto-detected) or `.xlsx`/`.xlsm`. Also accepts the
+display-style "From ... / To ..." headers (case/space-insensitive) — both forms map to the same
+columns. The user id is **not** in the file — every copy is created under `--user-id`.
+
+**FROM (source) columns:**
+
+| Column | Required | Notes |
+|---|:---:|---|
+| `source_state_center_id` | ✅ | |
+| `source_state_center_name` | | context only |
+| `source_department_id` | | blank = root scope |
+| `source_department_name` | | context only |
+| `source_designation_id` | | informational — matching is by name, not id |
+| `source_designation_name` | ✅ | source designation to copy |
+| `source_org_type` | ✅ | must be `state` or `ministry` — context only, never applied to the new row |
+
+**TO (target) columns:**
+
+| Column | Required | Notes |
+|---|:---:|---|
+| `target_state_center_id` | ✅ | |
+| `target_state_center_name` | ✅ | becomes the new row's `state_center_name` |
+| `target_department_id` | | blank = root scope |
+| `target_department_name` | | becomes the new row's `department_name` |
+| `target_designation_id` | | informational |
+| `target_designation_name` | ✅ | target designation |
+| `target_org_type` | ✅ | must be `state` or `ministry` — becomes the new row's `org_type` |
+
+An ID cell pasted in scientific notation (e.g. `1.36E+18`) is rejected (`id_scientific_notation`)
+rather than silently mismatched — format ID columns as Text before pasting. Either org_type column
+with an unrecognized value (not `state`/`ministry`, tolerant to a few synonyms like
+`center`/`central`/`union`) is rejected as `invalid_org_type`, not fatal to the rest of the run.
 
 **Output**: log at `bulk_scripts/logs/<input-file-name>_<timestamp>.log`; outcome CSV written
 **alongside the input file** at `<input-file-name>_<timestamp>.csv` — one row per input line,
 columns: `row_no, status, reason, source_state_center_id, source_department_id,
-source_designation, source_id, source_status, target_user_id, target_state_center_id,
-target_department_id, target_designation, new_role_mapping_id, new_sort_order`.
+source_designation, source_org_type, source_id, source_status, target_user_id,
+target_state_center_id, target_department_id, target_designation, target_org_type,
+new_role_mapping_id, new_sort_order`.
 
 **Things to know**
 - `--user-id` is used **only** for the target side (ownership of the new row and the
@@ -375,10 +422,12 @@ target_department_id, target_designation, new_role_mapping_id, new_sort_order`.
   recommendations, and CBP plans are **not** copied; those live downstream of script 4 and would
   need to be regenerated separately for the new scope.
 - `state_center_name`/`department_name`/`designation_name`/`status`/`user_id`/`state_center_id`/
-  `department_id` are all overridden to the target row's values (`status` is always forced to
-  `COMPLETED`); everything else (the FRAC content, `igot_designation_name`/`igot_designation_id`,
-  `sector_name`, `org_type`, `instruction`, `wing_division_section`) is copied verbatim from the
-  source.
+  `department_id`/`org_type` are all overridden to the target row's values (`status` is always
+  forced to `COMPLETED`; `org_type` always comes from the input's `Target Org Type` column, **never**
+  cloned from the source — the target scope's org type can legitimately differ from the source's,
+  e.g. copying a state-level designation into a ministry); everything else (the FRAC content,
+  `igot_designation_name`/`igot_designation_id`, `sector_name`, `instruction`,
+  `wing_division_section`) is copied verbatim from the source.
 - Safe to re-run: a designation already present for the target user in the target scope is
   skipped, not duplicated or overwritten.
 
@@ -413,9 +462,17 @@ Dry-run never calls the LLM/embedding pipeline, even for rows that would need fr
 `GOOGLE_GENAI_USE_VERTEXAI`, `GOOGLE_APPLICATION_CREDENTIALS`, `GOOGLE_API_KEY`,
 `GOOGLE_EMBEDDING_MODEL`, `EMBEDDING_OUTPUT_DIMENSIONALITY`, `GEMINI_PRO_MODEL_NAME`
 
-**Input**: `.xlsx`/`.xlsm` or `.csv` with 7 columns — only `role_mapping_id` (UUID) is mandatory;
-`state_center_id, department_id, org_type, state_center_name, department_name, designation` are
-optional and only echoed into the outcome CSV.
+**Input**: `.xlsx`/`.xlsm` or `.csv`.
+
+| Column | Required | Notes |
+|---|:---:|---|
+| `role_mapping_id` | ✅ | UUID identifying the role_mapping to process |
+| `state_center_id` | | optional, echoed into the outcome CSV only |
+| `department_id` | | optional, echoed into the outcome CSV only |
+| `org_type` | | optional, echoed into the outcome CSV only |
+| `state_center_name` | | optional, echoed into the outcome CSV only |
+| `department_name` | | optional, echoed into the outcome CSV only |
+| `designation` | | optional, echoed into the outcome CSV only |
 
 **Output**: `<dir of --excel>/batch_generate_and_save_cbp_plan_<timestamp>.csv` (input columns +
 `recommendation_id`, `status`, `total_courses`, per-stage token counts, `error`); log at
@@ -456,10 +513,13 @@ python bulk_scripts/batch_generate_and_save_cbp_plan.py --excel <path/to/input.x
 plan = one approval request). Fully self-contained — re-implements the send-for-approval + MDO
 email logic directly against the DB.
 
-**What it handles**: If the `role_mapping_id`, `recommendation_id`, or `mdo_id` column is entirely
-missing from the input file, the script aborts immediately (these three columns are mandatory). A
-row with a blank/invalid `role_mapping_id`/`recommendation_id`, or blank `mdo_id`, is skipped, not
-fatal to the batch. A row whose CBP plan isn't found is skipped (`SKIPPED_NO_CBP_PLAN`).
+**What it handles**: If the `role_mapping_id` or `recommendation_id` column is entirely missing
+from the input file, the script aborts immediately (these two columns are mandatory). A row with a
+blank/invalid `role_mapping_id`/`recommendation_id` is skipped, not fatal to the batch. A row whose
+CBP plan isn't found is skipped (`SKIPPED_NO_CBP_PLAN`). `mdo_id` is optional — if the column is
+missing entirely, or present but blank on a row, that row's `mdo_id` is stored as `NULL` (never
+skipped/failed for it); the MDO approval email is simply not sent for that row, logged as a
+no-op, same as when a real `mdo_id` doesn't resolve to any MDO admin.
 
 ⚠️ **Does not handle re-runs safely** — there is no dedup/already-submitted check. Every run creates
 fresh approval requests for every eligible row. Re-running the same input file creates duplicate
@@ -468,15 +528,30 @@ approval requests and sends duplicate emails; only run this once per input file.
 **Env required**: `DATABASE_URL`, `KB_BASE_URL`, `KB_AUTH_TOKEN`, `NOTIFICATION_BASE_URL`,
 `MDO_PORTAL_URL`, `ENABLE_EMAIL_NOTIFICATION`
 
-**Input**: `.xlsx`/`.xlsm` or `.csv` with mandatory columns `role_mapping_id`, `recommendation_id`,
-`mdo_id`; optional/echoed-only columns `state_center_id`, `department_id`, `org_type`,
-`state_center_name`, `department_name`, `designation`.
+**Input**: `.xlsx`/`.xlsm` or `.csv`. If either mandatory column is entirely missing from the
+file, the script aborts immediately (not just the affected row).
+
+| Column | Required | Notes |
+|---|:---:|---|
+| `role_mapping_id` | ✅ | |
+| `recommendation_id` | ✅ | |
+| `mdo_id` | | optional — missing column or blank cell is stored as `NULL`; the approval email is skipped for that row, not an error |
+| `state_center_id` | | optional, echoed into the outcome CSV only |
+| `department_id` | | optional, echoed into the outcome CSV only |
+| `org_type` | | optional, echoed into the outcome CSV only |
+| `state_center_name` | | optional, echoed into the outcome CSV only |
+| `department_name` | | optional, echoed into the outcome CSV only |
+| `designation` | | optional, echoed into the outcome CSV only |
 
 **Output**: `<dir of --excel>/batch_send_approval_requests_<timestamp>.csv` (input columns +
 `approval_request_id`, `request_name`, `designation_count`, `approval_request_item_ids`, `status`,
 `error`); log at `bulk_scripts/logs/batch_send_approval_requests_<timestamp>.log`.
 
 **Things to know**
+- `mdo_id` is optional — a row with no `mdo_id` (missing column or blank cell) is still submitted
+  normally; it's stored as `NULL` on the approval request and the MDO approval email is simply not
+  sent for that row (logged, not a failure). If the app's own DB has `mdo_id` as `NOT NULL`, keep
+  that DB change in sync with this script's assumption before relying on this.
 - A row marked "succeeded" in the output means the approval request was created — it does **not**
   guarantee the notification email reached anyone. Sending the email is best-effort: if it fails
   (approver not found, notification service down, etc.), only a warning is logged and the row still
@@ -541,8 +616,13 @@ The pod name and local port above are examples — use the actual pod name for t
 you're targeting (`kubectl get pods -n dev | grep cb-ext-course-service`), and keep the port-forward
 running in a separate terminal for the duration of the script run.
 
-**Input**: CSV/Excel with mandatory column `approval_request_id`; an optional per-row `due_date`
-column overrides `--due-date` for that row; every other input column is passed through unchanged.
+**Input**: CSV/Excel.
+
+| Column | Required | Notes |
+|---|:---:|---|
+| `approval_request_id` | ✅ | blank/invalid value skips that row, not fatal |
+| `due_date` | | overrides `--due-date` for that row only |
+| *(anything else)* | | passed through unchanged into the outcome CSV |
 
 **Output**: `<dir of --excel>/bulk_training_plan_approval_<timestamp>.csv` — every input column (in
 original order) followed by `cbp_plan_name, cbp_plan_id, due_date, status, error, published_by`;
@@ -589,6 +669,96 @@ python bulk_scripts/bulk_training_plan_approval.py --excel <path/to/plans.xlsx> 
 
 ---
 
+## 7. `bulk_update_courses_by_role_mapping.py`
+
+**What it does**: Bulk-removes and/or bulk-adds courses on a `role_mappings` row's recommendation
+and CBP plan, driven by an input file. Pure DB, no LLM/API calls — use it to hand-correct a course
+list (e.g. swap out a mis-recommended course) without re-running generation or the app's UI.
+
+**What it handles**: For every input row, updates **both**
+`recommended_courses.filtered_courses` (the recommendation shown in the UI) and
+`cbp_plans.selected_courses` (every CBP plan built on that role mapping) — matching courses to
+remove by their `identifier` field, the same field the app's own single-course delete uses. A
+course to add is resolved against `course_metadata_weightage` (the same table the recommendation
+pipeline enriches from) so it carries the same keys as a generated course and is indistinguishable
+downstream; an identifier not found there is **not** added and is reported under
+`unresolved_courses` rather than inserted as a bare id that would render as an empty card. A
+manually added course is stamped with `--relevancy` (default 90, the app's own default for
+identifier-added courses) and `--rationale`, and `filtered_courses` is re-sorted by relevancy
+descending after an add, matching how generation persists it.
+
+Every row lands in exactly one of these outcomes, all non-fatal to the rest of the run (one bad row
+never aborts the batch):
+
+| Status | When |
+|---|---|
+| `role_mapping_not_found` | `role_mapping_id` doesn't exist in `role_mappings` |
+| `user_mismatch` | role mapping exists but is owned by someone other than `--user-id` |
+| `no_records` | role mapping exists but has no `recommended_courses` **and** no `cbp_plans` rows at all |
+| `recommendation_in_progress` | the role mapping's recommendation is still `IN_PROGRESS` — skipped whole rather than half-edited under a running generation (the same guard the app's API returns a 409 for) |
+| `additions_unresolved` | every requested addition failed to resolve against `course_metadata_weightage`, and there were no removals either |
+| `no_change_needed` | every removal was already absent and every addition was already present — nothing left to do |
+| `would_update` | dry-run only: at least one real add/remove would happen |
+| `updated` | `--execute` only: the add/remove was persisted |
+| `error` | row-level input problem — `missing_columns`, `ambiguous_columns`, `no_courses_specified` (both course columns empty), `identifier_in_both` (same id in both columns), or `invalid_role_mapping_id` |
+
+Safe to re-run: an identifier already gone (or already present) is reported, not an error, so a row
+with nothing left to do comes back as `no_change_needed` rather than failing. Every row runs in its
+own transaction with `SELECT ... FOR UPDATE` under `--execute`, so a concurrent app edit can't be
+silently clobbered by the read-modify-write.
+
+**Env required**: `DATABASE_URL` only (pure DB script, no GCS/Gemini).
+
+**Input**: `.csv` (tab- or comma-delimited, auto-detected) or `.xlsx`/`.xlsm`. Headers are matched
+case/space/underscore-insensitively, so `Role Mapping ID`, `role_mapping_id` and `role-mapping-id`
+are all the same column.
+
+| Column | Required | Accepted header aliases | Notes |
+|---|:---:|---|---|
+| `role_mapping_id` | ✅ | `role mapping`, `role mapping ids` | must exist in `role_mappings`, else `role_mapping_not_found` |
+| `courses_to_be_removed` | | `course_to_be_removed`, `courses to remove`, `course to remove`, `courses to be deleted`, `remove courses`, `removed courses`, `course ids to be removed` | identifier(s) to remove; comma/semicolon/pipe/newline/space-separated or a JSON list — at least one of this or the add column is required |
+| `courses_to_be_added` | | `course_to_be_added`, `courses to add`, `course to add`, `add courses`, `added courses`, `new courses`, `course ids to be added` | identifier(s) to add; same list formats as removals |
+
+A courses cell may hold a single identifier, a separated list, or a JSON/Python-style list — all
+parse to the same result, with duplicates within a cell collapsed. An unquoted bracketed list split
+across columns by a comma-delimited CSV (`[do_1,do_2]` written without surrounding quotes) is
+stitched back together automatically; if a row still has more fields than the header after that
+repair, it's rejected as `ambiguous_columns` rather than guessed at.
+
+**Output**: log at `bulk_scripts/logs/<input-file-name>_<timestamp>.log`; outcome CSV written
+**alongside the input file** at `<input-file-name>_<timestamp>.csv` — one row per input line,
+columns: `row_no, mode, status, reason, role_mapping_id, role_mapping_user_id, state_center_id,
+department_id, designation_name, requested_removals, requested_additions, recommendation_ids,
+recommendation_statuses, rec_courses_before, rec_courses_after, removed_from_recommendations,
+added_to_recommendations, cbp_plan_ids, cbp_courses_before, cbp_courses_after,
+removed_from_cbp_plans, added_to_cbp_plans, added_course_names, not_found_courses,
+unresolved_courses, already_present_courses`.
+
+**Things to know**
+- `--user-id` is **mandatory** and scopes every row: a role mapping owned by anyone else is
+  skipped as `user_mismatch`, never touched.
+- `recommended_courses.actual_courses` (the raw vector-search audit trail) is deliberately left
+  untouched by both operations — only `filtered_courses` drives what the user sees.
+  `suggested_courses` and `user_added_courses` are not touched either; an identifier that only
+  exists there is reported under `not_found_courses` on removal, not removed.
+- Re-generating recommendations afterwards discards every edit made here (removed courses come
+  back, added ones disappear) — run this only after generation has settled for that role mapping.
+- If the same `role_mapping_id` appears on several rows, each row is processed independently
+  against the identifiers on that row (they are not merged).
+
+```bash
+# 1. Dry run
+python bulk_scripts/bulk_update_courses_by_role_mapping.py --excel <path/to/changes.csv> --user-id <uuid>
+
+# 2. Execute
+python bulk_scripts/bulk_update_courses_by_role_mapping.py --excel <path/to/changes.csv> --user-id <uuid> --execute
+
+# 3. Execute with a specific batch size (default 10)
+python bulk_scripts/bulk_update_courses_by_role_mapping.py --excel <path/to/changes.xlsx> --user-id <uuid> --execute --batch-size 20
+```
+
+---
+
 ## Typical end-to-end order
 
 If you're running these as a pipeline for a new state/department onboarding, the usual order is:
@@ -602,6 +772,9 @@ If you're running these as a pipeline for a new state/department onboarding, the
 
 Each step's outcome CSV tells you what's ready to feed into the next step (e.g. which
 `role_mapping_id`s succeeded in step 3 are the ones to hand to step 4).
+
+`bulk_update_courses_by_role_mapping.py` (script 7) is not part of this sequence — it's an ad-hoc
+utility for hand-correcting a course list after step 4 has already run, not a pipeline stage.
 
 ## Running scripts in the background (VM / jumphost)
 

@@ -38,12 +38,17 @@ direct spreadsheet paste, comma for a saved CSV). Expected "From ... / To ..." h
     From Department Name      (optional)          -> context only
     From Designation ID       (optional)          -> informational (matching is by name)
     From Designation Name     (required)          -> source designation to copy
+    Source Org Type           (required)          -> must be 'state' or 'ministry' (context only --
+                                                       the new row's org_type always comes from
+                                                       Target Org Type below, never cloned from source)
     To Center State ID        (required)          -> target state_center_id
     To Center state name      (required)          -> target state_center_name on the new row
     To Department ID          (optional, blank=NULL)
     ToDepartment Name         (optional)          -> target department_name on the new row
     To Designation ID         (optional)          -> informational
     To Designation Name       (required)          -> target designation
+    Target Org Type           (required)          -> must be 'state' or 'ministry'; becomes the new
+                                                       row's org_type
 
 The user_id is NOT in the file; every copy is created under --user-id.
 ID cells pasted in scientific notation (e.g. 1.36E+18) are rejected (id_scientific_notation) -- they
@@ -215,7 +220,7 @@ class RoleMapping(Base):
     sector_name = Column(String(255), nullable=True, index=True)
     instruction = Column(Text, nullable=True)
     designation_name = Column(String(255), nullable=True, index=True)
-    wing_division_section = Column(String(255), nullable=True)
+    wing_division_section = Column(Text, nullable=True)
     role_responsibilities = Column(JSONB, default=list, nullable=True)
     activities = Column(JSONB, default=list, nullable=True)
     competencies = Column(JSONB, default=list, nullable=True)
@@ -244,10 +249,16 @@ DEFAULT_BATCH_SIZE = 10
 REQUIRED_COLUMNS = [
     "source_state_center_id",
     "source_designation_name",
+    "source_org_type",
     "target_state_center_id",
     "target_state_center_name",
     "target_designation_name",
+    "target_org_type",
 ]
+
+# org_type must parse to one of these (case/synonym-insensitive, see _org_type_of).
+_ORG_TYPE_STATE_SYNONYMS = {"state", "states"}
+_ORG_TYPE_MINISTRY_SYNONYMS = {"ministry", "ministries", "centre", "center", "central", "union"}
 
 # Columns never copied verbatim: primary key, parent FK (set via relationship) and
 # server-managed timestamps.
@@ -263,12 +274,14 @@ HEADER_MAP = {
     "fromdepartmentname": "source_department_name",
     "fromdesignationid": "source_designation_id",
     "fromdesignationname": "source_designation_name",
+    "sourceorgtype": "source_org_type",
     "tocenterstateid": "target_state_center_id",
     "tocenterstatename": "target_state_center_name",
     "todepartmentid": "target_department_id",
     "todepartmentname": "target_department_name",
     "todesignationid": "target_designation_id",
     "todesignationname": "target_designation_name",
+    "targetorgtype": "target_org_type",
 }
 
 # Scope-ID fields that must never be a scientific-notation paste (e.g. "1.36E+18").
@@ -286,14 +299,20 @@ REPORT_COLUMNS = [
     "status",
     "reason",
     "source_state_center_id",
+    "source_state_center_name",
     "source_department_id",
+    "source_department_name",
     "source_designation",
+    "source_org_type",
     "source_id",
     "source_status",
     "target_user_id",
     "target_state_center_id",
+    "target_state_center_name",
     "target_department_id",
+    "target_department_name",
     "target_designation",
+    "target_org_type",
     "new_role_mapping_id",
     "new_sort_order",
 ]
@@ -382,6 +401,19 @@ def _looks_scientific(value):
     return bool(value) and bool(_SCI_NOTATION_RE.match(str(value).strip()))
 
 
+def _org_type_of(value):
+    """Parses an org_type cell to the canonical 'state'/'ministry' string (matches
+    src.schemas.role_mapping.OrgType's values). Returns None if the value doesn't match a known
+    synonym -- org_type is mandatory with no default, so an unparseable value must be surfaced
+    as a row error, not silently guessed."""
+    norm = "".join(str(value).split()).lower() if value is not None else ""
+    if norm in _ORG_TYPE_STATE_SYNONYMS:
+        return "state"
+    if norm in _ORG_TYPE_MINISTRY_SYNONYMS:
+        return "ministry"
+    return None
+
+
 def _scope_conditions(state_center_id, department_id, user_id=None):
     """Build the (state_center, department[, user]) scope filter, treating a blank
     department as an explicit NULL match. user_id is only applied when given -- source
@@ -426,14 +458,18 @@ async def copy_one(db, row, execute, target_user_id):
     Source rows are matched by scope + designation_name only, regardless of owner. Returns a
     uniform result dict (status + all report fields)."""
     ssc = _clean(row.get("source_state_center_id"))
+    ssc_name = _clean(row.get("source_state_center_name"))
     sdept = _clean(row.get("source_department_id"))
+    sdept_name = _clean(row.get("source_department_name"))
     source_designation = _clean(row.get("source_designation_name"))
+    source_org_type_raw = _clean(row.get("source_org_type"))
 
     tsc = _clean(row.get("target_state_center_id"))
     tdept = _clean(row.get("target_department_id"))
     tsc_name = _clean(row.get("target_state_center_name"))
     tdept_name = _clean(row.get("target_department_name"))
     target_designation = _clean(row.get("target_designation_name"))
+    target_org_type_raw = _clean(row.get("target_org_type"))
 
     label = (
         f"'{source_designation}' [{ssc}/{sdept}] -> "
@@ -445,14 +481,20 @@ async def copy_one(db, row, execute, target_user_id):
         "status": None,
         "reason": "",
         "source_state_center_id": ssc,
+        "source_state_center_name": ssc_name,
         "source_department_id": sdept,
+        "source_department_name": sdept_name,
         "source_designation": source_designation,
+        "source_org_type": source_org_type_raw,
         "source_id": "",
         "source_status": "",
         "target_user_id": str(target_user_id),
         "target_state_center_id": tsc,
+        "target_state_center_name": tsc_name,
         "target_department_id": tdept,
+        "target_department_name": tdept_name,
         "target_designation": target_designation,
+        "target_org_type": target_org_type_raw,
         "new_role_mapping_id": "",
         "new_sort_order": "",
     }
@@ -466,6 +508,24 @@ async def copy_one(db, row, execute, target_user_id):
     if missing:
         logger.error(f"SKIP {label}: missing required column(s): {', '.join(missing)}")
         return done("error", f"missing_columns: {', '.join(missing)}")
+
+    # Both org_type columns are mandatory and must parse to 'state' or 'ministry' -- an
+    # unparseable value is a row error (not a fallback), same convention as
+    # batch_rolemapping_generate.py's _org_type_of.
+    source_org_type = _org_type_of(source_org_type_raw)
+    target_org_type = _org_type_of(target_org_type_raw)
+    bad_org_type = []
+    if source_org_type is None:
+        bad_org_type.append(f"source_org_type={source_org_type_raw!r}")
+    if target_org_type is None:
+        bad_org_type.append(f"target_org_type={target_org_type_raw!r}")
+    if bad_org_type:
+        detail = ", ".join(bad_org_type)
+        logger.error(f"SKIP {label}: invalid org_type ({detail}); must be 'state' or 'ministry'")
+        return done("error", f"invalid_org_type: {detail}")
+    # Report the canonical parsed value (not the raw cell) now that both are validated.
+    result["source_org_type"] = source_org_type
+    result["target_org_type"] = target_org_type
 
     # Guard: an ID pasted in scientific notation (e.g. 1.36E+18) is a lossy value that can never match.
     sci = [f for f in _ID_FIELDS if _looks_scientific(_clean(row.get(f)))]
@@ -520,13 +580,16 @@ async def copy_one(db, row, execute, target_user_id):
         logger.info(f"SKIP {label}: target already has designation '{target_designation}'")
         return done("skipped_existing", "target already has this designation")
 
-    # Build the new parent row.
+    # Build the new parent row. org_type always comes from the input's target_org_type -- never
+    # cloned from the source -- since the target scope's org_type may legitimately differ from
+    # the source's (e.g. copying a state-level designation into a ministry).
     new_rm = RoleMapping(
         **clone_columns(
             src,
             RoleMapping,
             {
                 "user_id": target_user_id,
+                "org_type": target_org_type,
                 "state_center_id": tsc,
                 "state_center_name": tsc_name,
                 "department_id": tdept,

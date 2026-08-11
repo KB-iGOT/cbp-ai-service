@@ -214,11 +214,3 @@ curl
 .vscode/
 
 *.csv
-
-approaches/
-logs/
-outputs/
-scripts/
-docs/
-database_data/
-new_logs/

@@ -872,7 +872,7 @@ async def delete_role_mapping(
         raise
     except Exception as e:
         logger.error(f"Error deleting role mapping: {str(e)}")
-        db.rollback()
+        await db.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to delete role mapping"

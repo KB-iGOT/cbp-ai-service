@@ -76,6 +76,7 @@ import json
 import logging
 import os
 import sys
+import time
 import uuid
 from dataclasses import dataclass
 from datetime import datetime
@@ -452,7 +453,7 @@ class RoleMapping(Base):
     status = Column(String(50), nullable=True)
     sector_name = Column(String(255), nullable=True)
     designation_name = Column(String(255), nullable=True)
-    wing_division_section = Column(String(255), nullable=True)
+    wing_division_section = Column(Text, nullable=True)
     role_responsibilities = Column(JSONB, nullable=True)
     activities = Column(JSONB, nullable=True)
     competencies = Column(JSONB, nullable=True)
@@ -535,13 +536,20 @@ async def with_retry(coro_fn, *args, description: str = "operation", **kwargs):
     """
     Calls coro_fn(*args, **kwargs) with exponential-backoff retry.
     Raises the last exception if all attempts are exhausted.
+    Logs the wall-clock time taken by each attempt at INFO level.
     """
     delay = RETRY_INITIAL_DELAY_SECONDS
     last_exc: Optional[Exception] = None
     for attempt in range(1, RETRY_ATTEMPTS + 1):
+        start = time.perf_counter()
         try:
-            return await coro_fn(*args, **kwargs)
+            result = await coro_fn(*args, **kwargs)
+            elapsed = time.perf_counter() - start
+            logger.info(f"  [timing] {description} took {elapsed:.3f}s")
+            return result
         except Exception as e:
+            elapsed = time.perf_counter() - start
+            logger.info(f"  [timing] {description} failed after {elapsed:.3f}s")
             last_exc = e
             if attempt == RETRY_ATTEMPTS:
                 break
@@ -972,7 +980,7 @@ async def fetch_keyword_search_courses(db: AsyncSession, keywords: List[str], li
     array_overlaps = " OR ".join(f"keywords && ARRAY[:{f'kw{i}'}]" for i, _ in enumerate(keywords))
     name_ilike = " OR ".join(f"name ILIKE :{f'nl{i}'}" for i, _ in enumerate(keywords))
     fts_parts = " OR ".join(
-        f"to_tsvector('english', COALESCE(description, '')) @@ plainto_tsquery('english', :{f'fts{i}'})"
+        f"description_tsv @@ plainto_tsquery('english', :{f'fts{i}'})"
         for i, _ in enumerate(keywords)
     )
 
