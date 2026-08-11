@@ -17,7 +17,7 @@ from ...prompts.v3.prompts import (
 from ...crud.document import crud_document
 from ...core.logger import logger
 
-with open("data/competencies.json") as f:
+with open("data/withidentifier_competencies.json") as f:
     COMPETENCY_MAPPING = json.load(f)
 
 # Deterministic KCM canonicalization index (id -> exact {type, theme, sub_theme}).
@@ -566,7 +566,7 @@ class RoleMappingService:
         self, frac_mappings: List[Dict[str, Any]]
     ) -> List[Dict[str, Any]]:
         """Cross-verify every generated role mapping's competencies against the KCM dataset
-        (data/competencies.json), correcting mismatches per _reconcile_competency_against_kcm.
+        (data/withidentifier_competencies.json), correcting mismatches per _reconcile_competency_against_kcm.
 
         Domain competencies are skipped (not part of the KCM Behavioural/Functional master)
         and passed through unchanged.
@@ -682,9 +682,10 @@ class RoleMappingService:
             )
 
             # ============ PASS 3: KCM RECONCILIATION (Behavioural/Functional only) ============
-            # Cross-verify every Behavioural/Functional competency against data/competencies.json,
-            # correcting LLM drift (swapped theme/sub_theme, wrong type) instead of trusting it
-            # blindly. Domain competencies are left untouched (not part of the KCM master).
+            # Cross-verify every Behavioural/Functional competency against the KCM dataset
+            # (data/withidentifier_competencies.json), correcting LLM drift (swapped theme/sub_theme,
+            # wrong type, missing/invalid competency_id) instead of trusting it blindly. Domain
+            # competencies are left untouched (not part of the KCM master).
             frac_mappings = self.reconcile_role_mappings_with_kcm(frac_mappings)
 
             logger.info("THREE-PASS ROLE MAPPING COMPLETE")
