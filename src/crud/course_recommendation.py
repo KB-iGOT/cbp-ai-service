@@ -211,7 +211,7 @@ class CRUDRecommendedCourse:
         Strategy (OR-combined, ranked by match count):
           1. keywords[] array overlap  — GIN index hit
           2. name trigram match        — pg_trgm ilike
-          3. description FTS           — to_tsvector / plainto_tsquery
+          3. description FTS           — description_tsv / plainto_tsquery (precomputed column, GIN index hit)
 
         Returns (identifier, name, keyword_score) sorted DESC.
         keyword_score = number of distinct match signals (1-3).
@@ -227,8 +227,9 @@ class CRUDRecommendedCourse:
             f"name ILIKE :{f'nl{i}'}" for i, _ in enumerate(keywords)
         )
         # plainto_tsquery handles multi-word phrases safely (no operator syntax needed)
+        # description_tsv is a precomputed/indexed column (GIN), avoiding a per-row to_tsvector() call
         fts_parts = " OR ".join(
-            f"to_tsvector('english', COALESCE(description, '')) @@ plainto_tsquery('english', :{f'fts{i}'})"
+            f"description_tsv @@ plainto_tsquery('english', :{f'fts{i}'})"
             for i, _ in enumerate(keywords)
         )
 

@@ -214,5 +214,3 @@ curl
 .vscode/
 
 *.csv
-
-scripts/
