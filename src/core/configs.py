@@ -1,3 +1,4 @@
+import json
 from enum import Enum
 from typing import Union
 from pydantic import Field, field_validator
@@ -79,6 +80,41 @@ class Settings(BaseSettings):
     # See src/services/llm/ for the provider-agnostic interface.
     LLM_PROVIDER: LLMProviderOption = Field(default=LLMProviderOption.GEMINI, description="Provider backing src.services.llm.get_llm()")
     LLM_EMBEDDING_PROVIDER: LLMProviderOption = Field(default=LLMProviderOption.GEMINI, description="Provider backing src.services.llm.get_embedder()")
+
+    # Model redirection map, applied by src/services/llm/models.py to EVERY model name before
+    # it reaches a provider. Exists because several call sites pass a hardcoded Gemini model
+    # literal (e.g. "gemini-2.5-pro") rather than reading a setting, so those calls could not
+    # otherwise follow a provider switch. Values may carry a LangChain "provider:model" prefix.
+    #   LLM_MODEL_MAP='{"gemini-2.5-pro": "openai:gpt-5", "gemini-3.5-flash": "openai:gpt-5-mini"}'
+    # Empty (the default) means no redirection — every model name passes through untouched, so
+    # behaviour is identical to having no map at all.
+    LLM_MODEL_MAP: Union[str, dict[str, str]] = Field(
+        default_factory=dict,
+        description="JSON object (or dict) remapping model names before they reach the provider. "
+                    "Empty means pass-through."
+    )
+
+    @field_validator("LLM_MODEL_MAP", mode="after")
+    @classmethod
+    def parse_model_map(cls, v):
+        if isinstance(v, str):
+            v = v.strip()
+            if not v:
+                return {}
+            try:
+                parsed = json.loads(v)
+            except json.JSONDecodeError as e:
+                raise ValueError(f"LLM_MODEL_MAP must be a JSON object: {e}") from e
+            if not isinstance(parsed, dict):
+                raise ValueError("LLM_MODEL_MAP must be a JSON object, not a list/scalar")
+            return {str(k): str(val) for k, val in parsed.items()}
+        return v or {}
+
+    # API keys for non-Google providers reached through the LangChain adapter. Only the key for
+    # the provider actually in use needs to be set; the adapter exports it to the environment
+    # that the corresponding LangChain integration package reads.
+    OPENAI_API_KEY: str = Field(default="", description="Required only when routing to openai:* models")
+    ANTHROPIC_API_KEY: str = Field(default="", description="Required only when routing to anthropic:* models")
 
     KB_BASE_URL: str
     KB_AUTH_TOKEN: str

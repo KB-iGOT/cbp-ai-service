@@ -14,6 +14,7 @@ from pydantic import BaseModel
 from ....core.configs import settings
 from ....core.logger import logger
 from ..base import Capability, EmbeddingProvider, LLMProvider
+from ..models import resolve_model, split_provider
 from ..types import (
     CacheHandle,
     GenerationConfig,
@@ -25,6 +26,25 @@ from ..types import (
     Tool,
     Usage,
 )
+
+_GOOGLE_PROVIDER_PREFIXES = {"google_genai", "google_vertexai", "gemini", "google"}
+
+
+def _gemini_model(model: str) -> str:
+    """Apply LLM_MODEL_MAP, then strip any LangChain-style provider prefix, which this native
+    SDK does not understand. A prefix naming a non-Google provider means the map is pointed at
+    another vendor while LLM_PROVIDER is still `gemini` — warn rather than send a model name
+    that will 404, since the mismatch is a config error, not a transient failure."""
+    resolved = resolve_model(model)
+    prefix, bare = split_provider(resolved)
+    if prefix and prefix not in _GOOGLE_PROVIDER_PREFIXES:
+        logger.warning(
+            f"LLM_MODEL_MAP routes '{model}' to '{resolved}' (provider '{prefix}'), but "
+            f"LLM_PROVIDER=gemini uses the native Google SDK. Sending '{bare}' to Gemini; set "
+            f"LLM_PROVIDER=langchain to actually reach '{prefix}'."
+        )
+    return bare
+
 
 _PERMISSIVE_SAFETY_SETTINGS = [
     gtypes.SafetySetting(category="HARM_CATEGORY_HATE_SPEECH", threshold="OFF"),
@@ -146,6 +166,7 @@ class GeminiProvider(LLMProvider):
         config: GenerationConfig | None = None,
     ) -> LLMResponse:
         config = config or GenerationConfig()
+        model = _gemini_model(model)
         start = time.monotonic()
         response = await self._client.aio.models.generate_content(
             model=model,
@@ -165,6 +186,7 @@ class GeminiProvider(LLMProvider):
         config: GenerationConfig | None = None,
     ) -> AsyncIterator[str]:
         config = config or GenerationConfig()
+        model = _gemini_model(model)
         result = await self._client.aio.models.generate_content_stream(
             model=model,
             contents=_to_gemini_contents(contents),
@@ -175,7 +197,9 @@ class GeminiProvider(LLMProvider):
                 yield chunk.text
 
     async def count_tokens(self, contents: str | Sequence[Message], *, model: str) -> int:
-        response = await self._client.aio.models.count_tokens(model=model, contents=_to_gemini_contents(contents))
+        response = await self._client.aio.models.count_tokens(
+            model=_gemini_model(model), contents=_to_gemini_contents(contents)
+        )
         return response.total_tokens
 
     @asynccontextmanager
@@ -190,7 +214,7 @@ class GeminiProvider(LLMProvider):
         cache_name = None
         try:
             cache = await self._client.aio.caches.create(
-                model=model,
+                model=_gemini_model(model),
                 config=gtypes.CreateCachedContentConfig(
                     display_name="cbp-ai-service-cache",
                     contents=[gtypes.Content(role="user", parts=[_to_gemini_part(p) for p in parts])],
@@ -234,5 +258,7 @@ class GeminiEmbeddingProvider(EmbeddingProvider):
         task_type: str | None = None,
     ) -> list[list[float]]:
         config = gtypes.EmbedContentConfig(output_dimensionality=dimensions) if dimensions else None
-        response = await self._client.aio.models.embed_content(model=model, contents=list(texts), config=config)
+        response = await self._client.aio.models.embed_content(
+            model=_gemini_model(model), contents=list(texts), config=config
+        )
         return [e.values for e in response.embeddings]
