@@ -15,8 +15,7 @@ from ...core.database import get_db_session
 
 from ...schemas.document import BatchUploadResponse, DocumentResponse, DocumentListResponse, SummaryTriggerResponse, DocumentDeleteResponse, SummaryDeleteResponse, UploadFailure, DocumentType
 from ...services.storage_service import get_storage_service
-from ...services.llm import GenerationConfig, Message, Part, SafetyPolicy, get_llm
-from ...prompts.prompts import DOCUMENT_SUMMARY_PROMPT
+from ...services import llm_service
 from ...crud.document import crud_document
 from ...crud.meta_summary import crud_meta_summary
 
@@ -231,24 +230,7 @@ async def _run_document_summary(document_id: uuid.UUID):
             return
 
         try:
-            contents = [Message.user(
-                Part.from_bytes(data=pdf_bytes, mime_type="application/pdf"),
-                DOCUMENT_SUMMARY_PROMPT,
-            )]
-
-            generate_content_config = GenerationConfig(
-                temperature=0,
-                top_p=1,
-                safety=SafetyPolicy.PERMISSIVE,
-            )
-
-            response = await get_llm().generate(
-                contents,
-                model=settings.GEMINI_PRO_MODEL_NAME,
-                config=generate_content_config,
-            )
-
-            summary_text = response.text
+            summary_text = await llm_service.summarize_uploaded_document(pdf_bytes)
             if not summary_text:
                 raise RuntimeError("Empty summary returned by model")
             update_records = {

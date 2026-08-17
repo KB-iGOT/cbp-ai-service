@@ -1,36 +1,15 @@
 import PyPDF2
 import io
-from ..core.configs import settings
-from ..prompts.prompts import ACBP_DOCUMENT_SUMMARY_PROMPT
 from ..core.logger import logger
-from .llm import GenerationConfig, Message, Part, SafetyPolicy, get_llm
-
-WORK_ALLOCATION_SUMMARY_PROMPT = """
-You are an expert analyst specializing in Work Allocation Order documents for government and organizational projects. Please analyze the provided Work Allocation Order PDF document and create a comprehensive, structured summary.
-
-Focus on extracting and summarizing:
-1. Work order details and reference numbers
-2. Allocated tasks and responsibilities
-3. Personnel assignments and roles
-4. Timeline and deadlines
-5. Resource allocation and budget
-6. Deliverables and expected outcomes
-7. Quality standards and requirements
-8. Reporting and monitoring mechanisms
-9. Approval authorities and stakeholders
-
-**Output Format:**
-Provide a well-structured summary that captures all essential elements of the Work Allocation Order. Use clear headings, bullet points where appropriate, and ensure the summary provides actionable insights for project execution.
-
-Please analyze the PDF document and provide your comprehensive summary:
-"""
+from . import llm_service
 
 
 class PDFProcessingService:
-    """Service for processing PDF files and generating summaries using an LLM"""
+    """Service for processing PDF files and generating summaries.
 
-    def __init__(self):
-        self.llm = get_llm()
+    Prompts, schemas and generation configs for the summary calls live in
+    src/services/llm_service.py; this service owns PDF text extraction and document-type routing.
+    """
 
     def extract_text_from_pdf(self, pdf_content: bytes) -> str:
         """
@@ -77,44 +56,23 @@ class PDFProcessingService:
             logger.error(f"Error extracting text from PDF: {str(e)}")
             raise Exception(f"PDF text extraction failed: {str(e)}")
 
-    async def _generate_pdf_summary(self, pdf_content: bytes, prompt: str, log_label: str) -> str:
-        """Shared PDF-to-summary call used by both ACBP and Work Allocation summaries."""
+    async def generate_acbp_plan_summary(self, text_content: bytes) -> str:
+        """Generate summary for ACBP Plan"""
         try:
-            contents = [Message.user(
-                Part.from_bytes(data=pdf_content, mime_type="application/pdf"),
-                prompt,
-            )]
-            config = GenerationConfig(
-                temperature=1,
-                top_p=0.95,
-                seed=0,
-                max_output_tokens=65535,
-                safety=SafetyPolicy.PERMISSIVE,
-                thinking_budget=-1,
-            )
-            response = await self.llm.generate(contents, model="gemini-2.5-pro", config=config)
-
-            summary = response.text
-            if not summary:
-                logger.warning(f"Empty {log_label} summary generated")
-                return "Summary generation failed - no content returned"
-
-            logger.info(f"Successfully generated {log_label} summary ({len(summary)} characters)")
-            return summary
-
+            summary = await llm_service.summarize_acbp_plan(text_content)
+            return summary or "Summary generation failed - no content returned"
         except Exception as e:
-            logger.error(f"Error generating {log_label} summary: {str(e)}")
+            logger.error(f"Error generating ACBP Plan summary: {str(e)}")
             return f"Summary generation failed: {str(e)}"
 
-    async def generate_acbp_plan_summary(self, text_content: bytes) -> str:
-        """Generate summary for ACBP Plan using the configured LLM"""
-        logger.info("Generating ACBP Plan summary")
-        return await self._generate_pdf_summary(text_content, ACBP_DOCUMENT_SUMMARY_PROMPT, "ACBP Plan")
-
     async def generate_work_allocation_summary(self, text_content: bytes) -> str:
-        """Generate summary for Work Allocation Order using the configured LLM"""
-        logger.info("Generating Work Allocation Order summary")
-        return await self._generate_pdf_summary(text_content, WORK_ALLOCATION_SUMMARY_PROMPT, "Work Allocation Order")
+        """Generate summary for Work Allocation Order"""
+        try:
+            summary = await llm_service.summarize_work_allocation(text_content)
+            return summary or "Summary generation failed - no content returned"
+        except Exception as e:
+            logger.error(f"Error generating Work Allocation Order summary: {str(e)}")
+            return f"Summary generation failed: {str(e)}"
 
     async def process_pdf_and_generate_summary(self, pdf_content: bytes, document_type: str) -> str:
         """

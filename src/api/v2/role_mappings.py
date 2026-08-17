@@ -1,5 +1,4 @@
 import asyncio
-import json
 from typing import Dict, List, Optional
 import uuid
 from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, UploadFile, status
@@ -9,11 +8,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ...models.role_mapping import ProcessingStatus, RoleMapping
 from ...models.user import User
 
-from ...prompts.v2.prompts import DESIGNATION_ROLE_MAPPING_PROMPT
 from ...schemas.role_mapping import AddDesignationToRoleMappingRequest, OrgType, RoleMappingBackgroundResponse, RoleMappingResponse, RoleMappingUpdate, RoleMappingWithoutCBP
 from ...services.v2.role_mapping_service import role_mapping_service
 from ...services.v3.role_mapping_service import role_mapping_service as role_mapping_service_v3
-from ...services.llm import GenerationConfig, Message, get_llm
+from ...services import llm_service
 
 from ...core.database import get_db_session
 from ...core.logger import logger
@@ -24,9 +22,6 @@ from ...api.dependencies import get_current_active_user
 
 
 router = APIRouter(tags=["Role Mappings"])
-
-with open("data/competencies.json") as f:
-    COMPETENCY_MAPPING = json.load(f)
 
 async def process_role_mapping_task(
     placeholder_id: uuid.UUID,
@@ -232,55 +227,20 @@ async def generate_role_mapping(
         )
 
 async def generate_role_and_competencies(input_data):
-    # Build strict prompt
+    """Generate one designation's role mapping. Fetches the document summaries this designation
+    needs, then delegates prompt/schema/LLM handling to services/llm_service."""
     try:
-        docs_summary = await role_mapping_service.get_documents_summary(input_data['user_id'], input_data['state_center_id'], input_data['department_id'])
-        
-        # if not docs_summary:
-        #     logger.warning(f"No document data found for ID: {input_data['state_center_id']}")
-        #     raise Exception("No document data found for this state/center")
+        docs_summary = await role_mapping_service.get_documents_summary(
+            input_data['user_id'], input_data['state_center_id'], input_data['department_id'])
 
-        
-        logger.info(f"Generating role and competencies for designation: {input_data.get('designation')}")
-        
-        output_json_format = {
-            "designation_name": "[Designation Name]",
-            "wing_division_section": "[Wing/Division/Section]",
-            "role_responsibilities": "[List of Role Responsibilities]",
-            "activities": "[List of Activities]",
-            "competencies": [
-                {
-                    "type": "[Behavioural/Functional/Domain]",
-                    "theme": "[Competency Theme]",
-                    "sub_theme": "[Competency Sub-theme]",
-                }
-            ],
-            "source": "[Primary document summaries, KCM, AI Suggested]"
-        }
-        prompt = DESIGNATION_ROLE_MAPPING_PROMPT.format(
-            organization_name=input_data.get('org_name'),
-            department_name=input_data.get('dep_name'),
-            designation_name=input_data.get('designation'),
+        return await llm_service.generate_designation_role_mapping_v2(
+            org_name=input_data.get('org_name'),
+            dep_name=input_data.get('dep_name'),
+            designation=input_data.get('designation'),
             sector=input_data.get('sector_name', 'N/A'),
-            instructions=input_data.get('instruction'),
-            primary_summary=docs_summary or 'N/A',
-            kcm_competencies=json.dumps(COMPETENCY_MAPPING, indent=2),
-            output_json_format=json.dumps(output_json_format, indent=None, separators=(',', ':'))
+            instruction=input_data.get('instruction'),
+            primary_summary=docs_summary,
         )
-
-        schema = {"type":"OBJECT","properties":{"designation_name":{"type":"STRING","description":"The official designation or job title for the role."},"wing_division_section":{"type":"STRING","description":"The organizational unit (wing, division, or section) where the role is situated."},"role_responsibilities":{"type":"ARRAY","items":{"type":"STRING"},"description":"A list of 5-8 concise, action-oriented role responsibilities."},"activities":{"type":"ARRAY","items":{"type":"STRING"},"description":"A list of 5–8 activities or tasks aligned to the role responsibilities."},"competencies":{"type":"ARRAY","items":{"type":"OBJECT","properties":{"type":{"type":"STRING","enum":["Behavioural","Functional","Domain"],"description":"The category of competency as per Karmayogi framework."},"theme":{"type":"STRING","description":"The parent theme of the competency (must come from dataset)."},"sub_theme":{"type":"STRING","description":"The sub-theme of the competency (must come from dataset)."}},"required":["type","theme","sub_theme"]},"description":"A list of competencies relevant to the role. Must include at least one Behavioural, one Functional, and one Domain competency."}},"required":["designation_name","wing_division_section","role_responsibilities","activities","competencies"]}
-
-        contents = [Message.user(prompt)]
-
-        generate_content_config = GenerationConfig(temperature=0.5)
-
-        parsed_response = await get_llm().generate_structured(
-            contents,
-            model=settings.GEMINI_PRO_MODEL_NAME,
-            schema=schema,
-            config=generate_content_config,
-        )
-        return parsed_response
     except Exception as e:
         logger.exception(f"Background task failed for designation: {input_data.get('designation')}")
         raise

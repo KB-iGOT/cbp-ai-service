@@ -1,20 +1,14 @@
 # src/role_mapping_service.py
 import json
-from typing import Dict, Any, List, Literal, Optional
+from typing import Dict, Any, List, Optional
 import uuid
 import asyncio
-from pydantic import BaseModel, Field
 
 from ...schemas.role_mapping import OrgType
 from ...core.configs import settings
-from ...prompts.v3.prompts import (
-    DESIGNATION_EXTRACTION_PROMPT,
-    ROLE_MAPPING_PROMPT_CENTRE,
-    ROLE_MAPPING_PROMPT_STATE,
-)
 from ...crud.document import crud_document
 from ...core.logger import logger
-from ..llm import GenerationConfig, Message, get_llm
+from .. import llm_service
 
 with open("data/withidentifier_competencies.json") as f:
     COMPETENCY_MAPPING = json.load(f)
@@ -146,80 +140,13 @@ def canonicalize_competencies(raw_competencies: List[Dict[str, Any]]) -> Dict[st
     return {"competencies": kept, "metrics": metrics}
 
 
-# src/prompts/v2/prompts.py (add this to your existing prompts file)
-
-center_json_output = {
-    "mappings": [{
-        "designation_name": "string",
-        "wing_division_section": "string",
-        "role_responsibilities": ["string", "string"],
-        "activities": ["string", "string"],
-        "sort_order": "integer",
-        "competencies": [
-            {
-                "competency_id": "KCM id e.g. BEH-07 / FUN-23 (REQUIRED for Behavioural & Functional; omit for Domain)",
-                "type": "Behavioural | Functional | Domain",
-                "theme": "string",
-                "sub_theme": "string"
-            }
-        ],
-        "source": ["ACBP", "Work Allocation Order", "AI Suggested"]
-    }]
-}
-
-state_json_output = {
-    "mappings": [{
-        "designation_name": "string",
-        "wing_division_section": "string",
-        "role_responsibilities": ["string", "string"],
-        "activities": ["string", "string"],
-        "sort_order": "integer",
-        "competencies": [
-            {
-                "competency_id": "KCM id e.g. BEH-07 / FUN-23 (REQUIRED for Behavioural & Functional; omit for Domain)",
-                "type": "Behavioural | Functional | Domain",
-                "theme": "string",
-                "sub_theme": "string"
-            }
-        ],
-        "source": ["Work Allocation Order", "ACBP", "Additional supporting document", "AI Suggested"]
-    }]
-}
-class Designation(BaseModel):
-    sort_order: int = Field(
-        description="Hierarchical position, starting from 1 (highest) and incrementing sequentially"
-    )
-    designation: str = Field(
-        description="Exact official designation or job title"
-    )
-    wing_division_section: str = Field(
-        description="Exact wing/division/section the designation belongs to, or org unit / administrative from source document"
-    )
-class DesignationExtractionResponse(BaseModel):
-    designations: List[Designation] = Field(
-        description="List of extracted unique designations sorted by hierarchy"
-    )
-class FRACCompetency(BaseModel):
-    competency_id: Optional[str] = Field(default=None, description="KCM competency id (e.g. BEH-07 / FUN-23). REQUIRED for Behavioural & Functional; omit for Domain.")
-    type: Literal["Behavioural", "Functional", "Domain"] = Field(description="Competency type: Behavioural, Functional, or Domain")
-    theme: str = Field(description="Competency theme")
-    sub_theme: str = Field(description="Competency sub theme")
-
-class FRACRoleMapping(BaseModel):
-    designation_name: str = Field(description="Official designation name")
-    wing_division_section: str = Field(description="Wing/division/section the designation belongs to")
-    role_responsibilities: List[str] = Field(description="Flat list of role responsibilities as strings")
-    activities: List[str] = Field(description="Flat list of activity strings")
-    sort_order: int = Field(description="Hierarchy sort order, strictly increasing from 1")
-    competencies: List[FRACCompetency] = Field(description="Flat list of competency objects.")
-    source: Optional[List[str]] = Field(default=None, description="Source references")
-class FRACBatchResponse(BaseModel):
-    mappings: List[FRACRoleMapping] = Field(description="List of FRAC role mappings for all designations in the batch")
 class RoleMappingService:
-    """Service for generating role mappings using an LLM"""
+    """v3 multi-pass role mapping.
 
-    def __init__(self):
-        self.llm = get_llm()
+    Prompts, schemas and generation configs for the LLM passes live in
+    src/services/llm_service.py; this service owns data fetching, batch orchestration and the
+    deterministic KCM canonicalization that follows generation.
+    """
 
     async def _extract_designations(
         self,
@@ -230,42 +157,11 @@ class RoleMappingService:
 
         Args:
             organization_data: Dictionary containing document summaries
-            additional_document_contents: Additional PDF documents
 
         Returns:
             Dict containing extracted designations with metadata
         """
-        logger.info(f"PASS 1: Extracting designations for {organization_data.get('organization_name')}")
-
-        prompt = """
-                Here is the input Data:
-                Ministry/State Name: {ORGANIZATION_NAME}
-                Department/Organisation Name: {DEPARTMENT_NAME}
-
-                Primary reference document Summaries:
-                {DOCUMENT_SUMMARIES}
-
-                Extract ALL unique designations from the provided input data and organize them hierarchically based on the system prompt.
-                """.format(
-                    ORGANIZATION_NAME=organization_data.get('organization_name'),
-                    DEPARTMENT_NAME=organization_data.get('department_name'),
-                    DOCUMENT_SUMMARIES=organization_data.get('docs_summary', 'N/A')
-                )
-        contents = [Message.user(prompt)]
-
-        generate_content_config = GenerationConfig(
-            system_instruction=DESIGNATION_EXTRACTION_PROMPT,
-            temperature=0.1,   # Very low — factual extraction, no creativity
-            top_p=0.85, # Restrict to high-probability tokens
-        )
-
-        extraction_response = await self.llm.generate_structured(
-            contents,
-            model=settings.GEMINI_FLASH_MODEL_NAME,
-            schema=DesignationExtractionResponse,
-            config=generate_content_config,
-        )
-
+        extraction_response = await llm_service.extract_designations(organization_data)
         return {
             "designations": [d.model_dump() for d in extraction_response.designations]
         }
@@ -282,57 +178,22 @@ class RoleMappingService:
         Args:
             designations_batch: List of designations to process
             organization_data: Organization context data
-            additional_document_contents: Additional documents
             batch_number: Current batch number for logging
 
         Returns:
-            List of FRAC mappings for the batch (empty list on failure)
+            List of FRAC mappings for the batch (empty list on failure, so one bad batch
+            never fails the whole run)
         """
         try:
-            is_state = organization_data["org_type"] == OrgType.state.value
-            logger.info(f"PASS 2 - Batch {batch_number}: Processing {len(designations_batch)} designations")
-            logger.info(f"Role Mapping is using prompt :: {'STATE_PROMPT' if is_state else 'CENTER_PROMPT'}")
-            PROMPT = ROLE_MAPPING_PROMPT_STATE if is_state else ROLE_MAPPING_PROMPT_CENTRE
-            output_json_format = state_json_output if is_state else center_json_output
-
-            # Create designation context for the batch
-            designation_context = json.dumps({
-                "validated_designations": designations_batch,
-                "batch_info": {
-                    "batch_number": batch_number,
-                    "total_in_batch": len(designations_batch)
-                }
-            }, indent=2)
-
-            base_prompt = PROMPT.format(
-                pass1_output=designation_context,
-                organization_name=organization_data.get('organization_name'),
-                department_name=organization_data.get('department_name'),
-                instructions=organization_data.get('instruction'),
-                primary_summary=organization_data.get('docs_summary'),
-                kcm_competencies=json.dumps(COMPETENCY_MAPPING, indent=2),
-                output_json_format=json.dumps(output_json_format, indent=2)
+            batch_response = await llm_service.generate_frac_batch(
+                designations_batch,
+                organization_data,
+                batch_number=batch_number,
             )
-
-            contents = [Message.user(base_prompt)]
-
-            generate_content_config = GenerationConfig(
-                temperature=0.3,
-                top_p=0.90,
-            )
-
-            batch_response = await self.llm.generate_structured(
-                contents,
-                model=settings.GEMINI_PRO_MODEL_NAME,
-                schema=FRACBatchResponse,
-                config=generate_content_config,
-            )
-
             validated_response = [record.model_dump() for record in batch_response.mappings]
-
             logger.info(f"Batch {batch_number}: Successfully generated {len(validated_response)} FRAC mappings")
             return validated_response
-        except Exception as e:
+        except Exception:
             logger.exception(f"Batch {batch_number}: Error generating FRAC mapping")
             return []
 

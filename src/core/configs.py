@@ -38,20 +38,6 @@ class Settings(BaseSettings):
     REDIS_DESIG_EMB_PREFIX: str = Field(default="cbp_desig_emb", description="Redis key prefix for designation embeddings cache")
     DESIGNATION_SIMILARITY_THRESHOLD: float = Field(default=0.93, description="Minimum cosine similarity score for semantic designation match")
     DESIGNATION_EMBED_BATCH_SIZE: int = Field(default=100, description="Max designations per Gemini embedding API call")
-    DESIGNATION_EMBEDDING_DIMENSIONS: int = Field(
-        default=768,
-        description="Vector width of the designation_embeddings.embedding pgvector column. "
-                    "Independent of EMBEDDING_OUTPUT_DIMENSIONALITY (1536, used for course search) "
-                    "— the two must not be conflated."
-    )
-    DESIGNATION_EMBEDDING_MODEL: str = Field(
-        default="BAAI/bge-base-en-v1.5 (local sentence-transformers, via scripts/ingest_designation_embeddings.py)",
-        description="Model that actually populated the designation_embeddings table. Documented here "
-                    "so DesignationMatcherService can warn that it queries with a different model "
-                    "(GOOGLE_EMBEDDING_MODEL) — cosine similarity across two different embedding "
-                    "models' vector spaces is not meaningful; DESIGNATION_SIMILARITY_THRESHOLD was "
-                    "tuned empirically around this mismatch, not derived from a principled value."
-    )
 
     @property
     def REDIS_URL(self) -> str:
@@ -77,11 +63,11 @@ class Settings(BaseSettings):
     ROLE_MAPPING_BATCH_SIZE: int = Field(default=30, description="Number of designations per batch when processing PASS 2 role mapping generation in parallel")
 
     # LLM provider selection — swap the backing adapter without touching call sites.
-    # See src/services/llm/ for the provider-agnostic interface.
-    LLM_PROVIDER: LLMProviderOption = Field(default=LLMProviderOption.GEMINI, description="Provider backing src.services.llm.get_llm()")
-    LLM_EMBEDDING_PROVIDER: LLMProviderOption = Field(default=LLMProviderOption.GEMINI, description="Provider backing src.services.llm.get_embedder()")
+    # See src/services/llm_service.py for the provider-agnostic interface.
+    LLM_PROVIDER: LLMProviderOption = Field(default=LLMProviderOption.GEMINI, description="Provider backing src.services.llm_service.get_llm()")
+    LLM_EMBEDDING_PROVIDER: LLMProviderOption = Field(default=LLMProviderOption.GEMINI, description="Provider backing src.services.llm_service.get_embedder()")
 
-    # Model redirection map, applied by src/services/llm/models.py to EVERY model name before
+    # Model redirection map, applied by src/services/llm_service.py to EVERY model name before
     # it reaches a provider. Exists because several call sites pass a hardcoded Gemini model
     # literal (e.g. "gemini-2.5-pro") rather than reading a setting, so those calls could not
     # otherwise follow a provider switch. Values may carry a LangChain "provider:model" prefix.
@@ -227,6 +213,15 @@ class Settings(BaseSettings):
                     "courses (deterministic top-up, never a trim). Set false to fall back to the "
                     "flat COURSE_RECOMMENDATION_MIN_RELEVANCY cutoff with no count guarantees."
     )
+    # Public/external course lookup via the provider's builtin web search. Disabled by default,
+    # matching the long-standing "Disabled for temporary reasons" early-return this replaces —
+    # enabling it adds a web-search LLM call per recommendation and mixes public (non-iGOT)
+    # courses into results.
+    ENABLE_GENERAL_COURSE_LOOKUP: bool = Field(
+        default=False,
+        description="If true, also recommend public courses found via provider web search."
+    )
+
     BEHAVIOURAL_MIN_RELEVANCY: int = 75
     FUNCTIONAL_MIN_RELEVANCY: int = 75
     BEHAVIOURAL_MIN_COUNT: int = 3

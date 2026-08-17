@@ -5,26 +5,12 @@ from sqlalchemy import text
 
 from ..core.configs import settings
 from ..core.logger import logger
-from .llm import get_embedder
+from . import llm_service
 from .redis_service import redis_service
 from .designation_service import designation_service
 
-logger.warning(
-    f"designation_embeddings table was populated with '{settings.DESIGNATION_EMBEDDING_MODEL}' "
-    f"but is queried with embedding model '{settings.GOOGLE_EMBEDDING_MODEL}' "
-    f"({settings.DESIGNATION_EMBEDDING_DIMENSIONS}-dim). Cosine similarity across two different "
-    "embedding models' vector spaces is not meaningful — DESIGNATION_SIMILARITY_THRESHOLD was "
-    "tuned empirically around this mismatch, not derived from a principled value. Re-ingest "
-    "designation_embeddings with a consistent model to fix properly."
-)
-
-
 def _cache_key(designation: str) -> str:
     return f"{settings.REDIS_DESIG_EMB_PREFIX}:{designation.lower()}"
-
-
-def _format_for_matching(designation: str) -> str:
-    return f"task: sentence similarity | query: {designation}"
 
 
 async def _get_embeddings(texts: List[str]) -> List[List[float]]:
@@ -48,13 +34,17 @@ async def _get_embeddings(texts: List[str]) -> List[List[float]]:
         uncached_texts = [texts[i] for i in uncached_indices]
         logger.info(f"Embedding cache miss: {len(uncached_texts)}/{len(texts)} — calling embedding provider")
 
-        formatted = [_format_for_matching(t) for t in uncached_texts]
-        fresh_embeddings = await get_embedder().embed(
-            formatted,
-            model=settings.GOOGLE_EMBEDDING_MODEL,
-            dimensions=settings.DESIGNATION_EMBEDDING_DIMENSIONS,
-            batch_size=settings.DESIGNATION_EMBED_BATCH_SIZE,
-        )
+        fresh_embeddings = await llm_service.embed_designations(uncached_texts)
+
+        # Fail loudly on a count mismatch instead of letting zip() truncate. A short result
+        # here silently pairs designations with other designations' vectors, which produces
+        # confident-looking wrong matches rather than an error — the failure mode that hid a
+        # batching bug in the embedding call for a long time.
+        if len(fresh_embeddings) != len(uncached_indices):
+            raise RuntimeError(
+                f"embed_designations returned {len(fresh_embeddings)} embeddings for "
+                f"{len(uncached_indices)} designations; refusing to match on misaligned vectors"
+            )
 
         to_cache = {}
         for idx, emb in zip(uncached_indices, fresh_embeddings):

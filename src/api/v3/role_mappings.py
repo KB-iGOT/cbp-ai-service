@@ -1,4 +1,3 @@
-import json
 from typing import Optional
 import uuid
 from fastapi import APIRouter, BackgroundTasks, Depends, Form, HTTPException, status
@@ -22,9 +21,6 @@ from ...api.dependencies import get_current_active_user
 
 
 router = APIRouter(tags=["Role Mappings"])
-
-with open("data/competencies.json") as f:
-    COMPETENCY_MAPPING = json.load(f)
 
 async def process_role_mapping_task(
     placeholder_id: uuid.UUID,

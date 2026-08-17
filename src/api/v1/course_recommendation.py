@@ -6,8 +6,6 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Path, Qu
 from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ...prompts.prompts import COURSE_SELECTION_SYSTEM_PROMPT, DESIGNNATION_GROUP_SYSTEM_PROMPT, VECTOR_QUERY_SYSTEM_PROMPT
-
 from ...models.course_recommendation import RecommendationStatus
 from ...models.user import User
 from ...schemas.course_recommendation import RecommendCourseCreate, RecommendedCourseResponse
@@ -22,35 +20,24 @@ from ...crud.course_suggestion import crud_suggested_course
 from ...crud.user_added_course import crud_user_added_course
 
 from ...api.dependencies import get_current_active_user
-from ...services.llm import GenerationConfig, Message, SafetyPolicy, Tool, get_embedder, get_llm
+from ...services import llm_service
 
 router = APIRouter(tags=["Course Recommendations"])
 
-llm = get_llm()
-embedder = get_embedder()
 
-_PERMISSIVE_SAFETY = SafetyPolicy.PERMISSIVE
+# ── LLM-backed helpers ────────────────────────────────────────────────────────
+# These keep this module's own call surface; the prompt, response schema and generation
+# config behind each one live in src/services/llm_service.py, so they work under any
+# LLM_PROVIDER and nothing here has to know which model is answering.
 
-# Curse Recommendation APIs
 async def get_embedding(text: str) -> list:
+    """Embed one search query for course vector search.
 
-    logger.info(f"Generating embedding for text '{text[:50]}...")
+    Returns the vector itself (a flat list of floats) — NOT a list of vectors. Blank input or
+    a failed call yields [], which callers treat as "no vector for this query".
+    """
+    return await llm_service.embed_search_query(text)
 
-    if not text.strip():
-        print("Warning: Attempted to get embedding for empty text. Returning empty list.")
-        return []
-
-    vector_query = f"task: search result | query: {text}"
-
-    try:
-        return await embedder.embed_batch(
-            [vector_query],
-            model=settings.GOOGLE_EMBEDDING_MODEL,
-            dimensions=settings.EMBEDDING_OUTPUT_DIMENSIONALITY,
-        )
-    except Exception as e:
-        logger.exception(f"Error generating embedding for text '{text[:50]}...': {e}")
-        return []
 
 async def generate_contextual_queries(user_profile: str) -> Dict[str, Any]:
     """
@@ -59,216 +46,37 @@ async def generate_contextual_queries(user_profile: str) -> Dict[str, Any]:
     - description_query : narrative paragraph for description_embedding vector search
     - combined_query    : multi-angle rich query for combined_embedding vector search
     - search_keywords   : list of 10-15 domain/skill terms for Postgres keyword search
-
-    All outputs are sector/domain-aware and non-generic.
     """
-    logger.info("Generating contextual queries from user profile")
+    return await llm_service.generate_contextual_queries(user_profile)
 
-    contents = [Message.user(f"Role Profile:\n{user_profile}")]
-
-    schema = {
-        "type": "OBJECT",
-        "properties": {
-            "keyword_query":     {"type": "STRING"},
-            "description_query": {"type": "STRING"},
-            "combined_query":    {"type": "STRING"},
-            "search_keywords":   {"type": "ARRAY", "items": {"type": "STRING"}},
-        },
-        "required": ["keyword_query", "description_query", "combined_query", "search_keywords"],
-    }
-    config = GenerationConfig(
-        temperature=0.4,
-        top_p=0.95,
-        # max_output_tokens=2048,
-        safety=_PERMISSIVE_SAFETY,
-        system_instruction=VECTOR_QUERY_SYSTEM_PROMPT,
-    )
-
-    result = await llm.generate_structured(
-        contents, model=settings.GEMINI_PRO_MODEL_NAME, schema=schema, config=config,
-    )
-    logger.info("Contextual queries generated successfully")
-    return result
 
 async def infer_designation_group(user_profile: str) -> str:
-    """
-    Ask the LLM to reason about the full role profile and classify the designation
-    into Group A/B (senior/gazetted officers) or Group C/D (supporting/clerical staff).
-    Returns 'AB' or 'CD'.
-    """
-    contents = [Message.user(f"Role Profile:\n{user_profile}")]
-
-    schema = {
-        "type": "OBJECT",
-        "properties": {"group": {"type": "STRING", "enum": ["AB", "CD"]}},
-        "required": ["group"],
-    }
-    config = GenerationConfig(
-        temperature=0,
-        max_output_tokens=256,
-        safety=_PERMISSIVE_SAFETY,
-        system_instruction=DESIGNNATION_GROUP_SYSTEM_PROMPT,
-    )
-
-    try:
-        result = await llm.generate_structured(
-            contents, model=settings.GEMINI_FLASH_MODEL_NAME, schema=schema, config=config,
-        )
-        group = result.get("group", "AB")
-
-        logger.info(f"LLM classified designation group as: {group}")
-        return group
-    except Exception as e:
-        logger.warning(f"Designation group inference failed, defaulting to AB: {e}")
-        return "AB"
+    """Classify the designation into Group A/B (senior/gazetted officers) or Group C/D
+    (supporting/clerical staff). Returns 'AB' or 'CD', defaulting to 'AB' on failure."""
+    return await llm_service.infer_designation_group(user_profile)
 
 
 async def get_filtered_courses_by_llm(
     courses_prompt: str,
     user_profile: str,
     organisation: str,
-    designation_group: str,
+    designation_group: str | None = None,
 ) -> str:
+    """LLM-based course selection and scoring. Returns raw JSON text ("[]" if empty).
+
+    `designation_group` is accepted but deliberately unused: the Behavioural/Functional
+    guarantee is enforced in code (pure-B/F top-up), never via prompt emphasis, because
+    per-group prompt tuning made the model under-pick Domain courses.
     """
-    LLM-based course selection and scoring with:
-    - Provider priority (own-org courses preferred)
-    - Domain-mix enforcement by designation group
-    - Sector-specific domain inclusion
-    - Topic/type diversity within domain courses
-    """
-    logger.info("Filtering candidate courses through LLM")
+    return await llm_service.filter_courses(courses_prompt, user_profile, organisation)
 
-    # NOTE: The LLM prompt is intentionally left exactly as it was originally — no Behavioural/
-    # Functional coverage instruction is injected here. Adding B/F emphasis to a fixed-size
-    # selection made the model under-pick Domain courses (the total is capped, so more B/F means
-    # fewer Domain). Domain selection must stay identical to the pre-change behaviour, so the B/F
-    # guarantee is enforced ONLY in code (deterministic pure-B/F top-up), never via the prompt.
-    contents = [Message.user(f"""
-Role Profile:
-{user_profile}
-
-Own Organisation: {organisation or 'N/A'}
-
-Candidate Courses:
-{courses_prompt}
-""")]
-
-    response_schema = {
-        "type": "ARRAY",
-        "items": {
-            "type": "OBJECT",
-            "properties": {
-                "identifier":        {"type": "STRING"},
-                "course":            {"type": "STRING"},
-                "relevancy":         {"type": "INTEGER"},
-                "rationale":         {"type": "STRING"},
-            },
-            "required": ["identifier", "course", "relevancy", "rationale"],
-        },
-    }
-
-    config = GenerationConfig(
-        temperature=0,
-        top_p=1,
-        # max_output_tokens=8192,
-        safety=_PERMISSIVE_SAFETY,
-        json_output=True,
-        response_schema=response_schema,
-        system_instruction=COURSE_SELECTION_SYSTEM_PROMPT,
-        thinking_budget=2048,
-        include_thoughts=False,
-    )
-
-    response = await llm.generate(contents, model=settings.GEMINI_PRO_MODEL_NAME, config=config)
-    if not response.text:
-        logger.error(f"LLM filtering empty response — failed to inspect:  {response.raw}")
-        return "[]"
-    return response.text
 
 async def get_general_courses_from_gemini(user_profile) -> List[Dict[str, Any]]:
+    """Fetch public courses from external learning platforms via provider web search.
+
+    Disabled unless ENABLE_GENERAL_COURSE_LOOKUP is set, so this returns [] by default.
     """
-    Fetches general courses from Gemini based on the designation and department.
-    """
-    # Disabled for temporary reasons. Remove below line to enable Gemini fetching of general courses.
-    return []
-    logger.info("Fetching the general courses across the learning platforms")
-    generate_content_config = GenerationConfig(
-        system_instruction=f"""
-        You are an expert in civil service training and development.
-        Your role is to recommend highly relevant and foundational courses that would help professionals excel in their designation within government/administrative organizations.
-
-        # Research & Recommendation Guidelines:
-        1. Search across credible and accessible learning platforms, including but not limited to:
-            Coursera, edX, Udemy, FutureLearn, SWAYAM, NPTEL, Khan Academy, WHO, Harvard Online, MIT OCW, Stanford Online, LinkedIn Learning, etc.
-            - Prefer globally credible and India-contextualized content.
-            - Do not include iGOT/Karmayogi links.
-
-        2. Course Selection Criteria:
-            - Recommend 10–15 courses that are universally essential for this designation.
-            - Courses must strengthen Behavioral, Functional, and Domain competencies.
-            - Ensure recommendations are active, course-specific, and not generic category pages.
-            - Do not include fictional or AI-generated course names. Recommend only courses that exist publicly and are accessible.
-
-        3. Quality Control:
-            - Avoid duplicates.
-            - Ensure public links are correct and accessible.
-            - Keep rationales concise and role-relevant.
-            - Course name should be the same as given in the webpage.
-        
-        For each course, provide the following information in a structured JSON format:
-        - course: The full name of the course.
-        - platform: The name of the platform where the course is hosted (e.g., Coursera, edX, Udemy).
-        - relevancy: An integer from 0 to 100, indicating high relevancy.
-        - rationale: A brief, 1-2 sentence explanation of why this course is essential.
-        - language: The language of the specific course (e.g., en, hi).
-        - public_link: An actual public URL to the specific course.
-        - competencies: An array of competency objects. 
-          Each object should have competencyAreaName, competencyThemeName, and competencySubThemeName.
-        Ensure the output is a JSON array of objects.
-
-        **OUTPUT FORMAT REQUIRED:**
-        Provide the output as a **direct JSON array of objects**. 
-        **IMPORTANT:** Do **NOT** enclose the JSON within markdown code blocks (e.g., do not use ```json ... ``` or ``` ... ```). The output must be *only* the JSON array itself.
-        """,
-        temperature=0.5,
-        # Remove tools unless you really want google_search
-        tools=[Tool.WEB_SEARCH],
-        safety=_PERMISSIVE_SAFETY,
-        # json_output=True,
-        # response_schema=schema,
-    )
-
-    try:
-        contents = [Message.user(f"Here's the user role context: {user_profile}")]
-
-        response = await llm.generate(
-            contents,
-            model=settings.GEMINI_PRO_MODEL_NAME,
-            config=generate_content_config,
-        )
-
-        text_response = response.text
-        if not text_response:
-            print("Gemini response was empty or not in text format.")
-            return []
-
-        
-        text_response = text_response.replace("```json", '')
-        text_response = text_response.replace("```", '')
-        # # Parse JSON
-        general_courses = json.loads(text_response)
-
-        # Add identifiers
-        for course in general_courses:
-            course['identifier'] = str(uuid.uuid4())
-            course['is_public'] = True
-        logger.info("Fetched general courses from Gemini")
-        return general_courses
-
-    except Exception as e:
-        print("Gemini raw response (before failure):", locals().get("response", "No response"))
-        print(f"Error fetching general courses from Gemini: {e}")
-        return []
+    return await llm_service.fetch_general_courses(user_profile)
 
 def _course_competency_areas(course: dict) -> set:
     """Return the set of competency areas a course covers, drawn from its competencies list
@@ -518,22 +326,22 @@ async def process_recommendation_task(
         functional_competency_query  = _build_competency_query_by_type(raw_competencies or [], "functional")
         behavioural_competency_query = _build_competency_query_by_type(raw_competencies or [], "behavioral")
         
-        # 3. Embed all queries in parallel
-        kw_emb_list, desc_emb_list, comb_emb_list, func_comp_emb_list, behav_comp_emb_list = await asyncio.gather(
+        # 3. Embed all queries in parallel. embed_search_query returns the vector itself (a
+        #    flat list of floats), not a list of vectors — do not index into it.
+        kw_emb, desc_emb, comb_emb, func_comp_emb, behav_comp_emb = await asyncio.gather(
             get_embedding(keyword_query),
             get_embedding(description_query),
             get_embedding(combined_query),
             get_embedding(functional_competency_query),
             get_embedding(behavioural_competency_query),
         )
-        if not kw_emb_list or not desc_emb_list or not comb_emb_list:
+        if not kw_emb or not desc_emb or not comb_emb:
             raise Exception("Failed to generate one or more embeddings")
 
-        kw_emb   = kw_emb_list[0]
-        desc_emb = desc_emb_list[0]
-        comb_emb = comb_emb_list[0]
-        func_comp_emb  = func_comp_emb_list[0] if func_comp_emb_list else None
-        behav_comp_emb = behav_comp_emb_list[0] if behav_comp_emb_list else None
+        # These two are optional: a role with no functional/behavioural competencies yields an
+        # empty query, hence an empty vector — fall back to the combined vector downstream.
+        func_comp_emb = func_comp_emb or None
+        behav_comp_emb = behav_comp_emb or None
 
         # 4. Vector search + Postgres keyword search + competency-typed searches in parallel
         vector_results, kw_results, func_results, behav_results = await asyncio.gather(

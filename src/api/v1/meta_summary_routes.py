@@ -11,8 +11,7 @@ from ...schemas.meta_summary import MetaSummaryCreateRequest, MetaSummaryDeleteR
 from ...crud.document import crud_document
 from ...crud.meta_summary import crud_meta_summary
 from .document_routes import _run_document_summary
-from ...prompts.prompts import META_SUMMARY_PROMPT
-from ...services.llm import GenerationConfig, Message, SafetyPolicy, get_llm
+from ...services import llm_service
 
 from ...core.logger import logger
 
@@ -55,22 +54,9 @@ async def _run_meta_summary(request_id: uuid.UUID):
             summaries_text_parts.append(f"--- {doc.filename} ({doc.file_id}) ---\n{doc.summary_text}\n")
 
         joined = "\n".join(summaries_text_parts)
-        prompt_text = META_SUMMARY_PROMPT.format(payload=joined)
 
-        contents = [Message.user(prompt_text)]
-        generate_content_config = GenerationConfig(
-            temperature=0.6,
-            top_p=0.95,
-            max_output_tokens=8192,
-            safety=SafetyPolicy.PERMISSIVE,
-        )
         try:
-            response = await get_llm().generate(
-                contents,
-                model="gemini-2.5-pro",
-                config=generate_content_config,
-            )
-            meta_text = response.text
+            meta_text = await llm_service.summarize_across_documents(joined)
             if not meta_text:
                 raise RuntimeError("Empty meta summary returned")
 
