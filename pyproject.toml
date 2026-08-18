@@ -6,9 +6,11 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "fastapi==0.111.0",
-    "google-genai>=1.20.0",
+    # Floor is >=1.65.0 because langchain-google-genai (the `langchain` extra) requires it;
+    # kept <2.0 so a resolver nudge can't silently pull in an untested major SDK version.
+    "google-genai>=1.65.0,<2.0",
     "psycopg2-binary==2.9.9",
-    "pydantic[email]==2.7.4",
+    "pydantic[email]>=2.9,<3.0",
     "pydantic-settings>=2.9.1",
     "sqlalchemy[asyncio]==2.0.30",
     "uvicorn==0.30.1",
@@ -26,3 +28,23 @@ dependencies = [
     "bs4>=0.0.2",
     "openpyxl>=3.1.5",
 ]
+
+[project.optional-dependencies]
+# Only needed when LLM_PROVIDER or LLM_EMBEDDING_PROVIDER is set to "langchain" —
+# see src/services/llm/providers/langchain.py. Default provider (Gemini) does not need this.
+#
+# langchain-google-genai (NOT langchain-google-vertexai): the latter's ChatVertexAI /
+# VertexAIEmbeddings are deprecated as of LangChain 3.2 and slated for removal in 4.0.
+# langchain-google-genai supports both the Gemini Developer API and Gemini on Vertex AI
+# (vertexai=True + project/location), and exposes output_dimensionality on embeddings.
+langchain = [
+    "langchain>=0.3",
+    "langchain-core>=0.3",
+    "langchain-google-genai>=4.0.0",
+]
+
+# Extra providers, each opt-in. Install alongside the `langchain` extra and point
+# LLM_MODEL_MAP / the *_MODEL_NAME settings at e.g. "openai:gpt-5" or
+# "anthropic:claude-sonnet-5" — no application code changes required.
+openai = ["langchain-openai>=0.2"]
+anthropic = ["langchain-anthropic>=0.3"]

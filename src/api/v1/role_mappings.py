@@ -1,6 +1,4 @@
 import asyncio
-import json
-import os
 from typing import Dict, List, Optional
 import uuid
 import httpx
@@ -8,17 +6,14 @@ from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPExcepti
 from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from google import genai
-from google.genai import types
-
 from ...models.role_mapping import ProcessingStatus, RoleMapping
 from ...models.user import User
 
-from ...prompts.prompts import DESIGNATION_ROLE_MAPPING_PROMPT
 from ...schemas.role_mapping import AddDesignationToRoleMappingRequest, DesignationmatchedResult, ReorderDesignationsRequest, RoleMappingBackgroundResponse, RoleMappingReorderListItem, RoleMappingResponse, RoleMappingSearchFilters, RoleMappingSearchRequest, RoleMappingSearchResponse, RoleMappingUpdate, RoleMappingWithoutCBP, matchedDesignationsRequest, MatchedDesignationDetail
 from ...services.role_mapping_service import role_mapping_service
 from ...services.designation_service import designation_service
 from ...services.designation_matcher_service import designation_matcher_service
+from ...services import llm_service
 
 from ...core.database import get_db_session
 from ...core.logger import logger
@@ -31,16 +26,6 @@ from ...api.dependencies import get_current_active_user
 
 
 router = APIRouter(tags=["Role Mappings"])
-
-with open("data/competencies.json") as f:
-    COMPETENCY_MAPPING = json.load(f)
-
-os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = settings.GOOGLE_APPLICATION_CREDENTIALS
-client = genai.Client(
-    project=settings.GOOGLE_PROJECT_ID,
-    location="us-central1",
-    vertexai=True
-)
 
 async def process_role_mapping_task(
     placeholder_id: uuid.UUID,
@@ -254,76 +239,26 @@ async def generate_role_mapping(
         )
 
 async def generate_role_and_competencies(input_data):
-    # Build strict prompt
+    """Generate one designation's role mapping. Fetches the summaries this designation needs,
+    then delegates prompt/schema/LLM handling to services/llm_service."""
     try:
-        state_center_data = await crud_state_center_data.get_by_state_center_and_department(input_data['state_center_id'], input_data['department_id'])
-        
-        # if not state_center_data:
-        #     logger.warning(f"No state center data found for ID: {input_data['state_center_id']}")
-        #     raise Exception("No ACBP plan or work allocation data found for this state/center")
+        state_center_data = await crud_state_center_data.get_by_state_center_and_department(
+            input_data['state_center_id'], input_data['department_id'])
 
-        
-        print(f"Generating role mapping for :: {input_data['designation']}")
-        
-        output_json_format = {
-            "designation_name": "[Designation Name]",
-            "wing_division_section": "[Wing/Division/Section]",
-            "role_responsibilities": "[List of Role Responsibilities]",
-            "activities": "[List of Activities]",
-            "competencies": [
-                {
-                    "type": "[Behavioral/Functional/Domain]",
-                    "theme": "[Competency Theme]",
-                    "sub_theme": "[Competency Sub-theme]",
-                }
-            ],
-            "source": "[ACBP, Work Allocation Order, KCM, AI Suggested]"
-        }
-        prompt = DESIGNATION_ROLE_MAPPING_PROMPT.format(
-            organization_name=input_data.get('org_name'),
-            department_name=input_data.get('dep_name'),
-            designation_name=input_data.get('designation'),
+        logger.info(f"Generating role mapping for :: {input_data['designation']}")
+
+        return await llm_service.generate_designation_role_mapping_v1(
+            org_name=input_data.get('org_name'),
+            dep_name=input_data.get('dep_name'),
+            designation=input_data.get('designation'),
             sector=input_data.get('sector_name', 'N/A'),
-            instructions=input_data.get('instruction'),
+            instruction=input_data.get('instruction'),
             acbp_summary=state_center_data.acbp_plan_summary if state_center_data else 'N/A',
             work_allocation_summary=state_center_data.work_allocation_order_summary if state_center_data else 'N/A',
-            kcm_competencies=json.dumps(COMPETENCY_MAPPING, indent=2),
-            output_json_format=json.dumps(output_json_format, indent=None, separators=(',', ':'))
         )
-
-        generate_content_config = types.GenerateContentConfig(
-            temperature=0.5,
-            # safety_settings=[
-            #     types.SafetySetting(category="HARM_CATEGORY_HATE_SPEECH", threshold="OFF")
-            # ],
-            response_mime_type="application/json",
-            response_schema={"type":"OBJECT","properties":{"designation_name":{"type":"STRING","description":"The official designation or job title for the role."},"wing_division_section":{"type":"STRING","description":"The organizational unit (wing, division, or section) where the role is situated."},"role_responsibilities":{"type":"ARRAY","items":{"type":"STRING"},"description":"A list of 5-8 concise, action-oriented role responsibilities."},"activities":{"type":"ARRAY","items":{"type":"STRING"},"description":"A list of 5–8 activities or tasks aligned to the role responsibilities."},"competencies":{"type":"ARRAY","items":{"type":"OBJECT","properties":{"type":{"type":"STRING","enum":["Behavioral","Functional","Domain"],"description":"The category of competency as per Karmayogi framework."},"theme":{"type":"STRING","description":"The parent theme of the competency (must come from dataset)."},"sub_theme":{"type":"STRING","description":"The sub-theme of the competency (must come from dataset)."}},"required":["type","theme","sub_theme"]},"description":"A list of competencies relevant to the role. Must include at least one Behavioral, one Functional, and one Domain competency."}},"required":["designation_name","wing_division_section","role_responsibilities","activities","competencies"]},
-        )
-
-        contents = [   
-            types.Content(
-                role="user", 
-                parts=[
-                    types.Part.from_text(text=prompt)
-                ]
-            )
-        ]
-
-        response = await client.aio.models.generate_content(
-            model="gemini-2.5-pro",
-            contents=contents,
-            config=generate_content_config,
-        )
-        print("ADD Designation gemini metadata usage:: ", response.usage_metadata)
-        text_response = response.text
-        if not text_response:
-            print("Gemini response was empty or not in text format.")
-            return []
-        parsed_response = json.loads(text_response)
-        return parsed_response
     except Exception as e:
-        print(f"Error generating role and responsibilities from Gemini: {e}")
-        raise HTTPException(status_code=500, detail=f"Gemini error: {str(e)}")
+        logger.exception("Error generating role and responsibilities from LLM")
+        raise HTTPException(status_code=500, detail=f"LLM error: {str(e)}")
 
 @router.post("/role-mapping/match-designations", response_model=DesignationmatchedResult)
 async def match_designations_with_igot(

@@ -10,10 +10,8 @@ from ...models.meta_summary import MetaSummary
 from ...schemas.meta_summary import MetaSummaryCreateRequest, MetaSummaryDeleteResponse, MetaSummaryListResponse, MetaSummaryResponse
 from ...crud.document import crud_document
 from ...crud.meta_summary import crud_meta_summary
-from .document_routes import get_genai_client, _run_document_summary
-from ...prompts.prompts import META_SUMMARY_PROMPT
-
-from google.genai import types
+from .document_routes import _run_document_summary
+from ...services import llm_service
 
 from ...core.logger import logger
 
@@ -56,33 +54,9 @@ async def _run_meta_summary(request_id: uuid.UUID):
             summaries_text_parts.append(f"--- {doc.filename} ({doc.file_id}) ---\n{doc.summary_text}\n")
 
         joined = "\n".join(summaries_text_parts)
-        prompt_text = META_SUMMARY_PROMPT.format(payload=joined)
 
-        client = get_genai_client()
-        contents = [
-            types.Content(
-                role="user",
-                parts=[types.Part.from_text(text=prompt_text)]
-            )
-        ]
-        generate_content_config = types.GenerateContentConfig(
-            temperature=0.6,
-            top_p=0.95,
-            max_output_tokens=8192,
-            safety_settings=[
-                types.SafetySetting(category="HARM_CATEGORY_HATE_SPEECH", threshold="OFF"),
-                types.SafetySetting(category="HARM_CATEGORY_DANGEROUS_CONTENT", threshold="OFF"),
-                types.SafetySetting(category="HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold="OFF"),
-                types.SafetySetting(category="HARM_CATEGORY_HARASSMENT", threshold="OFF"),
-            ],
-        )
         try:
-            response = client.models.generate_content(
-                model="gemini-2.5-pro",
-                contents=contents,
-                config=generate_content_config
-            )
-            meta_text = response.text
+            meta_text = await llm_service.summarize_across_documents(joined)
             if not meta_text:
                 raise RuntimeError("Empty meta summary returned")
 

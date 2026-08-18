@@ -1,16 +1,10 @@
 import asyncio
 import json
-import os
 import uuid
 from typing import Any, Dict, List
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Path, Query, status
 from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
-
-from google import genai
-from google.genai import types
-
-from ...prompts.prompts import COURSE_SELECTION_SYSTEM_PROMPT, DESIGNNATION_GROUP_SYSTEM_PROMPT, VECTOR_QUERY_SYSTEM_PROMPT
 
 from ...models.course_recommendation import RecommendationStatus
 from ...models.user import User
@@ -26,45 +20,24 @@ from ...crud.course_suggestion import crud_suggested_course
 from ...crud.user_added_course import crud_user_added_course
 
 from ...api.dependencies import get_current_active_user
+from ...services import llm_service
 
 router = APIRouter(tags=["Course Recommendations"])
 
-os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = settings.GOOGLE_APPLICATION_CREDENTIALS
-client = genai.Client(
-    project=settings.GOOGLE_PROJECT_ID,
-    location=settings.GOOOGLE_PROJECT_LOCATION_GLOBAL,
-    vertexai=settings.GOOGLE_GENAI_USE_VERTEXAI,
-    http_options=settings.GEMINI_HTTP_OPTIONS
-)
 
-embedding_client = genai.Client(
-    api_key=settings.GOOGLE_API_KEY,
-    vertexai=False,
-    http_options=settings.GEMINI_HTTP_OPTIONS
-)
+# ── LLM-backed helpers ────────────────────────────────────────────────────────
+# These keep this module's own call surface; the prompt, response schema and generation
+# config behind each one live in src/services/llm_service.py, so they work under any
+# LLM_PROVIDER and nothing here has to know which model is answering.
 
-# Curse Recommendation APIs
 async def get_embedding(text: str) -> list:
+    """Embed one search query for course vector search.
 
-    logger.info(f"Generating embedding for text '{text[:50]}...")
+    Returns the vector itself (a flat list of floats) — NOT a list of vectors. Blank input or
+    a failed call yields [], which callers treat as "no vector for this query".
+    """
+    return await llm_service.embed_search_query(text)
 
-    if not text.strip():
-        print("Warning: Attempted to get embedding for empty text. Returning empty list.")
-        return []
-    
-    vector_query = f"task: search result | query: {text}"
-
-    try:
-        response = await embedding_client.aio.models.embed_content(
-            model=settings.GOOGLE_EMBEDDING_MODEL,
-            contents=vector_query,
-            config=types.EmbedContentConfig(output_dimensionality=settings.EMBEDDING_OUTPUT_DIMENSIONALITY)
-        )
-        
-        return response.embeddings
-    except Exception as e:
-        logger.exception(f"Error generating embedding for text '{text[:50]}...': {e}")
-        return []
 
 async def generate_contextual_queries(user_profile: str) -> Dict[str, Any]:
     """
@@ -73,255 +46,196 @@ async def generate_contextual_queries(user_profile: str) -> Dict[str, Any]:
     - description_query : narrative paragraph for description_embedding vector search
     - combined_query    : multi-angle rich query for combined_embedding vector search
     - search_keywords   : list of 10-15 domain/skill terms for Postgres keyword search
-
-    All outputs are sector/domain-aware and non-generic.
     """
-    logger.info("Generating contextual queries from user profile")
+    return await llm_service.generate_contextual_queries(user_profile)
 
-    user_part = types.Part.from_text(text=f"Role Profile:\n{user_profile}")
-    contents = [types.Content(role="user", parts=[user_part])]
-
-    config = types.GenerateContentConfig(
-        temperature=0.4,
-        top_p=0.95,
-        # max_output_tokens=2048,
-        safety_settings=[
-            types.SafetySetting(category="HARM_CATEGORY_HATE_SPEECH", threshold="OFF"),
-            types.SafetySetting(category="HARM_CATEGORY_DANGEROUS_CONTENT", threshold="OFF"),
-            types.SafetySetting(category="HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold="OFF"),
-            types.SafetySetting(category="HARM_CATEGORY_HARASSMENT", threshold="OFF"),
-        ],
-        response_mime_type="application/json",
-        response_schema={
-            "type": "OBJECT",
-            "properties": {
-                "keyword_query":     {"type": "STRING"},
-                "description_query": {"type": "STRING"},
-                "combined_query":    {"type": "STRING"},
-                "search_keywords":   {"type": "ARRAY", "items": {"type": "STRING"}},
-            },
-            "required": ["keyword_query", "description_query", "combined_query", "search_keywords"],
-        },
-        system_instruction=[types.Part.from_text(text=VECTOR_QUERY_SYSTEM_PROMPT)],
-    )
-
-    response = await client.aio.models.generate_content(
-        model=settings.GEMINI_PRO_MODEL_NAME,
-        contents=contents,
-        config=config,
-    )
-    logger.info("Contextual queries generated successfully")
-    if not response.text:
-        logger.error(f"LLM returned empty response for contextual queries: {response}")
-        raise Exception("generate_contextual_queries: LLM returned empty response")
-    return json.loads(response.text)
 
 async def infer_designation_group(user_profile: str) -> str:
-    """
-    Ask the LLM to reason about the full role profile and classify the designation
-    into Group A/B (senior/gazetted officers) or Group C/D (supporting/clerical staff).
-    Returns 'AB' or 'CD'.
-    """
-    user_part = types.Part.from_text(text=f"Role Profile:\n{user_profile}")
-
-    config = types.GenerateContentConfig(
-        temperature=0,
-        max_output_tokens=256,
-        safety_settings=[
-            types.SafetySetting(category="HARM_CATEGORY_HATE_SPEECH", threshold="OFF"),
-            types.SafetySetting(category="HARM_CATEGORY_DANGEROUS_CONTENT", threshold="OFF"),
-            types.SafetySetting(category="HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold="OFF"),
-            types.SafetySetting(category="HARM_CATEGORY_HARASSMENT", threshold="OFF"),
-        ],
-        response_mime_type="application/json",
-        response_schema={
-            "type": "OBJECT",
-            "properties": {"group": {"type": "STRING", "enum": ["AB", "CD"]}},
-            "required": ["group"],
-        },
-        system_instruction=[types.Part.from_text(text=DESIGNNATION_GROUP_SYSTEM_PROMPT)],
-    )
-
-    try:
-        response = await client.aio.models.generate_content(
-            model=settings.GEMINI_FLASH_MODEL_NAME,
-            contents=[types.Content(role="user", parts=[user_part])],
-            config=config,
-        )
-        if not response.text:
-            logger.warning("Designation group LLM returned empty response, defaulting to AB")
-            return "AB"
-        result = json.loads(response.text)
-        group = result.get("group", "AB")
-        logger.info(f"LLM classified designation group as: {group}")
-        return group
-    except Exception as e:
-        logger.warning(f"Designation group inference failed, defaulting to AB: {e}")
-        return "AB"
+    """Classify the designation into Group A/B (senior/gazetted officers) or Group C/D
+    (supporting/clerical staff). Returns 'AB' or 'CD', defaulting to 'AB' on failure."""
+    return await llm_service.infer_designation_group(user_profile)
 
 
 async def get_filtered_courses_by_llm(
     courses_prompt: str,
     user_profile: str,
     organisation: str,
-    designation_group: str,
+    designation_group: str | None = None,
 ) -> str:
-    """
-    LLM-based course selection and scoring with:
+    """LLM-based course selection and scoring with:
     - Provider priority (own-org courses preferred)
     - Domain-mix enforcement by designation group
     - Sector-specific domain inclusion
     - Topic/type diversity within domain courses
     """
-    logger.info("Filtering candidate courses through LLM")
-
-    if designation_group == "AB":
-        mix_rule = "Domain: ≥50%, Behavioral: ~25%, Functional: ~25%"
-    else:
-        mix_rule = "Domain: ~40%, Behavioral: ~30%, Functional: ~30%"
-    # ({mix_rule})
-    
-
-    user_part = types.Part.from_text(text=f"""
-Role Profile:
-{user_profile}
-
-Own Organisation: {organisation or 'N/A'}
-
-Candidate Courses:
-{courses_prompt}
-""")
-
-    response_schema = {
-        "type": "ARRAY",
-        "items": {
-            "type": "OBJECT",
-            "properties": {
-                "identifier":        {"type": "STRING"},
-                "course":            {"type": "STRING"},
-                "relevancy":         {"type": "INTEGER"},
-                "rationale":         {"type": "STRING"},
-            },
-            "required": ["identifier", "course", "relevancy", "rationale"],
-        },
-    }
-
-    config = types.GenerateContentConfig(
-        temperature=0,
-        top_p=1,
-        # max_output_tokens=8192,
-        safety_settings=[
-            types.SafetySetting(category="HARM_CATEGORY_HATE_SPEECH", threshold="OFF"),
-            types.SafetySetting(category="HARM_CATEGORY_DANGEROUS_CONTENT", threshold="OFF"),
-            types.SafetySetting(category="HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold="OFF"),
-            types.SafetySetting(category="HARM_CATEGORY_HARASSMENT", threshold="OFF"),
-        ],
-        response_mime_type="application/json",
-        response_schema=response_schema,
-        system_instruction=[types.Part.from_text(text=COURSE_SELECTION_SYSTEM_PROMPT)],
-        thinking_config=types.ThinkingConfig(include_thoughts=False, thinking_budget=2048),
+    return await llm_service.filter_courses(
+        courses_prompt, user_profile, organisation, designation_group
     )
 
-    response = await client.aio.models.generate_content(
-        model=settings.GEMINI_PRO_MODEL_NAME,
-        contents=[types.Content(role="user", parts=[user_part])],
-        config=config,
-    )
-    if not response.text:
-        logger.error(f"LLM filtering empty response — failed to inspect:  {response}")
-        return "[]"
-    return response.text
 
 async def get_general_courses_from_gemini(user_profile) -> List[Dict[str, Any]]:
+    """Fetch public courses from external learning platforms via provider web search.
+
+    Disabled unless ENABLE_GENERAL_COURSE_LOOKUP is set, so this returns [] by default.
     """
-    Fetches general courses from Gemini based on the designation and department.
-    """
-    # Disabled for temporary reasons. Remove below line to enable Gemini fetching of general courses. 
-    return []
-    logger.info("Fetching the general courses across the learning platforms")
-    generate_content_config = types.GenerateContentConfig(
-        system_instruction=f"""
-        You are an expert in civil service training and development.
-        Your role is to recommend highly relevant and foundational courses that would help professionals excel in their designation within government/administrative organizations.
+    return await llm_service.fetch_general_courses(user_profile)
 
-        # Research & Recommendation Guidelines:
-        1. Search across credible and accessible learning platforms, including but not limited to:
-            Coursera, edX, Udemy, FutureLearn, SWAYAM, NPTEL, Khan Academy, WHO, Harvard Online, MIT OCW, Stanford Online, LinkedIn Learning, etc.
-            - Prefer globally credible and India-contextualized content.
-            - Do not include iGOT/Karmayogi links.
+def _course_competency_areas(course: dict) -> set:
+    """Return the set of competency areas a course covers, drawn from its competencies list
+    (competencyAreaName / type): any of {'domain', 'functional', 'behavioural'}. A course can
+    cover several. Tolerates both the British 'behavioural' and US 'behavioral' spellings, and
+    mirrors the retrieval SQL (competencyAreaName LIKE '%functional%'/'%behavioural%') and the
+    report grouping so 'a course covers type X' means the same thing everywhere."""
+    areas = set()
+    for c in course.get("competencies") or []:
+        if not isinstance(c, dict):
+            continue
+        area = (c.get("competencyAreaName") or c.get("type") or "").lower()
+        if "domain" in area:
+            areas.add("domain")
+        elif "function" in area:
+            areas.add("functional")
+        elif "behav" in area:
+            areas.add("behavioural")
+    return areas
 
-        2. Course Selection Criteria:
-            - Recommend 10–15 courses that are universally essential for this designation.
-            - Courses must strengthen Behavioral, Functional, and Domain competencies.
-            - Ensure recommendations are active, course-specific, and not generic category pages.
-            - Do not include fictional or AI-generated course names. Recommend only courses that exist publicly and are accessible.
 
-        3. Quality Control:
-            - Avoid duplicates.
-            - Ensure public links are correct and accessible.
-            - Keep rationales concise and role-relevant.
-            - Course name should be the same as given in the webpage.
-        
-        For each course, provide the following information in a structured JSON format:
-        - course: The full name of the course.
-        - platform: The name of the platform where the course is hosted (e.g., Coursera, edX, Udemy).
-        - relevancy: An integer from 0 to 100, indicating high relevancy.
-        - rationale: A brief, 1-2 sentence explanation of why this course is essential.
-        - language: The language of the specific course (e.g., en, hi).
-        - public_link: An actual public URL to the specific course.
-        - competencies: An array of competency objects. 
-          Each object should have competencyAreaName, competencyThemeName, and competencySubThemeName.
-        Ensure the output is a JSON array of objects.
+def _passes_type_floor(course: dict) -> bool:
+    """Relevancy floor. The lower Behavioural/Functional floor is applied ONLY to courses that
+    carry no Domain competency — i.e. courses that can never appear in the Domain grouping. Any
+    course that touches Domain (or covers no B/F area) keeps the original flat floor, so every
+    Domain-contributing course is filtered exactly as it was before this change. This guarantees
+    the Domain set is unchanged; only pure Behavioural/Functional courses are affected."""
+    rel = course.get("relevancy", 0)
+    areas = _course_competency_areas(course)
+    if "domain" in areas or not (areas & {"functional", "behavioural"}):
+        return rel >= settings.COURSE_RECOMMENDATION_MIN_RELEVANCY
+    floors = []
+    if "functional" in areas:
+        floors.append(settings.FUNCTIONAL_MIN_RELEVANCY)
+    if "behavioural" in areas:
+        floors.append(settings.BEHAVIOURAL_MIN_RELEVANCY)
+    return rel >= min(floors)
 
-        **OUTPUT FORMAT REQUIRED:**
-        Provide the output as a **direct JSON array of objects**. 
-        **IMPORTANT:** Do **NOT** enclose the JSON within markdown code blocks (e.g., do not use ```json ... ``` or ``` ... ```). The output must be *only* the JSON array itself.
-        """,
-        temperature=0.5,
-        # Remove tools unless you really want google_search
-        tools=[{"google_search": {}}],
 
-        safety_settings=[
-            types.SafetySetting(category="HARM_CATEGORY_HATE_SPEECH", threshold="OFF")
-        ],
-        # response_mime_type="application/json",
-        # response_schema=schema,
-    )
+def _topup_relevancy(distance: float, floor: int) -> int:
+    """Relevancy to record for a top-up course.
 
-    try:
-        msg1_text1 = types.Part.from_text(
-            text=f"Here's the user role context: {user_profile}"
+    A top-up never went through the LLM, so it has no LLM-assigned relevancy. Rather than stamping
+    every top-up with the same floor constant (which made them indistinguishable and tied in the
+    final sort), scale the retrieval similarity into a percentage and clamp it into [floor, 100]:
+    the floor keeps them at or above the cutoff they were admitted under, so a downstream consumer
+    filtering on `relevancy >= cutoff` still keeps them, while stronger retrieval matches now rank
+    above weaker ones. Still an approximation, not an LLM judgement — `is_topup` marks it as such."""
+    return max(floor, min(100, round(float(distance) * 100)))
+
+
+def _enrich_topup_course(identifier: str, meta: Any, ptype: str, floor: int, distance: float) -> dict:
+    """Build a course dict for a quota top-up candidate (never went through the LLM filter),
+    shaped exactly like an LLM-filtered+enriched course (same keys, plus `is_topup`) so downstream
+    persistence treats it identically to the others."""
+    _org = getattr(meta, "organisation", None)
+    return {
+        "identifier": identifier,
+        "course": meta.name,
+        "relevancy": _topup_relevancy(distance, floor),
+        "rationale": f"Added to meet minimum {ptype} competency coverage for this role.",
+        "is_public": False,
+        # Marks a deterministic quota top-up rather than an LLM-selected course, so the relevancy
+        # above is read as a retrieval-similarity approximation, not an LLM relevance judgement.
+        "is_topup": True,
+        "competencies": meta.competencies_v6,
+        "duration": meta.duration,
+        "organisation": (
+            ", ".join(str(o) for o in _org if o) if isinstance(_org, list) else (_org or None)
+        ),
+    }
+
+
+def _enforce_competency_quotas(
+    selected: List[dict],
+    all_candidates: List[dict],
+    metadata_map: Dict[str, Any],
+) -> List[dict]:
+    """Guarantee a minimum number of Behavioural, Functional AND Domain courses.
+
+    For each type: count how many selected courses already cover that area; if under its minimum,
+    top up the shortfall from the already-retrieved candidate pool, ranked by vector distance and
+    deduped against the current selection, so identical input yields an identical set.
+
+    Eligibility differs by type:
+      - Behavioural / Functional → PURE candidates only (cover the type, carry NO Domain
+        competency), so a B/F top-up can never enlarge the Domain grouping.
+      - Domain → any Domain-bearing candidate.
+
+    Domain has a minimum because it was observed swinging run-to-run (occasionally near zero) for
+    the same role profile. This is a top-up ONLY: no course the LLM selected is ever dropped,
+    trimmed, or reordered by this function — a type can freely exceed its minimum.
+
+    Returns the adjusted list."""
+    if not settings.ENFORCE_COMPETENCY_QUOTAS:
+        return selected
+
+    # B/F first so their deficits are measured against the LLM's own selection (unchanged
+    # behaviour), then Domain — a Domain top-up that also covers B/F therefore cannot mask a
+    # B/F shortfall. Domain uses the original flat relevancy cutoff, not a lower dedicated floor.
+    reqs = {
+        "behavioural": (settings.BEHAVIOURAL_MIN_COUNT, settings.BEHAVIOURAL_MIN_RELEVANCY),
+        "functional":  (settings.FUNCTIONAL_MIN_COUNT,  settings.FUNCTIONAL_MIN_RELEVANCY),
+        "domain":      (settings.DOMAIN_MIN_COUNT,      settings.COURSE_RECOMMENDATION_MIN_RELEVANCY),
+    }
+
+    result = list(selected)
+    selected_ids = {c["identifier"] for c in result}
+
+    def _is_eligible_topup(course: dict, ptype: str) -> bool:
+        """True if the course may be used to top up ptype. Domain accepts any Domain-bearing
+        course; Behavioural/Functional accept only PURE candidates (no Domain competency) so
+        topping them up cannot enlarge the Domain grouping."""
+        areas = _course_competency_areas(course)
+        if ptype not in areas:
+            return False
+        if ptype == "domain":
+            return True
+        return "domain" not in areas
+
+    for ptype, (min_count, floor) in reqs.items():
+        covered = sum(1 for c in result if ptype in _course_competency_areas(c))
+        deficit = min_count - covered
+        if deficit <= 0:
+            continue
+
+        pool = sorted(
+            (c for c in all_candidates
+             if c.get("identifier") not in selected_ids and _is_eligible_topup(c, ptype)),
+            key=lambda c: c.get("distance", 0),
+            reverse=True,
         )
-        contents = [types.Content(role="user", parts=[msg1_text1])]
+        added = 0
+        for cand in pool:
+            if added >= deficit:
+                break
+            meta = metadata_map.get(cand["identifier"])
+            if not meta:
+                continue
+            result.append(
+                _enrich_topup_course(
+                    cand["identifier"], meta, ptype, floor, cand.get("distance", 0)
+                )
+            )
+            selected_ids.add(cand["identifier"])
+            added += 1
 
-        response = await client.aio.models.generate_content(
-            model=settings.GEMINI_PRO_MODEL_NAME,
-            contents=contents,
-            config=generate_content_config,
-        )
-        
-        text_response = response.text
-        if not text_response:
-            print("Gemini response was empty or not in text format.")
-            return []
+        if added < deficit:
+            logger.warning(
+                f"Quota: '{ptype}' still short by {deficit - added} after top-up (min {min_count}) "
+                f"— no eligible {ptype} candidates left in the retrieved pool; likely a data gap."
+            )
+        else:
+            logger.info(f"Quota: topped up {added} '{ptype}' course(s) to meet min {min_count}")
 
-        
-        text_response = text_response.replace("```json", '')
-        text_response = text_response.replace("```", '')
-        # # Parse JSON
-        general_courses = json.loads(text_response)
+    return result
 
-        # Add identifiers
-        for course in general_courses:
-            course['identifier'] = str(uuid.uuid4())
-            course['is_public'] = True
-        logger.info("Fetched general courses from Gemini")
-        return general_courses
-
-    except Exception as e:
-        print("Gemini raw response (before failure):", locals().get("response", "No response"))
-        print(f"Error fetching general courses from Gemini: {e}")
-        return []
 
 def _build_competency_query(competencies: list) -> str:
     """
@@ -414,22 +328,22 @@ async def process_recommendation_task(
         functional_competency_query  = _build_competency_query_by_type(raw_competencies or [], "functional")
         behavioural_competency_query = _build_competency_query_by_type(raw_competencies or [], "behavioral")
         
-        # 3. Embed all queries in parallel
-        kw_emb_list, desc_emb_list, comb_emb_list, func_comp_emb_list, behav_comp_emb_list = await asyncio.gather(
+        # 3. Embed all queries in parallel. embed_search_query returns the vector itself (a
+        #    flat list of floats), not a list of vectors — do not index into it.
+        kw_emb, desc_emb, comb_emb, func_comp_emb, behav_comp_emb = await asyncio.gather(
             get_embedding(keyword_query),
             get_embedding(description_query),
             get_embedding(combined_query),
             get_embedding(functional_competency_query),
             get_embedding(behavioural_competency_query),
         )
-        if not kw_emb_list or not desc_emb_list or not comb_emb_list:
+        if not kw_emb or not desc_emb or not comb_emb:
             raise Exception("Failed to generate one or more embeddings")
 
-        kw_emb   = kw_emb_list[0].values
-        desc_emb = desc_emb_list[0].values
-        comb_emb = comb_emb_list[0].values
-        func_comp_emb  = func_comp_emb_list[0].values if func_comp_emb_list else None
-        behav_comp_emb = behav_comp_emb_list[0].values if behav_comp_emb_list else None
+        # These two are optional: a role with no functional/behavioural competencies yields an
+        # empty query, hence an empty vector — fall back to the combined vector downstream.
+        func_comp_emb = func_comp_emb or None
+        behav_comp_emb = behav_comp_emb or None
 
         # 4. Vector search + Postgres keyword search + competency-typed searches in parallel
         vector_results, kw_results, func_results, behav_results = await asyncio.gather(
@@ -522,8 +436,9 @@ async def process_recommendation_task(
 
         courses_prompt = "\n".join(candidate_lines)
 
-        # 8. Determine designation group for mix ratios (LLM-reasoned)
-        # designation_group = await infer_designation_group(user_profile)
+        # 8. designation_group is intentionally not inferred: the B/F guarantee is enforced in code
+        #    (pure-B/F top-up), not via prompt emphasis, so no per-group prompt tuning is needed and
+        #    the LLM prompt stays identical to the original — keeping Domain selection unchanged.
         designation_group = None
 
         # 9. LLM filtering + general courses (parallel)
@@ -551,6 +466,9 @@ async def process_recommendation_task(
         logger.info(f"After enrichment, {len(filtered_courses)} courses remain with valid metadata")
         for course in filtered_courses:
             course["is_public"] = False
+            # Explicit False so the flag is present on every course, not only on quota top-ups:
+            # this course's relevancy IS an LLM judgement (see _enrich_topup_course).
+            course["is_topup"] = False
             meta = enriched_map.get(course["identifier"])
             if meta:
                 course["course"] = meta.name
@@ -561,12 +479,29 @@ async def process_recommendation_task(
                     ", ".join(str(o) for o in _org if o) if isinstance(_org, list) else (_org or None)
                 )
 
-        final_filtered_courses = filtered_courses + general_courses
-        final_filtered_courses = [
-            course for course in final_filtered_courses
-            if course.get("relevancy", 0) >= settings.COURSE_RECOMMENDATION_MIN_RELEVANCY
+        # Per-type relevancy floor: Domain-bearing (and untyped) courses keep the original flat
+        # cutoff, so nothing Domain-bearing is filtered differently than before; only pure
+        # Behavioural/Functional courses get the lower floor that stops them being silently deleted.
+        floor_passed = [
+            course for course in (filtered_courses + general_courses)
+            if _passes_type_floor(course)
         ]
+
+        # Guarantee a minimum count for Behavioural, Functional AND Domain via deterministic top-up
+        # from the retrieved pool. Top-up only — no course the LLM selected is ever dropped or
+        # reordered here. B/F top-ups stay restricted to pure B/F candidates so they cannot inflate
+        # the Domain grouping; Domain tops up from any Domain-bearing candidate.
+        final_filtered_courses = _enforce_competency_quotas(floor_passed, all_candidates, metadata_map)
         final_filtered_courses.sort(key=lambda course: course.get("relevancy", 0), reverse=True)
+
+        _breakdown = {"domain": 0, "functional": 0, "behavioural": 0, "untyped": 0}
+        for _c in final_filtered_courses:
+            _areas = _course_competency_areas(_c)
+            if not _areas:
+                _breakdown["untyped"] += 1
+            for _a in _areas:                       # a course can cover several areas
+                _breakdown[_a] += 1
+        logger.info(f"Final course competency coverage (courses may cover multiple): {_breakdown}")
 
         # 11. Persist
         await crud_recommended_course.update_status_and_data(
@@ -579,7 +514,7 @@ async def process_recommendation_task(
 
         logger.info(
             f"Course Recommendation task completed for {recommendation_id}: "
-            f"{len(final_filtered_courses)} courses with relevancy >= 80 "
+            f"{len(final_filtered_courses)} courses after per-type floor + quota enforcement "
             f"(from {len(filtered_courses)} iGOT + {len(general_courses)} public candidates)"
         )
 

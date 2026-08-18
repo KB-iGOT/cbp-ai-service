@@ -1,8 +1,8 @@
+import json
 from enum import Enum
 from typing import Union
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from google.genai import types
 
 class EnvironmentOption(str, Enum):
     LOCAL = "local"
@@ -12,6 +12,10 @@ class EnvironmentOption(str, Enum):
 class DocumentStorageOption(str, Enum):
     LOCAL = "local"
     GCP = "gcp"
+
+class LLMProviderOption(str, Enum):
+    GEMINI = "gemini"
+    LANGCHAIN = "langchain"
 
 class Settings(BaseSettings):
     """
@@ -58,16 +62,45 @@ class Settings(BaseSettings):
 
     ROLE_MAPPING_BATCH_SIZE: int = Field(default=30, description="Number of designations per batch when processing PASS 2 role mapping generation in parallel")
 
-    @property
-    def GEMINI_HTTP_OPTIONS(self) -> types.HttpOptions:
-        return types.HttpOptions(
-            retry_options=types.HttpRetryOptions(
-                initial_delay=self.GEMINI_RETRY_INITIAL_DELAY,
-                attempts=self.GEMINI_RETRY_ATTEMPTS,
-                exp_base=self.GEMINI_RETRY_EXP_BASE,
-                http_status_codes=self.GEMINI_RETRY_HTTP_STATUS_CODES,
-            )
-        )
+    # LLM provider selection — swap the backing adapter without touching call sites.
+    # See src/services/llm_service.py for the provider-agnostic interface.
+    LLM_PROVIDER: LLMProviderOption = Field(default=LLMProviderOption.GEMINI, description="Provider backing src.services.llm_service.get_llm()")
+    LLM_EMBEDDING_PROVIDER: LLMProviderOption = Field(default=LLMProviderOption.GEMINI, description="Provider backing src.services.llm_service.get_embedder()")
+
+    # Model redirection map, applied by src/services/llm_service.py to EVERY model name before
+    # it reaches a provider. Exists because several call sites pass a hardcoded Gemini model
+    # literal (e.g. "gemini-2.5-pro") rather than reading a setting, so those calls could not
+    # otherwise follow a provider switch. Values may carry a LangChain "provider:model" prefix.
+    #   LLM_MODEL_MAP='{"gemini-2.5-pro": "openai:gpt-5", "gemini-3.5-flash": "openai:gpt-5-mini"}'
+    # Empty (the default) means no redirection — every model name passes through untouched, so
+    # behaviour is identical to having no map at all.
+    LLM_MODEL_MAP: Union[str, dict[str, str]] = Field(
+        default_factory=dict,
+        description="JSON object (or dict) remapping model names before they reach the provider. "
+                    "Empty means pass-through."
+    )
+
+    @field_validator("LLM_MODEL_MAP", mode="after")
+    @classmethod
+    def parse_model_map(cls, v):
+        if isinstance(v, str):
+            v = v.strip()
+            if not v:
+                return {}
+            try:
+                parsed = json.loads(v)
+            except json.JSONDecodeError as e:
+                raise ValueError(f"LLM_MODEL_MAP must be a JSON object: {e}") from e
+            if not isinstance(parsed, dict):
+                raise ValueError("LLM_MODEL_MAP must be a JSON object, not a list/scalar")
+            return {str(k): str(val) for k, val in parsed.items()}
+        return v or {}
+
+    # API keys for non-Google providers reached through the LangChain adapter. Only the key for
+    # the provider actually in use needs to be set; the adapter exports it to the environment
+    # that the corresponding LangChain integration package reads.
+    OPENAI_API_KEY: str = Field(default="", description="Required only when routing to openai:* models")
+    ANTHROPIC_API_KEY: str = Field(default="", description="Required only when routing to anthropic:* models")
 
     KB_BASE_URL: str
     KB_AUTH_TOKEN: str
@@ -167,6 +200,63 @@ class Settings(BaseSettings):
     DEFAULT_RELEVANCY_SCORE: int = 90
 
     COURSE_RECOMMENDATION_MIN_RELEVANCY: int = 80
+
+    # Per-competency-type controls for course recommendation. Behavioural/Functional courses are
+    # generic and naturally score lower relevancy than Domain courses, so a single flat cutoff
+    # silently deletes them. These give each type its own relevancy floor and a hard MINIMUM count
+    # enforced deterministically after LLM filtering (top-up from the already-retrieved pool when a
+    # type is under its minimum) so per-type counts are stable run-to-run. There is no maximum /
+    # trim: a course the LLM selected is never dropped to satisfy a quota.
+    ENFORCE_COMPETENCY_QUOTAS: bool = Field(
+        default=True,
+        description="If true, enforce hard per-type minimum counts on the final recommended "
+                    "courses (deterministic top-up, never a trim). Set false to fall back to the "
+                    "flat COURSE_RECOMMENDATION_MIN_RELEVANCY cutoff with no count guarantees."
+    )
+    # Public/external course lookup via the provider's builtin web search. Disabled by default,
+    # matching the long-standing "Disabled for temporary reasons" early-return this replaces —
+    # enabling it adds a web-search LLM call per recommendation and mixes public (non-iGOT)
+    # courses into results.
+    ENABLE_GENERAL_COURSE_LOOKUP: bool = Field(
+        default=False,
+        description="If true, also recommend public courses found via provider web search."
+    )
+
+    BEHAVIOURAL_MIN_RELEVANCY: int = 75
+    FUNCTIONAL_MIN_RELEVANCY: int = 75
+    BEHAVIOURAL_MIN_COUNT: int = 3
+    FUNCTIONAL_MIN_COUNT: int = 3
+    # Domain keeps the original COURSE_RECOMMENDATION_MIN_RELEVANCY (80) floor — no separate,
+    # lower Domain floor — so Domain courses are filtered exactly as they always were. Only the
+    # count is now guaranteed, because Domain was observed swinging (occasionally near zero)
+    # run-to-run for the same role profile.
+    DOMAIN_MIN_COUNT: int = 3
+
+    # Domain competencies from the Work Allocation Order (WAO)
+    DOMAIN_FROM_WAO_ENABLED: bool = Field(
+        default=False,
+        description="If true, derive Domain competencies per designation directly from the raw WAO "
+                    "text (uncapped, exhaustive) instead of the summary-based capped list. "
+                    "Behavioural/Functional competencies are unchanged. Falls back silently to the "
+                    "existing behaviour if the raw WAO cannot be read."
+    )
+    DOMAIN_FROM_WAO_CONCURRENCY: int = Field(
+        default=4,
+        description="Max concurrent per-designation domain-from-WAO LLM calls."
+    )
+    DOMAIN_FROM_WAO_MIN: int = Field(
+        default=6,
+        description="Minimum number of Domain competencies to keep per designation. If the WAO "
+                    "yields fewer, the shortfall is topped up (deduplicated) from the summary-based "
+                    "set rather than dropping below the floor or padding with invented items. "
+                    "Set to 0 to disable the floor (use exactly what the WAO supports)."
+    )
+    DOMAIN_FROM_WAO_CACHE_TTL_SECONDS: int = Field(
+        default=600,
+        description="TTL (seconds) for the Gemini context cache holding the WAO PDF, so the document "
+                    "is uploaded/charged once and reused across the per-designation domain calls. "
+                    "Set to 0 to disable caching (the PDF is sent inline on each call)."
+    )
 
     # Notification service settings
     ENABLE_EMAIL_NOTIFICATION: bool = Field(

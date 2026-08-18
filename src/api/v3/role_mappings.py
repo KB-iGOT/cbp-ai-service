@@ -1,12 +1,8 @@
-import json
-import os
 from typing import Optional
 import uuid
 from fastapi import APIRouter, BackgroundTasks, Depends, Form, HTTPException, status
 from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
-
-from google import genai
 
 from ...models.role_mapping import ProcessingStatus, RoleMapping
 from ...models.user import User
@@ -25,16 +21,6 @@ from ...api.dependencies import get_current_active_user
 
 
 router = APIRouter(tags=["Role Mappings"])
-
-with open("data/competencies.json") as f:
-    COMPETENCY_MAPPING = json.load(f)
-
-os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = settings.GOOGLE_APPLICATION_CREDENTIALS
-client = genai.Client(
-    project=settings.GOOGLE_PROJECT_ID,
-    location="us-central1",
-    vertexai=True
-)
 
 async def process_role_mapping_task(
     placeholder_id: uuid.UUID,
