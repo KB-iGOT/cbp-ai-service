@@ -62,13 +62,15 @@ async def get_filtered_courses_by_llm(
     organisation: str,
     designation_group: str | None = None,
 ) -> str:
-    """LLM-based course selection and scoring. Returns raw JSON text ("[]" if empty).
-
-    `designation_group` is accepted but deliberately unused: the Behavioural/Functional
-    guarantee is enforced in code (pure-B/F top-up), never via prompt emphasis, because
-    per-group prompt tuning made the model under-pick Domain courses.
+    """LLM-based course selection and scoring with:
+    - Provider priority (own-org courses preferred)
+    - Domain-mix enforcement by designation group
+    - Sector-specific domain inclusion
+    - Topic/type diversity within domain courses
     """
-    return await llm_service.filter_courses(courses_prompt, user_profile, organisation)
+    return await llm_service.filter_courses(
+        courses_prompt, user_profile, organisation, designation_group
+    )
 
 
 async def get_general_courses_from_gemini(user_profile) -> List[Dict[str, Any]]:

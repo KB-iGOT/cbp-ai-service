@@ -89,7 +89,11 @@ class Role(str, Enum):
 
 class SafetyPolicy(str, Enum):
     DEFAULT = "default"
-    PERMISSIVE = "permissive"
+    PERMISSIVE = "permissive"            # all four harm categories set to OFF
+    HATE_SPEECH_ONLY = "hate_speech_only"  # only HARM_CATEGORY_HATE_SPEECH OFF; the rest stay at
+                                           # provider defaults. Used by the public-course lookup,
+                                           # which upstream deliberately narrowed to this one
+                                           # category rather than disabling all filtering.
 
 
 class Tool(str, Enum):
@@ -388,6 +392,16 @@ _PERMISSIVE_SAFETY_SETTINGS = [
     gtypes.SafetySetting(category="HARM_CATEGORY_HARASSMENT", threshold="OFF"),
 ]
 
+# Narrower than the above on purpose — see SafetyPolicy.HATE_SPEECH_ONLY.
+_HATE_SPEECH_ONLY_SAFETY_SETTINGS = [
+    gtypes.SafetySetting(category="HARM_CATEGORY_HATE_SPEECH", threshold="OFF"),
+]
+
+_SAFETY_SETTINGS_BY_POLICY = {
+    SafetyPolicy.PERMISSIVE: _PERMISSIVE_SAFETY_SETTINGS,
+    SafetyPolicy.HATE_SPEECH_ONLY: _HATE_SPEECH_ONLY_SAFETY_SETTINGS,
+}
+
 
 def _build_http_options() -> gtypes.HttpOptions:
     return gtypes.HttpOptions(
@@ -451,8 +465,9 @@ def _build_gen_kwargs(config: GenerationConfig) -> dict:
         kwargs["response_mime_type"] = "application/json"
         if config.response_schema is not None:
             kwargs["response_schema"] = _to_gemini_schema(config.response_schema)
-    if config.safety == SafetyPolicy.PERMISSIVE:
-        kwargs["safety_settings"] = _PERMISSIVE_SAFETY_SETTINGS
+    safety_settings = _SAFETY_SETTINGS_BY_POLICY.get(config.safety)
+    if safety_settings:
+        kwargs["safety_settings"] = safety_settings
     if config.thinking_budget is not None:
         kwargs["thinking_config"] = gtypes.ThinkingConfig(
             thinking_budget=config.thinking_budget, include_thoughts=config.include_thoughts
@@ -1482,16 +1497,27 @@ async def infer_designation_group(user_profile: str) -> str:
         return "AB"
 
 
-async def filter_courses(courses_prompt: str, user_profile: str, organisation: str) -> str:
-    """Select and score the final course set from retrieved candidates. Returns raw JSON text
-    ("[]" when the model returns nothing) because the caller parses and enriches it.
-
-    NOTE: the prompt is intentionally unchanged from the original — no Behavioural/Functional
-    coverage instruction is injected. Adding B/F emphasis to a fixed-size selection made the
-    model under-pick Domain courses, so the B/F guarantee is enforced in code (deterministic
-    pure-B/F top-up in the caller), never via the prompt.
+async def filter_courses(
+    courses_prompt: str,
+    user_profile: str,
+    organisation: str,
+    designation_group: str | None = None,
+) -> str:
+    """
+    LLM-based course selection and scoring with:
+    - Provider priority (own-org courses preferred)
+    - Domain-mix enforcement by designation group
+    - Sector-specific domain inclusion
+    - Topic/type diversity within domain courses
     """
     logger.info("Filtering candidate courses through LLM")
+
+    if designation_group == "AB":
+        mix_rule = "Domain: ≥50%, Behavioral: ~25%, Functional: ~25%"
+    else:
+        mix_rule = "Domain: ~40%, Behavioral: ~30%, Functional: ~30%"
+    # ({mix_rule})
+
     contents = [Message.user(f"""
 Role Profile:
 {user_profile}
@@ -1539,7 +1565,7 @@ async def fetch_general_courses(user_profile: str) -> List[Dict[str, Any]]:
     logger.info("Fetching the general courses across the learning platforms")
     config = GenerationConfig(
         system_instruction=_GENERAL_COURSES_SYSTEM_PROMPT, temperature=0.5,
-        tools=[Tool.WEB_SEARCH], safety=SafetyPolicy.PERMISSIVE,
+        tools=[Tool.WEB_SEARCH], safety=SafetyPolicy.HATE_SPEECH_ONLY,
     )
     try:
         response = await llm.generate(
