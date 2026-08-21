@@ -16,6 +16,7 @@ from ...prompts.prompts import META_SUMMARY_PROMPT
 from google.genai import types
 
 from ...core.logger import logger
+from ...core import tracing
 
 router = APIRouter(prefix="/meta-summaries", tags=["Meta Summaries"]) 
 
@@ -32,6 +33,11 @@ async def _run_meta_summary(request_id: uuid.UUID):
             return
         
         await crud_meta_summary.update(request_id, {'status': 'IN_PROGRESS'})
+        _msid = getattr(batch, "user_id", None) or getattr(batch, "uploader_id", None) or "-"
+        tracing.set_identity(
+            user_id=getattr(batch, "user_id", None) or getattr(batch, "uploader_id", None),
+            session_id=f"{_msid}:{getattr(batch, 'state_center_id', '-')}:{getattr(batch, 'department_id', None) or '-'}",
+            tags=["meta-summary"])
 
         # Ensure all file summaries exist
         summaries_text_parts: List[str] = []

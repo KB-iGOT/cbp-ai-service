@@ -192,6 +192,18 @@ class Settings(BaseSettings):
                     "Set to 0 to disable caching (the PDF is sent inline on each call)."
     )
 
+    # Observability (Langfuse) — opt-in LLM tracing. Disabled by default; when off, no-op.
+    LANGFUSE_ENABLED: bool = Field(default=False, description="Enable Langfuse LLM tracing.")
+    LANGFUSE_PUBLIC_KEY: str = Field(default="", description="Langfuse public key (pk-lf-...).")
+    LANGFUSE_SECRET_KEY: str = Field(default="", description="Langfuse secret key (sk-lf-...).")
+    LANGFUSE_HOST: str = Field(default="", description="Langfuse host; blank -> https://cloud.langfuse.com.")
+    LANGFUSE_SAMPLE_RATE: float = Field(default=1.0, description="Fraction of traces sampled (1.0 = all).")
+    LANGFUSE_ENVIRONMENT: str = Field(
+        default="",
+        description="Langfuse 'environment' label to segment traces (e.g. local/staging/production, "
+                    "or an app/project label). Blank -> uses ENVIRONMENT. NOTE: the Langfuse *project* "
+                    "is determined by the public/secret key pair, not by this field.")
+
     # Notification service settings
     ENABLE_EMAIL_NOTIFICATION: bool = Field(
         default=False,

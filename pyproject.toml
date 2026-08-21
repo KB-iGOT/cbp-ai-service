@@ -24,4 +24,5 @@ dependencies = [
     "pgvector>=0.4.2",
     "redis[asyncio]>=5.0.0",
     "bs4>=0.0.2",
+    "langfuse>=3.0.0",
 ]

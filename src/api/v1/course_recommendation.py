@@ -19,6 +19,7 @@ from ...schemas.course_recommendation import RecommendCourseCreate, RecommendedC
 from ...core.database import get_db_session
 from ...core.logger import logger
 from ...core.configs import settings
+from ...core import tracing
 
 from ...crud.course_recommendation import crud_recommended_course
 from ...crud.role_mapping import crud_role_mapping
@@ -60,7 +61,7 @@ async def get_embedding(text: str) -> list:
             contents=vector_query,
             config=types.EmbedContentConfig(output_dimensionality=settings.EMBEDDING_OUTPUT_DIMENSIONALITY)
         )
-        
+
         return response.embeddings
     except Exception as e:
         logger.exception(f"Error generating embedding for text '{text[:50]}...': {e}")
@@ -354,6 +355,30 @@ async def process_recommendation_task(
     organisation: str,
     designation_name: str,
     raw_competencies: list = None,
+    user_id: str = None,
+    state_center_id: str = None,
+    department_id: str = None,
+):
+    """Wraps the recommendation pipeline in a Langfuse trace (no-op unless enabled). Uses the same
+    identity as role-mapping — user_id + session_id=<state_center_id>:<department_id> — so all a
+    user's/department's operations (summary, role-mapping, course-recs) group into one session."""
+    with tracing.trace(
+        name=f"course-rec: {designation_name}",
+        user_id=str(user_id) if user_id else None,
+        session_id=(f"{user_id}:{state_center_id}:{department_id or '-'}" if (user_id and state_center_id) else str(recommendation_id)),
+        tags=["course-rec"],
+        organisation=organisation, designation=designation_name,
+        recommendation_id=str(recommendation_id)):
+        return await _process_recommendation_task_impl(
+            recommendation_id, user_profile, organisation, designation_name, raw_competencies)
+
+
+async def _process_recommendation_task_impl(
+    recommendation_id: uuid.UUID,
+    user_profile: str,
+    organisation: str,
+    designation_name: str,
+    raw_competencies: list = None,
 ):
     """
     Background task: hybrid multi-embedding vector search + LLM filtering.
@@ -637,6 +662,9 @@ Competencies (with definitions):
             role_mapping.state_center_name or "",
             role_mapping.designation_name or "",
             role_mapping.competencies or [],
+            user_id=str(current_user.user_id),
+            state_center_id=role_mapping.state_center_id,
+            department_id=role_mapping.department_id,
         )
 
         logger.info(f"Course recommendation generation initiated for role mapping: {role_mapping_id}")

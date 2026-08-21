@@ -10,11 +10,13 @@ from .core.database import Base, sessionmanager
 from .api import router
 from .core.configs import EnvironmentOption, settings
 from .core.logger import logger
+from .core import tracing
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("✅ Starting up...")
-    
+
+    tracing.init()   # Langfuse (no-op unless LANGFUSE_ENABLED=true)
     sessionmanager.init(settings.DATABASE_URL)
     
     logger.info("--- Creating Tables ---")
@@ -30,6 +32,7 @@ async def lifespan(app: FastAPI):
     yield
     # On shutdown, dispose of the connection pool
     logger.info("🔻 Shutting down...")
+    tracing.shutdown()   # flush pending Langfuse spans
     await sessionmanager.close()
     logger.info("🔻 DB connection closed")
 

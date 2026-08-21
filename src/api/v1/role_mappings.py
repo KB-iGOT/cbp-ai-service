@@ -23,6 +23,7 @@ from ...services.designation_matcher_service import designation_matcher_service
 from ...core.database import get_db_session
 from ...core.logger import logger
 from ...core.configs import settings
+from ...core import tracing
 
 from ...crud.role_mapping import crud_role_mapping
 from ...crud.state_center_data import crud_state_center_data
@@ -481,6 +482,9 @@ async def add_designation_to_role_mapping(
     """
     try:
         logger.info(f"Addig new designation generation for state_center_id: {request.state_center_id}, department_id: {request.department_id}")
+        tracing.set_identity(user_id=current_user.user_id,
+                             session_id=f"{current_user.user_id}:{request.state_center_id}:{request.department_id or '-'}",
+                             tags=["add-designation"])
         
         # Get source role mapping
         role_mapping = await crud_role_mapping.get_all_mapping(db, request.state_center_id, current_user.user_id, request.department_id)

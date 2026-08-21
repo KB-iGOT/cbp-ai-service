@@ -6,6 +6,7 @@ from google.genai import types
 from ..core.configs import settings
 from ..prompts.prompts import ACBP_DOCUMENT_SUMMARY_PROMPT
 from ..core.logger import logger
+from ..core import tracing
 
 os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = settings.GOOGLE_APPLICATION_CREDENTIALS
 
@@ -118,11 +119,12 @@ class PDFProcessingService:
                 ),
             )
             
-            response = await self.client.aio.models.generate_content(
-                model="gemini-2.5-pro",
-                contents=contents,
-                config=generate_content_config
-            )
+            with tracing.trace(name="pdf-summary: acbp_plan", tags=["pdf-summary", "acbp_plan"]):
+                response = await self.client.aio.models.generate_content(
+                    model="gemini-2.5-pro",
+                    contents=contents,
+                    config=generate_content_config
+                )
             print("ACBP PLAN SUMMARY::", response.usage_metadata)
             summary = response.text
             
@@ -208,11 +210,12 @@ class PDFProcessingService:
                 ),
             )
             
-            response = await self.client.aio.models.generate_content(
-                model="gemini-2.5-pro",
-                contents=contents,
-                config=generate_content_config
-            )
+            with tracing.trace(name="pdf-summary: work_allocation", tags=["pdf-summary", "work_allocation"]):
+                response = await self.client.aio.models.generate_content(
+                    model="gemini-2.5-pro",
+                    contents=contents,
+                    config=generate_content_config
+                )
             print("WORK ALLOCATION SUMMARY::", response.usage_metadata)
             summary = response.text
             
