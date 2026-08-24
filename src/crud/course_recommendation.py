@@ -1,14 +1,15 @@
 import json
 import uuid
 from typing import Optional, List, Dict, Any, Literal
-from sqlalchemy import text, update
+from sqlalchemy import and_, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 
 
-from ..core.database import sessionmanager 
+from ..core.database import sessionmanager
 
-from ..models.course_recommendation import RecommendationStatus, RecommendedCourse 
+from ..models.course_recommendation import RecommendationStatus, RecommendedCourse
+from ..models.role_mapping import RoleMapping
 
 
 class CRUDRecommendedCourse:
@@ -59,6 +60,45 @@ class CRUDRecommendedCourse:
         
         result = await db.execute(stmt)
         return result.scalars().first()
+
+    async def get_in_progress_by_scope(
+        self,
+        db: AsyncSession,
+        user_id: uuid.UUID,
+        state_center_id: str,
+        department_id: Optional[str] = None,
+    ) -> List[RecommendedCourse]:
+        """
+        Retrieves all IN_PROGRESS RecommendedCourse records for a user, scoped to a
+        state/center (and optionally department), joined against their role mapping.
+
+        Args:
+            db: The async database session.
+            user_id: The ID of the requesting user.
+            state_center_id: The ID of the state/center to filter role mappings by.
+            department_id: Optional ID of the department (NULL-matched when omitted).
+
+        Returns:
+            List of IN_PROGRESS RecommendedCourse records, each with role_mapping loaded.
+        """
+        conditions = [
+            RecommendedCourse.user_id == user_id,
+            RecommendedCourse.status == RecommendationStatus.IN_PROGRESS,
+            RoleMapping.state_center_id == state_center_id,
+        ]
+        if department_id:
+            conditions.append(RoleMapping.department_id == department_id)
+        else:
+            conditions.append(RoleMapping.department_id.is_(None))
+
+        stmt = (
+            select(RecommendedCourse)
+            .join(RoleMapping, RecommendedCourse.role_mapping_id == RoleMapping.id)
+            .where(and_(*conditions))
+        )
+
+        result = await db.execute(stmt)
+        return result.scalars().all()
 
     async def delete_by_id(self, db: AsyncSession, recommendation_id: uuid.UUID) -> bool:
         """

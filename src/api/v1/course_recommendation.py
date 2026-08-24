@@ -2,7 +2,7 @@ import asyncio
 import json
 import os
 import uuid
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Path, Query, status
 from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -14,7 +14,11 @@ from ...prompts.prompts import COURSE_SELECTION_SYSTEM_PROMPT, DESIGNNATION_GROU
 
 from ...models.course_recommendation import RecommendationStatus
 from ...models.user import User
-from ...schemas.course_recommendation import RecommendCourseCreate, RecommendedCourseResponse
+from ...schemas.course_recommendation import (
+    BulkRecommendationStatusResponse,
+    RecommendCourseCreate,
+    RecommendedCourseResponse,
+)
 
 from ...core.database import get_db_session
 from ...core.logger import logger
@@ -668,6 +672,44 @@ Competencies (with definitions):
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to generate course recommendations. Please try again later."
+        )
+
+@router.get("/course-recommendations/bulk-status", response_model=BulkRecommendationStatusResponse)
+async def get_bulk_course_recommendation_status(
+    state_center_id: str = Query(..., description="ID of the associated state/center"),
+    department_id: Optional[str] = Query(None, description="ID of the associated department"),
+    db: AsyncSession = Depends(get_db_session),
+    current_user: User = Depends(get_current_active_user)
+):
+    """Get status of all in-progress course recommendations for a state/center (and optional department)"""
+    try:
+        logger.info(
+            f"Fetching bulk course recommendation status for state_center: {state_center_id}, "
+            f"department: {department_id}, user: {current_user.user_id}"
+        )
+
+        in_progress_recommendations = await crud_recommended_course.get_in_progress_by_scope(
+            db,
+            current_user.user_id,
+            state_center_id,
+            department_id,
+        )
+
+        items = [
+            {
+                "role_mapping_id": recommendation.role_mapping_id,
+                "recommendation_id": recommendation.id,
+                "status": recommendation.status,
+            }
+            for recommendation in in_progress_recommendations
+        ]
+
+        return BulkRecommendationStatusResponse(items=items)
+    except Exception as e:
+        logger.exception("Error in bulk course recommendation status endpoint:")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to fetch bulk course recommendation status. Please try again later."
         )
 
 @router.get("/course-recommendations", response_model=RecommendedCourseResponse)
