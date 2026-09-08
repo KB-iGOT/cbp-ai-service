@@ -474,6 +474,12 @@ Then compare that required behaviour against the `label` and `description` of EA
 - **Judge the sub-theme first, then the role.** Base the decision primarily on the nature of the `sub_theme` (and its `sub_theme_description`), then adjust for how this designation would realistically use it. Example: "Verbal & Non-Verbal Fluency" is practice-and-feedback based → `Offline`; "Rule of Business (AoB/ToB)" is rule-based knowledge → `Online`.
 - Be consistent: the same sub-theme should generally get the same `delivery_mode` across designations unless the role genuinely changes how it must be learned.
 
+**Justify every delivery mode — `delivery_mode_rationale` (REQUIRED for EVERY competency, Domain included):**
+- Alongside `delivery_mode`, output a `delivery_mode_rationale`: ONE short sentence (max ~25 words) stating WHY this sub-theme is best learned that way.
+- It MUST say what about the SUB-THEME drives the mode — the kind of learning it needs — not merely restate the mode.
+- ✅ "Fluency improves only through live practice with feedback and observed delivery, which self-paced modules cannot provide." ✅ "Procedural rules and timelines are factual content that transfers reliably through self-paced reading." ❌ "This competency is best delivered offline." ❌ "Offline mode suits this designation."
+- Where the role changed the answer from what the sub-theme alone would suggest, say so in the sentence.
+
 **Relevance guardrails — pick for THIS role, not just any valid entry:**
 - **Ground every pick.** Select a Behavioural/Functional competency ONLY if you can tie it to a specific listed Role/Responsibility or Activity of THIS designation. Silently ask yourself "which duty of this role needs this competency?" — if you cannot answer, do NOT select it. A valid KCM entry that is irrelevant to the role is still a WRONG selection.
 - **Do not pad to a count.** Choose the most relevant entries first. Aim for at least the minimum, but NEVER add a clearly-irrelevant competency just to reach the minimum or approach the maximum. Fewer, genuinely-relevant competencies are better than padded ones.
@@ -661,6 +667,12 @@ Then compare that required behaviour against the `label` and `description` of EA
   - `Offline` — skill-, behaviour-, or practice-based learning that needs live interaction, practice with feedback, role-play, group work, mentoring, or field exposure. Typical of interpersonal and applied sub-themes: verbal communication, negotiation, conflict handling, team leadership, empathy, public/citizen interaction, hands-on field techniques.
 - **Judge the sub-theme first, then the role.** Base the decision primarily on the nature of the `sub_theme` (and its `sub_theme_description`), then adjust for how this designation would realistically use it. Example: "Verbal & Non-Verbal Fluency" is practice-and-feedback based → `Offline`; "Rule of Business (AoB/ToB)" is rule-based knowledge → `Online`.
 - Be consistent: the same sub-theme should generally get the same `delivery_mode` across designations unless the role genuinely changes how it must be learned.
+
+**Justify every delivery mode — `delivery_mode_rationale` (REQUIRED for EVERY competency, Domain included):**
+- Alongside `delivery_mode`, output a `delivery_mode_rationale`: ONE short sentence (max ~25 words) stating WHY this sub-theme is best learned that way.
+- It MUST say what about the SUB-THEME drives the mode — the kind of learning it needs — not merely restate the mode.
+- ✅ "Fluency improves only through live practice with feedback and observed delivery, which self-paced modules cannot provide." ✅ "Procedural rules and timelines are factual content that transfers reliably through self-paced reading." ❌ "This competency is best delivered offline." ❌ "Offline mode suits this designation."
+- Where the role changed the answer from what the sub-theme alone would suggest, say so in the sentence.
 
 **Relevance guardrails — pick for THIS role, not just any valid entry:**
 - **Ground every pick.** Select a Behavioural/Functional competency ONLY if you can tie it to a specific listed Role/Responsibility or Activity of THIS designation. Silently ask yourself "which duty of this role needs this competency?" — if you cannot answer, do NOT select it. A valid KCM entry that is irrelevant to the role is still a WRONG selection.

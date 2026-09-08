@@ -1,9 +1,76 @@
+{#- Renders one competency: its theme - sub_theme label, plus the proficiency level and
+    delivery mode as badges. Both badges are optional: Domain competencies carry no
+    proficiency level, and course-level competencies carry neither. -#}
+{% macro competency_item(comp, accent) -%}
+<div class="bg-white p-1.5 rounded text-sm text-gray-700 border-l-2 border-{{ accent }}-400">
+  <div>{{ comp.label }}</div>
+  {% if comp.proficiency_level or comp.delivery_mode %}
+  <div class="competency-badges">
+    {% if comp.proficiency_level %}<span class="badge badge-level-{{ comp.proficiency_level | lower }}">{{ comp.proficiency_level }}</span>{% endif %}
+    {% if comp.delivery_mode %}<span class="badge badge-mode-{{ comp.delivery_mode | lower }}">{{ comp.delivery_mode }}</span>{% endif %}
+  </div>
+  {% endif %}
+</div>
+{%- endmacro %}
 <!DOCTYPE html>
 <html lang="{{ language | default('en') }}">
 
 <head>
   <meta charset="UTF-8" />
   <title>View CBP Plan</title>
+  <style>
+    /* Proficiency level / delivery mode badges on each competency.
+       The badge row is a plain inline strip — it must never pick up the accent rule or
+       the padding that the surrounding list applies to competency cards. */
+    .competency-badges {
+      margin: 4px 0 0 0 !important;
+      padding: 0 !important;
+      border: 0 !important;
+      border-left: 0 !important;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 5px;
+    }
+    .badge {
+      display: inline-block;
+      padding: 1.5px 9px;
+      border-radius: 9999px;
+      font-size: 10.5px;
+      font-weight: 600;
+      line-height: 1.55;
+      white-space: nowrap;
+      border: 1px solid transparent;
+    }
+
+    /* Proficiency level — filled, deepening with seniority */
+    .badge-level-operational {
+      background: #E8F0FE;
+      border-color: #A8C4F0;
+      color: #1B4CA1;
+    }
+    .badge-level-tactical {
+      background: #4C7FE0;
+      border-color: #4C7FE0;
+      color: #ffffff;
+    }
+    .badge-level-strategic {
+      background: #1B3A82;
+      border-color: #1B3A82;
+      color: #ffffff;
+    }
+
+    /* Delivery mode — outlined, so it reads as a different kind of attribute */
+    .badge-mode-online {
+      background: #E7F5EE;
+      border-color: #7FC4A0;
+      color: #1F6B47;
+    }
+    .badge-mode-offline {
+      background: #FDF0E3;
+      border-color: #E8A860;
+      color: #96551A;
+    }
+  </style>
   <style>
     @media print {
 
@@ -1312,20 +1379,22 @@
       width: 33%;
     }
 
-    .grid-list-item div {
+    /* Direct children only: each competency card owns the accent rule. The card's inner
+       label and badge row must not inherit a second border or the card's padding. */
+    .grid-list-item > div {
       padding: 5px 10px;
       margin: 10px 0px;
     }
 
-    .grid-list-item-behavioral div {
+    .grid-list-item-behavioral > div {
       border-left: 2px solid darkorange;
     }
 
-    .grid-list-item-functional div {
+    .grid-list-item-functional > div {
       border-left: 2px solid #ff1493;
     }
 
-    .grid-list-item-domain div {
+    .grid-list-item-domain > div {
       border-left: 2px solid #6b21a8;
     }
 
@@ -1812,9 +1881,7 @@
                     <h4 class="font-semibold text-blue-800 text-base mb-2">Behavioral</h4>
                     <div class="space-y-1 grid-list-item grid-list-item-behavioral">
                       {% for comp in designation.behavioralCompetencies %}
-                      <div class="bg-white p-1.5 rounded text-sm text-gray-700 border-l-2 border-blue-400">
-                        {{comp}}
-                      </div>
+                      {{ competency_item(comp, 'blue') }}
                       {% endfor %}
 
 
@@ -1829,9 +1896,7 @@
                     <h4 class="font-semibold text-green-800 text-base mb-2">Functional</h4>
                     <div class="space-y-1 grid-list-item grid-list-item-functional">
                       {% for comp in designation.functionalCompetencies %}
-                      <div class="bg-white p-1.5 rounded text-sm text-gray-700 border-l-2 border-green-400">
-                        {{comp}}
-                      </div>
+                      {{ competency_item(comp, 'green') }}
                       {% endfor %}
 
                     </div>
@@ -1845,9 +1910,7 @@
                     <h4 class="font-semibold text-purple-800 text-base mb-2">Domain</h4>
                     <div class="space-y-1 grid-list-item grid-list-item-domain">
                       {% for comp in designation.domainCompetencies %}
-                      <div class="bg-white p-1.5 rounded text-sm text-gray-700 border-l-2 border-purple-400">
-                        {{comp}}
-                      </div>
+                      {{ competency_item(comp, 'purple') }}
                       {% endfor %}
 
 
@@ -1890,7 +1953,7 @@
                     <div class="competency-sub-heading">Behavioral Competencies</div>
                     <ul class="competency-list">
                       {% for item in course.behavioral %}
-                      <li class="behavioural-pill">{{ item }}</li>
+                      <li class="behavioural-pill">{{ item.label }}</li>
                       {% endfor %}
                     </ul>
                     {% endif %}
@@ -1899,7 +1962,7 @@
                     <div class="competency-sub-heading">Functional Competencies</div>
                     <ul class="competency-list">
                       {% for item in course.functional %}
-                      <li class="functional-pill">{{ item }}</li>
+                      <li class="functional-pill">{{ item.label }}</li>
                       {% endfor %}
                     </ul>
                     {% endif %}
@@ -1909,7 +1972,7 @@
                     <div class="competency-sub-heading">Domain Competencies</div>
                     <ul class="competency-list">
                       {% for item in course.domain %}
-                      <li class="domain-pill">{{ item }}</li>
+                      <li class="domain-pill">{{ item.label }}</li>
                       {% endfor %}
                     </ul>
                     {% endif %}

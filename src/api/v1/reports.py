@@ -52,10 +52,13 @@ class ReportService:
         unique_behavioral = set()
         unique_functional = set()
         unique_domain = set()
+        # Competencies are dicts ({label, proficiency_level, delivery_mode}); uniqueness is
+        # still counted on the label alone, so the same competency at two proficiency levels
+        # across designations stays one competency in these totals.
         for d in designation_data:
-            unique_behavioral.update(comp.strip().lower() for comp in d["behavioralCompetencies"])
-            unique_functional.update(comp.strip().lower() for comp in d["functionalCompetencies"])
-            unique_domain.update(comp.strip().lower() for comp in d["domainCompetencies"])
+            unique_behavioral.update(comp["label"].strip().lower() for comp in d["behavioralCompetencies"])
+            unique_functional.update(comp["label"].strip().lower() for comp in d["functionalCompetencies"])
+            unique_domain.update(comp["label"].strip().lower() for comp in d["domainCompetencies"])
         total_behavioral = len(unique_behavioral)
         total_functional = len(unique_functional)
         total_domain = len(unique_domain)

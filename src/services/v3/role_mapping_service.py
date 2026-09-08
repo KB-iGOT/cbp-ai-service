@@ -175,7 +175,8 @@ center_json_output = {
                 "sub_theme": "string",
                 "proficiency_level": "Operational | Tactical | Strategic (REQUIRED for Behavioural & Functional; omit for Domain)",
                 "proficiency_rationale": "one short sentence citing the R&R/Activity that justifies the level (REQUIRED for Behavioural & Functional; omit for Domain)",
-                "delivery_mode": "Online | Offline"
+                "delivery_mode": "Online | Offline",
+                "delivery_mode_rationale": "one short sentence on why this sub-theme is best learned that way (REQUIRED for every competency, including Domain)"
             }
         ],
         "source": ["ACBP", "Work Allocation Order", "AI Suggested"]
@@ -197,7 +198,8 @@ state_json_output = {
                 "sub_theme": "string",
                 "proficiency_level": "Operational | Tactical | Strategic (REQUIRED for Behavioural & Functional; omit for Domain)",
                 "proficiency_rationale": "one short sentence citing the R&R/Activity that justifies the level (REQUIRED for Behavioural & Functional; omit for Domain)",
-                "delivery_mode": "Online | Offline"
+                "delivery_mode": "Online | Offline",
+                "delivery_mode_rationale": "one short sentence on why this sub-theme is best learned that way (REQUIRED for every competency, including Domain)"
             }
         ],
         "source": ["Work Allocation Order", "ACBP", "Additional supporting document", "AI Suggested"]
@@ -225,6 +227,7 @@ class FRACCompetency(BaseModel):
     proficiency_level: Optional[str] = Field(default=None, description="The single best-fit proficiency level for THIS designation, selected from the competency's proficiency_levels (Operational, Tactical or Strategic). REQUIRED for Behavioural & Functional; omit for Domain.")
     proficiency_rationale: Optional[str] = Field(default=None, description="One short sentence naming the specific Role/Responsibility or Activity of this designation that justifies the chosen proficiency_level. REQUIRED for Behavioural & Functional; omit for Domain.")
     delivery_mode: Literal["Online", "Offline"] = Field(description="Whether this competency's sub-theme is best learned Online (knowledge-based, self-paced) or Offline (practice/interaction-based) for this designation")
+    delivery_mode_rationale: Optional[str] = Field(default=None, description="One short sentence stating what about this sub-theme makes it best learned in the chosen delivery_mode. REQUIRED for every competency, including Domain.")
     
 class FRACRoleMapping(BaseModel):
     designation_name: str = Field(description="Official designation name")
@@ -551,8 +554,14 @@ class RoleMappingService:
         for c in (raw_competencies or []):
             ctype = self._norm_type(c.get("type", ""))
             if ctype == "Domain":
-                domain = {k: v for k, v in c.items() if k not in ("competency_id", "proficiency_level")}
+                # Domain competencies are outside KCM: no id and no proficiency level, so the
+                # level's justification is dropped with it. The delivery mode still applies.
+                domain = {
+                    k: v for k, v in c.items()
+                    if k not in ("competency_id", "proficiency_level", "proficiency_rationale")
+                }
                 domain["delivery_mode"] = self._resolve_delivery_mode(c, metrics)
+                domain["delivery_mode_rationale"] = (c.get("delivery_mode_rationale") or "").strip() or None
                 kept.append(domain)
                 continue
             metrics["bf_total"] += 1
@@ -619,6 +628,7 @@ class RoleMappingService:
                 "proficiency_level": self._resolve_proficiency_level(c, canon, metrics),
                 "proficiency_rationale": (c.get("proficiency_rationale") or "").strip() or None,
                 "delivery_mode": self._resolve_delivery_mode(c, metrics),
+                "delivery_mode_rationale": (c.get("delivery_mode_rationale") or "").strip() or None,
             }
             if c.get("source") is not None:
                 out["source"] = c["source"]
