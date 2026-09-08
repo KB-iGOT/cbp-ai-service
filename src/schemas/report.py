@@ -12,34 +12,46 @@ class CompetencyGrouper:
     }
     
     @classmethod
-    def group_competencies(cls, competencies: List[Dict[str, Any]]) -> Dict[str, List[str]]:
+    def group_competencies(cls, competencies: List[Dict[str, Any]]) -> Dict[str, List[Dict[str, Any]]]:
         """
         Group competencies into behavioral, functional, and domain categories.
-        
+
         Args:
             competencies: List of competency dictionaries
-            
+
         Returns:
-            Dictionary with 'behavioral', 'functional', and 'domain' keys
+            Dictionary with 'behavioral', 'functional', and 'domain' keys, each holding
+            a list of {'label', 'proficiency_level', 'delivery_mode'} dictionaries.
+            Templates render `label` as before; the two extra keys are None for course
+            competencies (iGOT course data carries no proficiency level or delivery mode)
+            and `proficiency_level` is None for Domain, which has no KCM level.
         """
         grouped = {
             'behavioral': [],
             'functional': [],
             'domain': []
         }
-        
+
         if not competencies:
             return grouped
-        
+
         for comp in competencies:
-            label = cls._format_competency_label(comp)
             comp_type = cls._determine_competency_type(comp)
-            
+
             if comp_type:
-                grouped[comp_type].append(label)
-        
+                grouped[comp_type].append(cls._format_competency(comp))
+
         return grouped
-    
+
+    @classmethod
+    def _format_competency(cls, comp: Dict[str, Any]) -> Dict[str, Any]:
+        """Build the template-facing competency: display label plus level and delivery mode."""
+        return {
+            'label': cls._format_competency_label(comp),
+            'proficiency_level': (comp.get('proficiency_level') or '').strip() or None,
+            'delivery_mode': (comp.get('delivery_mode') or '').strip() or None,
+        }
+
     @classmethod
     def _format_competency_label(cls, comp: Dict[str, Any]) -> str:
         """Format competency label from theme and sub-theme"""

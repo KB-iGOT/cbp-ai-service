@@ -260,6 +260,12 @@ Then compare that required behaviour against the `label` and `description` of EA
     - `Offline` — skill-, behaviour-, or practice-based learning that needs live interaction, practice with feedback, role-play, group work, mentoring, or field exposure. Typical of interpersonal and applied sub-themes: verbal communication, negotiation, conflict handling, team leadership, empathy, public/citizen interaction, hands-on field techniques.
 - **Judge the sub-theme first, then the role.** Base the decision primarily on the nature of the `sub_theme` (and its `sub_theme_description`), then adjust for how this designation would realistically use it. Example: "Verbal & Non-Verbal Fluency" is practice-and-feedback based → `Offline`; "Rule of Business (AoB/ToB)" is rule-based knowledge → `Online`.
 
+**Justify every delivery mode — `delivery_mode_rationale` (REQUIRED for EVERY competency, Domain included):**
+- Alongside `delivery_mode`, output a `delivery_mode_rationale`: ONE short sentence (max ~25 words) stating WHY this sub-theme is best learned that way.
+- It MUST say what about the SUB-THEME drives the mode — the kind of learning it needs — not merely restate the mode.
+- ✅ "Fluency improves only through live practice with feedback and observed delivery, which self-paced modules cannot provide." ✅ "Procedural rules and timelines are factual content that transfers reliably through self-paced reading." ❌ "This competency is best delivered offline." ❌ "Offline mode suits this designation."
+- Where the role changed the answer from what the sub-theme alone would suggest, say so in the sentence.
+
 **Domain Competencies**
 - Derived from: ACBP + Web Scraping results + AI knowledge + Ministry/Department sectoral focus.
 Must include references to **schemes, governance, state-level practices, and global benchmarks (UN, OECD, WHO, World Bank, etc.)**.
