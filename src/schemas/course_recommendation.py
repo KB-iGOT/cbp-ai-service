@@ -29,3 +29,13 @@ class RecommendCourseCreate(BaseModel):
     """ Course Recommendation Generate"""
     role_mapping_id: uuid.UUID = Field(..., description="ID of the associated role mapping")
 
+class BulkRecommendationStatusItem(BaseModel):
+    """Status of a single in-progress course recommendation"""
+    role_mapping_id: uuid.UUID = Field(..., description="ID of the associated role mapping")
+    recommendation_id: uuid.UUID = Field(..., description="ID of the recommended course record")
+    status: str = Field(..., description="Current recommendation status")
+
+class BulkRecommendationStatusResponse(BaseModel):
+    """Response schema for bulk course recommendation status"""
+    items: List[BulkRecommendationStatusItem] = Field(default=[], description="In-progress recommendations for the given scope")
+

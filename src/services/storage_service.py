@@ -111,7 +111,6 @@ class GCPStorageService(StorageService):
         
         # Initialize GCP client with specific credentials if provided
         if credentials_path and os.path.exists(credentials_path):
-            logger.info(f"Using GCP Storage credentials from: {credentials_path}")
             self.client = storage.Client.from_service_account_json(credentials_path)
         else:
             logger.info("Using default GCP credentials for storage")

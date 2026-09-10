@@ -1,6 +1,6 @@
 import uuid
 from typing import Any, Dict, Optional, List
-from sqlalchemy import update
+from sqlalchemy import and_, delete, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 
@@ -63,7 +63,31 @@ class CRUDCBPPlan:
         result = await db.execute(stmt)
         await db.commit()
         return result.scalar_one()
-            
+
+    async def delete_by_role_mapping(
+        self,
+        db: AsyncSession,
+        role_mapping_id: uuid.UUID,
+        user_id: uuid.UUID
+    ) -> int:
+        """
+        Delete all CBP plans for a specific role mapping and user.
+
+        Returns:
+            The number of rows deleted.
+        """
+        stmt = delete(CBPPlan).where(
+            and_(
+                CBPPlan.role_mapping_id == role_mapping_id,
+                CBPPlan.user_id == user_id
+            )
+        )
+
+        result = await db.execute(stmt)
+        await db.commit()
+
+        return result.rowcount
+
 
 # Initialize the CRUD utility for use across the application
 crud_cbp_plan = CRUDCBPPlan()

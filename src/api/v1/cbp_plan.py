@@ -1,10 +1,10 @@
 import httpx
 import uuid
 from typing import Any, Dict, List
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Path, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ...schemas.cbp_plan import CBPPlanSaveRequest, CBPPlanSaveResponse, CBPPlanUpdateRequest
+from ...schemas.cbp_plan import CBPPlanDeleteResponse, CBPPlanSaveRequest, CBPPlanSaveResponse, CBPPlanUpdateRequest
 from ...models.user import User
 
 from ...crud.cbp_plan import crud_cbp_plan
@@ -311,7 +311,7 @@ async def update_cbp_plan(
         raise
     except Exception as e:
         logger.error(f"Error updating CBP plan: {str(e)}")
-        db.rollback()
+        await db.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to update CBP plan: {str(e)}"
@@ -401,4 +401,75 @@ async def delete_course_from_cbp_plan(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to delete course from CBP plan: {str(e)}"
+        )
+
+@router.delete("/cbp-plan/role-mapping/{role_mapping_id}", response_model=CBPPlanDeleteResponse)
+async def delete_cbp_plan_by_role_mapping(
+    role_mapping_id: uuid.UUID = Path(..., description="ID of the role mapping"),
+    db: AsyncSession = Depends(get_db_session),
+    current_user: User = Depends(get_current_active_user)
+):
+    """
+    Delete the CBP plan(s) of a role mapping.
+
+    Args:
+        role_mapping_id: UUID of the role mapping
+
+    Returns:
+        Deletion confirmation with the number of deleted CBP plans
+
+    Raises:
+        404: Role mapping not found / not owned by the user, or it has no CBP plan
+        500: Deletion failed
+    """
+    try:
+        logger.info(f"Deleting CBP plan for role mapping: {role_mapping_id} by user: {current_user.user_id}")
+
+        # Validate role mapping exists and belongs to current user
+        role_mapping = await crud_role_mapping.get_by_id_and_user(db, role_mapping_id, current_user.user_id)
+
+        if not role_mapping:
+            logger.warning(f"Role mapping with ID {role_mapping_id} not found or doesn't belong to user {current_user.user_id}")
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Role mapping not found or access denied"
+            )
+
+        # Ensure a CBP plan exists for this role mapping and belongs to the current user
+        existing_cbp_plan = await crud_cbp_plan.get_by_role_mapping(db, role_mapping_id, current_user.user_id)
+
+        if not existing_cbp_plan:
+            logger.warning(f"No CBP plan found for role mapping: {role_mapping_id}")
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"No CBP plan found for role mapping '{role_mapping.designation_name}'. Please create a CBP Plan first."
+            )
+
+        deleted_count = await crud_cbp_plan.delete_by_role_mapping(db, role_mapping_id, current_user.user_id)
+
+        # Nothing left to delete: another request removed the plan in the meantime
+        if deleted_count == 0:
+            logger.info(f"CBP plan for role mapping {role_mapping_id} was already deleted")
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"No CBP plan found for role mapping '{role_mapping.designation_name}'. It may have already been deleted."
+            )
+
+        success_message = f"Successfully deleted CBP plan for role mapping '{role_mapping.designation_name}'"
+        logger.info(f"{success_message}. Deleted records: {deleted_count}")
+
+        return CBPPlanDeleteResponse(
+            message=success_message,
+            role_mapping_id=str(role_mapping_id),
+            deleted_count=deleted_count
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error deleting CBP plan: {str(e)}")
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to delete CBP plan: {str(e)}"
         )

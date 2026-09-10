@@ -72,8 +72,8 @@ class ApprovalRequestItemResponse(BaseModel):
     id: uuid.UUID
     source_role_mapping_id: uuid.UUID
     
-    designation_name: str = Field(..., min_length=1, max_length=255, description="Name of the designation")
-    wing_division_section: str = Field(..., max_length=255, description="Wing/Division/Section name")
+    designation_name: str = Field(..., min_length=1, description="Name of the designation")
+    wing_division_section: str = Field(..., description="Wing/Division/Section name")
     role_responsibilities: List[str] = Field(default=[], description="List of role responsibilities")
     activities: List[str] = Field(default=[], description="List of activities")
     competencies: List[Competency] = Field(default=[], description="List of competencies")
@@ -108,6 +108,7 @@ class ApprovalRequestResponse(BaseModel):
     mdo_id: str
     designation_count: int
     status: ApprovalStatus
+    published_by: Optional[str] = None
     rejected_at: Optional[datetime] = None
     revoked_at: Optional[datetime] = None
     created_at: datetime

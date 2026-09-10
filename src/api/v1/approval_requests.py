@@ -301,6 +301,7 @@ async def get_approval_request(
             mdo_id=approval.mdo_id,
             designation_count=approval.designation_count,
             status=approval.status,
+            published_by=approval.published_by,
             created_at=approval.created_at,
             rejected_at=approval.rejected_at,
             revoked_at=approval.revoked_at,

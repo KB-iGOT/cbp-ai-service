@@ -27,7 +27,7 @@ class DesignationApproval(Base):
     )
     user_id = Column(UUID(as_uuid=True), nullable=False, index=True)
     designation_name = Column(String(255), nullable=False, index=True)
-    wing_division_section = Column(String(255), nullable=False)
+    wing_division_section = Column(Text, nullable=False)
     status = Column(
         String(20),
         default=DesignationApprovalStatus.PENDING.value,
