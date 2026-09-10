@@ -8,9 +8,14 @@ deletes the matching rows from the table.
 Usage:
     python delete_retired_courses_pipeline.py [--identifier-batch-size N]
 
+Configuration is read from the environment; a .env file in the current directory
+or the repo root is loaded automatically (real environment variables take
+precedence over .env values).
+
 Required environment variables:
     DATABASE_URL              Postgres connection string
                                e.g. postgresql://user:pass@host:5432/dbname
+                               (a "postgresql+asyncpg://" prefix is accepted)
     KB_BASE_URL                KB portal base URL
                                e.g. https://portal.igotkarmayogi.gov.in
     KB_AUTH_TOKEN              KB API bearer token (include the "Bearer " prefix)
@@ -28,10 +33,38 @@ Example:
 import argparse
 import asyncio
 import os
+from pathlib import Path
 from typing import List, Set
 
 import asyncpg
 import httpx
+
+
+def _load_dotenv():
+    """Populate os.environ from a .env file (cwd first, then this file's repo root) so the settings
+    below can be read without exporting them by hand. Real environment variables win (never
+    overwritten). Uses python-dotenv if installed, otherwise a minimal hand-parser."""
+    try:
+        from dotenv import load_dotenv
+
+        load_dotenv()  # searches cwd upward
+        load_dotenv(Path(__file__).resolve().parents[1] / ".env")
+    except ImportError:
+        pass
+    for env_path in (Path(".env"), Path(__file__).resolve().parents[1] / ".env"):
+        if not env_path.exists():
+            continue
+        for line in env_path.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, _, val = line.partition("=")
+            key = key.strip()
+            if key and key not in os.environ:
+                os.environ[key] = val.strip().strip('"').strip("'")
+
+
+_load_dotenv()  # so _require_env() below can read values populated from .env
 
 
 def _parse_args():
@@ -52,10 +85,18 @@ def _require_env(name: str) -> str:
     return value
 
 
+def _asyncpg_dsn(url: str) -> str:
+    """asyncpg needs a plain postgresql:// DSN; .env carries the SQLAlchemy
+    'postgresql+asyncpg://' dialect form used by the app."""
+    return url.replace("postgresql+asyncpg://", "postgresql://", 1)
+
+
 _args = _parse_args()
 
 # --- Configuration ---
-DATABASE_URL = _require_env("DATABASE_URL")
+DATABASE_URL = _asyncpg_dsn(_require_env("DATABASE_URL"))
+
+# API Configuration
 KB_BASE_URL = _require_env("KB_BASE_URL")
 KB_AUTH_TOKEN = _require_env("KB_AUTH_TOKEN")
 
