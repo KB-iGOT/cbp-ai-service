@@ -8,13 +8,18 @@ keywords / combined embeddings via Gemini, and upserts them into the
 Usage:
     python course_embedding_pipeline.py [--batch-size N] [--concurrency N]
 
+Configuration is read from the environment; a .env file in the current directory
+or the repo root is loaded automatically (real environment variables take
+precedence over .env values).
+
 Required environment variables:
     DATABASE_URL                    Postgres connection string
                                      e.g. postgresql://user:pass@host:5432/dbname
+                                     (a "postgresql+asyncpg://" prefix is accepted)
     KB_BASE_URL                     KB portal base URL
                                      e.g. https://portal.igotkarmayogi.gov.in
     KB_AUTH_TOKEN                   KB API bearer token (include the "Bearer " prefix)
-    GEMINI_API_KEY                  Gemini API key
+    GOOGLE_API_KEY                  Gemini API key
 
 Optional environment variables (can be overridden by CLI args for batch size/concurrency):
     BATCH_SIZE                       Courses fetched per API page (default: 20)
@@ -23,10 +28,11 @@ Optional environment variables (can be overridden by CLI args for batch size/con
     EMBEDDING_OUTPUT_DIMENSIONALITY  Output embedding dimensionality (default: 1536)
 
 Example:
+    # values come from .env, or export them explicitly:
     export DATABASE_URL="postgresql://user:pass@host:5432/dbname"
     export KB_BASE_URL="https://portal.igotkarmayogi.gov.in"
     export KB_AUTH_TOKEN="Bearer eyJhbGciOi..."
-    export GEMINI_API_KEY="AQ...."
+    export GOOGLE_API_KEY="AQ...."
     python course_embedding_pipeline.py --batch-size 50 --concurrency 10
 """
 
@@ -41,7 +47,35 @@ import re
 import asyncio
 import httpx
 from bs4 import BeautifulSoup
+from pathlib import Path
 from typing import List, Dict, Any, Tuple
+
+
+def _load_dotenv():
+    """Populate os.environ from a .env file (cwd first, then this file's repo root) so the settings
+    below can be read without exporting them by hand. Real environment variables win (never
+    overwritten). Uses python-dotenv if installed, otherwise a minimal hand-parser."""
+    try:
+        from dotenv import load_dotenv
+
+        load_dotenv()  # searches cwd upward
+        load_dotenv(Path(__file__).resolve().parents[1] / ".env")
+    except ImportError:
+        pass
+    for env_path in (Path(".env"), Path(__file__).resolve().parents[1] / ".env"):
+        if not env_path.exists():
+            continue
+        for line in env_path.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, _, val = line.partition("=")
+            key = key.strip()
+            if key and key not in os.environ:
+                os.environ[key] = val.strip().strip('"').strip("'")
+
+
+_load_dotenv()  # so _require_env() below can read values populated from .env
 
 
 def _parse_args():
@@ -66,17 +100,23 @@ def _require_env(name: str) -> str:
     return value
 
 
+def _asyncpg_dsn(url: str) -> str:
+    """asyncpg needs a plain postgresql:// DSN; .env carries the SQLAlchemy
+    'postgresql+asyncpg://' dialect form used by the app."""
+    return url.replace("postgresql+asyncpg://", "postgresql://", 1)
+
+
 _args = _parse_args()
 
 # --- Configuration ---
-DATABASE_URL = _require_env("DATABASE_URL")
+DATABASE_URL = _asyncpg_dsn(_require_env("DATABASE_URL"))
 
 # API Configuration
 KB_BASE_URL = _require_env("KB_BASE_URL")
 KB_AUTH_TOKEN = _require_env("KB_AUTH_TOKEN")
 
 client = genai.Client(
-    api_key=_require_env("GEMINI_API_KEY")
+    api_key=_require_env("GOOGLE_API_KEY")
 )
 
 # The embedding model to use
@@ -270,15 +310,17 @@ async def insert_batch_to_db(pool: asyncpg.Pool, records: List[Dict[str, Any]], 
                     )
                 await conn.execute(
                     """
+                    -- description_tsv is a GENERATED ALWAYS column
+                    -- (to_tsvector('english', COALESCE(description, ''))), so Postgres
+                    -- computes it from `description`; naming it here is rejected.
                     INSERT INTO course_metadata_weightage (
                         id, identifier, name, keywords, competencies_v6,
                         instructions, description, language, difficulty_level,
                         duration, organisation, token_count,
                         description_embedding, keywords_embedding, combined_embedding,
-                        version_key, description_tsv
+                        version_key
                     ) VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7, $8, $9, $10, $11, $12,
-                              $13::vector, $14::vector, $15::vector, $16,
-                              to_tsvector('english', COALESCE($7, '')));
+                              $13::vector, $14::vector, $15::vector, $16);
                     """,
                     record["course_id"], identifier, record["name"],
                     record["keywords_pg"], record["competencies_v6"],
@@ -327,7 +369,9 @@ async def create_table_and_extension(pool: asyncpg.Pool):
                 combined_embedding vector({EMBEDDING_DIMENSION}),
                 duration text COLLATE pg_catalog."default",
                 version_key text COLLATE pg_catalog."default",
-                description_tsv tsvector
+                description_tsv tsvector GENERATED ALWAYS AS (
+                    to_tsvector('english'::regconfig, COALESCE(description, ''::text))
+                ) STORED
             );
         """)
     print("Table course_metadata_weightage is ready.")
@@ -357,11 +401,8 @@ async def create_text_search_indexes(pool: asyncpg.Pool):
             ON public.course_metadata_weightage
             USING gin (competencies_v6);
         """)
-        await conn.execute("""
-            UPDATE public.course_metadata_weightage
-            SET description_tsv = to_tsvector('english', COALESCE(description, ''))
-            WHERE description_tsv IS NULL;
-        """)
+        # No backfill needed: description_tsv is GENERATED ALWAYS from `description`,
+        # so Postgres keeps it current and rejects any explicit write to it.
         await conn.execute("""
             CREATE INDEX IF NOT EXISTS course_metadata_weightage_description_tsv_idx
             ON public.course_metadata_weightage
