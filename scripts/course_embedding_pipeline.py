@@ -116,7 +116,7 @@ KB_BASE_URL = _require_env("KB_BASE_URL")
 KB_AUTH_TOKEN = _require_env("KB_AUTH_TOKEN")
 
 client = genai.Client(
-    api_key=_require_env("GOOGLE_API_KEY")
+    api_key=_require_env("GOOGLE_API_KEY"), vertexai=False
 )
 
 # The embedding model to use
