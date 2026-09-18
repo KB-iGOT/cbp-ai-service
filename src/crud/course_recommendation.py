@@ -218,7 +218,7 @@ class CRUDRecommendedCourse:
     ) -> List[Dict[str, Any]]:
         """
         Hybrid weighted vector search across three embedding columns in
-        course_metadata_weightage.
+        course_metadata_weightage_v2.
 
         Weightage: keywords 40%, description 20%, combined 40%.
         Returns rows sorted by weighted_score DESC.
@@ -232,7 +232,7 @@ class CRUDRecommendedCourse:
                     0.20 * (1.0 - (description_embedding <=> '{description_emb}')) +
                     0.40 * (1.0 - (combined_embedding    <=> '{combined_emb}'))
                 ) AS weighted_score
-            FROM public.course_metadata_weightage
+            FROM public.course_metadata_weightage_v2
             ORDER BY weighted_score DESC
             LIMIT {limit};
         """)
@@ -246,7 +246,7 @@ class CRUDRecommendedCourse:
         limit: int = 40,
     ) -> List[Dict[str, Any]]:
         """
-        Full-text + array keyword search on course_metadata_weightage.
+        Full-text + array keyword search on course_metadata_weightage_v2.
 
         Strategy (OR-combined, ranked by match count):
           1. keywords[] array overlap  — GIN index hit
@@ -288,7 +288,7 @@ class CRUDRecommendedCourse:
                     CASE WHEN ({name_ilike})     THEN 1 ELSE 0 END +
                     CASE WHEN ({fts_parts})       THEN 1 ELSE 0 END
                 )::float AS keyword_score
-            FROM public.course_metadata_weightage
+            FROM public.course_metadata_weightage_v2
             WHERE
                 ({array_overlaps})
                 OR ({name_ilike})
@@ -340,7 +340,7 @@ class CRUDRecommendedCourse:
                 identifier,
                 name,
                 (1.0 - (combined_embedding <=> '{combined_emb}')) AS score
-            FROM public.course_metadata_weightage
+            FROM public.course_metadata_weightage_v2
             WHERE EXISTS (
                 SELECT 1
                 FROM jsonb_array_elements(competencies_v6) AS comp
@@ -353,11 +353,94 @@ class CRUDRecommendedCourse:
             result = await db.execute(sql_query)
             return result.all()
 
+    async def fetch_exact_level_competency_matches(
+        self,
+        combined_emb: List[float],
+        competencies: List[Dict[str, Any]],
+        per_competency_limit: int = 5,
+    ) -> Dict[str, List[Dict[str, Any]]]:
+        """
+        Find courses that match a designation competency on ALL THREE attributes:
+        course_level == proficiency_level, competencyThemeName == theme, and
+        competencySubThemeName == sub_theme.
+
+        These are the mandatory exact matches: a course satisfying all three MUST reach
+        the recommendation list regardless of its semantic similarity score. Matching is
+        case- and whitespace-insensitive, but is otherwise exact — a match on level alone,
+        theme alone, or sub-theme alone does not qualify.
+
+        Only Behavioural/Functional competencies participate: Domain competencies carry no
+        proficiency level, so the three-attribute rule cannot apply to them.
+
+        Args:
+            combined_emb: Query vector, used only to RANK within each competency's matches
+                          so the per-competency cap keeps the most relevant ones.
+            competencies: The designation's competency dicts (type/theme/sub_theme/
+                          proficiency_level).
+            per_competency_limit: Max courses kept per competency. A single competency can
+                          have 70+ exact matches; capping per competency keeps every
+                          competency represented instead of letting one flood the list.
+
+        Returns:
+            {"<Theme> - <Sub-theme> (<Level>)": [{identifier, name, score}, ...]} — keyed so
+            the prompt and the post-LLM check can say WHICH requirement forced each course.
+        """
+        matches: Dict[str, List[Dict[str, Any]]] = {}
+        if not competencies:
+            return matches
+
+        sql_query = text("""
+            SELECT identifier, name,
+                   (1.0 - (combined_embedding <=> CAST(:emb AS vector))) AS score
+            FROM public.course_metadata_weightage_v2
+            WHERE lower(btrim(course_level)) = lower(btrim(:level))
+              AND EXISTS (
+                SELECT 1
+                FROM jsonb_array_elements(competencies_v6) AS comp
+                WHERE lower(btrim(comp->>'competencyThemeName')) = lower(btrim(:theme))
+                  AND lower(btrim(comp->>'competencySubThemeName')) = lower(btrim(:sub_theme))
+              )
+            ORDER BY score DESC
+            LIMIT :lim;
+        """)
+
+        async with sessionmanager.session() as db:
+            for competency in competencies:
+                ctype = (competency.get("type") or "").strip().lower()
+                if not ctype.startswith(("behav", "func")):
+                    continue  # Domain has no proficiency level — rule does not apply.
+
+                level = (competency.get("proficiency_level") or "").strip()
+                theme = (competency.get("theme") or competency.get("competencyThemeName") or "").strip()
+                sub_theme = (competency.get("sub_theme") or competency.get("competencySubThemeName") or "").strip()
+                if not (level and theme and sub_theme):
+                    continue  # All three attributes are required for an exact match.
+
+                result = await db.execute(
+                    sql_query,
+                    {
+                        "emb": str(combined_emb),
+                        "level": level,
+                        "theme": theme,
+                        "sub_theme": sub_theme,
+                        "lim": per_competency_limit,
+                    },
+                )
+                rows = result.all()
+                if rows:
+                    key = f"{theme} - {sub_theme} ({level})"
+                    matches[key] = [
+                        {"identifier": r.identifier, "name": r.name, "score": float(r.score)}
+                        for r in rows
+                    ]
+        return matches
+
     async def fetch_course_metadata(self, identifiers_str: str) -> Dict[str, Dict[str, Any]]:
         """Fetches competencies, duration, and organisation for a list of course identifiers."""
         competencies_query = text(f"""
-            SELECT identifier, competencies_v6, duration, organisation, keywords, description, name
-            FROM public.course_metadata_weightage
+            SELECT identifier, competencies_v6, duration, organisation, keywords, description, name,
+                   course_level
+            FROM public.course_metadata_weightage_v2
             WHERE identifier IN ({identifiers_str});
             """)
         async with sessionmanager.session() as db:

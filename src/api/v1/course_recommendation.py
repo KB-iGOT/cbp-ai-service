@@ -435,7 +435,15 @@ async def process_recommendation_task(
         func_comp_emb  = func_comp_emb_list[0].values if func_comp_emb_list else None
         behav_comp_emb = behav_comp_emb_list[0].values if behav_comp_emb_list else None
 
-        # 4. Vector search + Postgres keyword search + competency-typed searches in parallel
+        # 4. Vector search + Postgres keyword search + competency-typed searches in parallel.
+        #    Alongside these, fetch the mandatory exact matches: courses matching a
+        #    Behavioural/Functional competency on course_level + theme + sub_theme together.
+        #    These are guaranteed inclusions, independent of similarity ranking.
+        exact_match_task = crud_recommended_course.fetch_exact_level_competency_matches(
+            combined_emb=comb_emb,
+            competencies=raw_competencies or [],
+            per_competency_limit=settings.COURSE_EXACT_MATCH_PER_COMPETENCY,
+        )
         vector_results, kw_results, func_results, behav_results = await asyncio.gather(
             crud_recommended_course.fetch_hybrid_search_courses(
                 keyword_emb=kw_emb,
@@ -463,6 +471,19 @@ async def process_recommendation_task(
             ),
         )
 
+        exact_matches = await exact_match_task
+        # identifier -> the competency requirement(s) it exactly matches, for the prompt
+        # and the post-LLM validation.
+        exact_match_reasons: Dict[str, List[str]] = {}
+        for requirement, courses in exact_matches.items():
+            for course in courses:
+                exact_match_reasons.setdefault(course["identifier"], []).append(requirement)
+        if exact_match_reasons:
+            logger.info(
+                f"Exact level+theme+sub-theme matches: {len(exact_match_reasons)} courses "
+                f"across {len(exact_matches)} competency requirements"
+            )
+
         # 5. Merge & deduplicate: vector score normalised to [0,1]; keyword hits get a
         #    bonus score of 0.15 (max keyword_score=3 → normalise to 0-0.15). Functional and
         #    behavioural hits get a flat bonus of 0.10 to ensure they surface in the final pool.
@@ -482,6 +503,20 @@ async def process_recommendation_task(
                 seen[identifier]["distance"] = max(seen[identifier]["distance"], float(score)) + 0.10
             else:
                 seen[identifier] = {"identifier": identifier, "name": name, "distance": float(score) + 0.10}
+
+        # Exact matches enter the pool unconditionally and are boosted above the rest, so
+        # they can never be squeezed out of the candidate list by similarity ranking.
+        for requirement, courses in exact_matches.items():
+            for course in courses:
+                identifier = course["identifier"]
+                if identifier in seen:
+                    seen[identifier]["distance"] = max(seen[identifier]["distance"], course["score"]) + 1.0
+                else:
+                    seen[identifier] = {
+                        "identifier": identifier,
+                        "name": course["name"],
+                        "distance": course["score"] + 1.0,
+                    }
 
         all_candidates = sorted(seen.values(), key=lambda c: c["distance"], reverse=True)
         logger.info(
@@ -513,11 +548,21 @@ async def process_recommendation_task(
             if is_own_org == "NO" and department_name and org_info and department_name.lower() in org_info.lower():
                 is_own_org = "YES"
 
+            # Courses matching a competency on level + theme + sub-theme together are
+            # mandatory inclusions; flag them inline so the LLM can cite the reason.
+            exact_for_course = exact_match_reasons.get(c["identifier"])
+            exact_flag = (
+                f"EXACT MATCH (MUST INCLUDE) on {'; '.join(exact_for_course)} | "
+                if exact_for_course else ""
+            )
+
             candidate_lines.append(
                 f"Course ID: {c['identifier']} | "
+                f"{exact_flag}"
                 f"Course Name: {c['name']} | "
                 f"Course Description: {getattr(meta, 'description', None)} | "
                 f"Course Keywords: {getattr(meta, 'keywords', None)} | "
+                f"Course Level: {getattr(meta, 'course_level', None) or 'N/A'} | "
                 f"Similarity: {c['distance']:.4f} | "
                 f"Organisation: {org_info or 'N/A'} | "
                 f"Own Org: {is_own_org} | "
@@ -559,6 +604,7 @@ async def process_recommendation_task(
             if meta:
                 course["course"] = meta.name
                 course["competencies"] = meta.competencies_v6
+                course["course_level"] = meta.course_level
                 course["duration"] = meta.duration
                 _org = meta.organisation
                 course["organisation"] = (
@@ -570,6 +616,42 @@ async def process_recommendation_task(
             course for course in final_filtered_courses
             if course.get("relevancy", 0) >= settings.COURSE_RECOMMENDATION_MIN_RELEVANCY
         ]
+
+        # Final validation for the exact-match guardrail: an exact level+theme+sub_theme
+        # match must never be dropped — not by the LLM's selection, and not by the relevancy
+        # floor above. Re-add any that are missing so the guarantee holds deterministically
+        # rather than depending on the model following the instruction.
+        if exact_match_reasons:
+            present = {course.get("identifier") for course in final_filtered_courses}
+            missing = [i for i in exact_match_reasons if i not in present]
+            if missing:
+                restored_rows = await crud_recommended_course.fetch_course_metadata(
+                    ", ".join(f"'{i}'" for i in missing)
+                )
+                for meta in restored_rows:
+                    _org = meta.organisation
+                    final_filtered_courses.append({
+                        "identifier": meta.identifier,
+                        "course": meta.name,
+                        "competencies": meta.competencies_v6,
+                        "course_level": meta.course_level,
+                        "duration": meta.duration,
+                        "organisation": (
+                            ", ".join(str(o) for o in _org if o) if isinstance(_org, list) else (_org or None)
+                        ),
+                        "is_public": False,
+                        "relevancy": settings.COURSE_RECOMMENDATION_MIN_RELEVANCY,
+                        "reason": (
+                            "Recommended because of the exact match on proficiency level, competency theme "
+                            f"and sub-theme with the designation's competency requirement: "
+                            f"{'; '.join(exact_match_reasons[meta.identifier])}."
+                        ),
+                    })
+                logger.info(
+                    f"Exact-match validation restored {len(restored_rows)} course(s) dropped by "
+                    f"LLM selection or the relevancy threshold"
+                )
+
         final_filtered_courses.sort(key=lambda course: course.get("relevancy", 0), reverse=True)
 
         # 11. Persist

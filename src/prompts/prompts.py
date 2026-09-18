@@ -833,6 +833,22 @@ Analyze the candidate courses provided, select the best 50-60 courses and provid
 
 ## Selection Rules
 
+### 0. Mandatory Exact-Match Guardrail — Proficiency Level + Competency Theme + Sub-theme
+
+Some candidate courses are marked `EXACT MATCH (MUST INCLUDE) on <Theme> - <Sub-theme> (<Level>)`. This flag means the course matches a competency mapped to this designation on **all three** attributes simultaneously — proficiency level, competency theme and competency sub-theme.
+
+- Every course carrying this flag **MUST** be included in your output. This is not a preference; it is a hard requirement.
+- Never omit, exclude, or assign a low relevancy percentage to a flagged course because of its semantic similarity score, title or description similarity, ranking position, difficulty, provider, or any other secondary criterion.
+- This rule is applied **before** all scoring and ranking rules below and **takes precedence over** relevancy thresholds, the 50-60 course target, and any mix ratio.
+- Where several courses carry the flag for the same requirement, include all of them.
+- For every flagged course, the `rationale` MUST explicitly state that it was recommended because of the exact match on proficiency level, competency theme and sub-theme with the designation's competency requirement, naming that requirement.
+- **Final validation:** before returning your answer, re-scan the candidate list for every `EXACT MATCH (MUST INCLUDE)` course and confirm each one appears in your output. If any is missing, add it.
+- A match on level alone, theme alone, or sub-theme alone is NOT an exact match and earns no such guarantee — only the flag above does.
+
+Unflagged courses are selected normally, using the rules below.
+
+---
+
 ### 1. Contextual Role (Designation) Analysis (Mandatory)
 
 Before evaluating any course, first analyse the complete Role (Designation) profile to understand the designation's purpose, expected responsibilities, decision-making authority, operational scope, nature of work, and expected outcomes. Identify the Domain, Functional and Behavioral learning needs based on the role context before ranking courses.

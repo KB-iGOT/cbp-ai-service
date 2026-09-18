@@ -168,6 +168,16 @@ class Settings(BaseSettings):
 
     COURSE_RECOMMENDATION_MIN_RELEVANCY: int = 80
 
+    COURSE_EXACT_MATCH_PER_COMPETENCY: int = Field(
+        default=5,
+        description=(
+            "Max courses kept per competency when a course matches it exactly on proficiency "
+            "level + theme + sub-theme. These are mandatory inclusions; a single competency can "
+            "have 70+ exact matches, so this cap keeps every competency represented instead of "
+            "letting one flood the recommendation list."
+        ),
+    )
+
     # Notification service settings
     ENABLE_EMAIL_NOTIFICATION: bool = Field(
         default=False,
