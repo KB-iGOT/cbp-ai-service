@@ -176,7 +176,7 @@ center_json_output = {
                 "proficiency_level": "Operational | Tactical | Strategic (REQUIRED for Behavioural & Functional; omit for Domain)",
                 "proficiency_rationale": "one short sentence citing the R&R/Activity that justifies the level (REQUIRED for Behavioural & Functional; omit for Domain)",
                 "delivery_mode": "Online | Offline",
-                "delivery_mode_rationale": "one short sentence on why this sub-theme is best learned that way (REQUIRED for every competency, including Domain)"
+                "delivery_mode_rationale": "one short sentence naming the deciding factor — learning requirement, level of application, cadre scale, or institutional capability (REQUIRED for every competency, including Domain)"
             }
         ],
         "source": ["ACBP", "Work Allocation Order", "AI Suggested"]
@@ -199,7 +199,7 @@ state_json_output = {
                 "proficiency_level": "Operational | Tactical | Strategic (REQUIRED for Behavioural & Functional; omit for Domain)",
                 "proficiency_rationale": "one short sentence citing the R&R/Activity that justifies the level (REQUIRED for Behavioural & Functional; omit for Domain)",
                 "delivery_mode": "Online | Offline",
-                "delivery_mode_rationale": "one short sentence on why this sub-theme is best learned that way (REQUIRED for every competency, including Domain)"
+                "delivery_mode_rationale": "one short sentence naming the deciding factor — learning requirement, level of application, cadre scale, or institutional capability (REQUIRED for every competency, including Domain)"
             }
         ],
         "source": ["Work Allocation Order", "ACBP", "Additional supporting document", "AI Suggested"]
@@ -226,8 +226,8 @@ class FRACCompetency(BaseModel):
     sub_theme: str = Field(description="Competency sub theme")
     proficiency_level: Optional[str] = Field(default=None, description="The single best-fit proficiency level for THIS designation, selected from the competency's proficiency_levels (Operational, Tactical or Strategic). REQUIRED for Behavioural & Functional; omit for Domain.")
     proficiency_rationale: Optional[str] = Field(default=None, description="One short sentence naming the specific Role/Responsibility or Activity of this designation that justifies the chosen proficiency_level. REQUIRED for Behavioural & Functional; omit for Domain.")
-    delivery_mode: Literal["Online", "Offline"] = Field(description="Whether this competency's sub-theme is best learned Online (knowledge-based, self-paced) or Offline (practice/interaction-based) for this designation")
-    delivery_mode_rationale: Optional[str] = Field(default=None, description="One short sentence stating what about this sub-theme makes it best learned in the chosen delivery_mode. REQUIRED for every competency, including Domain.")
+    delivery_mode: Literal["Online", "Offline"] = Field(description="Whether this competency is best learned Online (self-paced digital content) or Offline (live facilitation, practice, feedback, field exposure), judged from the actual learning requirement, the level of application in this role, cadre scale and delivery feasibility, and institutional capability")
+    delivery_mode_rationale: Optional[str] = Field(default=None, description="One short sentence justifying the chosen delivery_mode by naming the deciding factor: the actual learning requirement, the level of application in this role, cadre scale and delivery feasibility, or institutional capability. Seniority alone or the mere existence of a training institution is not sufficient. REQUIRED for every competency, including Domain.")
     
 class FRACRoleMapping(BaseModel):
     designation_name: str = Field(description="Official designation name")
