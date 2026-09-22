@@ -22,7 +22,7 @@ class Competency(BaseModel):
     competency_id: Optional[str] = Field(None, description="KCM competency id (e.g. BEH-007); absent for Domain competencies")
     proficiency_level: Optional[str] = Field(None, description="Best-fit proficiency level for this designation (Operational, Tactical, Strategic); absent for Domain competencies")
     proficiency_rationale: Optional[str] = Field(None, description="Short justification citing the role responsibility or activity that determined the proficiency level; absent for Domain competencies")
-    delivery_mode: Optional[str] = Field(None, description="How this competency is best learned (Online or Offline)")
+    delivery_mode: Optional[str] = Field(None, description="How this competency is best learned (Online, Offline, or Blended; Blended applies to Functional competencies only)")
     delivery_mode_rationale: Optional[str] = Field(None, description="Short justification for the chosen delivery mode, naming the deciding factor (learning requirement, level of application, cadre scale, or institutional capability)")
 
 class RoleMappingBase(BaseModel):

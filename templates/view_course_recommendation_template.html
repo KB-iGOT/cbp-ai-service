@@ -11,6 +11,27 @@
     rel="stylesheet">
 
   <style>
+    /* Course proficiency level pill, shown beside the Course pill on each course card */
+    .course-level-pill {
+      /* Sits in .course-header, a flex row whose default align-items:stretch would blow the
+         pill up to the full row height. align-self + a fixed height match the Course pill. */
+      align-self: center;
+      display: inline-flex;
+      align-items: center;
+      height: 24px;
+      box-sizing: border-box;
+      padding: 0 12px;
+      border-radius: 9999px;
+      font-size: 12px;
+      font-weight: 600;
+      line-height: 1;
+      white-space: nowrap;
+      border: 1px solid transparent;
+    }
+    .course-level-operational { background: #E8F0FE; border-color: #A8C4F0; color: #1B4CA1; }
+    .course-level-tactical    { background: #4C7FE0; border-color: #4C7FE0; color: #ffffff; }
+    .course-level-strategic   { background: #1B3A82; border-color: #1B3A82; color: #ffffff; }
+
     * {
       box-sizing: border-box;
       word-break: break-word;
@@ -305,6 +326,7 @@
           <div class="course-header">
             <div class="course-pill"><img
                 src="https://portal.igotkarmayogi.gov.in/training-pla-ai/assets/icons/course.svg"> Course</div>
+            {% if course.course_level %}<div class="course-level-pill course-level-{{ course.course_level | lower }}">{{ course.course_level }}</div>{% endif %}
             <div>
               <div class="ai-green">
                 {% if course.is_public %}
