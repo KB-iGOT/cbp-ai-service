@@ -253,176 +253,58 @@ Then compare that required behaviour against the `label` and `description` of EA
 - If you cannot write such a sentence from the R&R and Activities, you have chosen the wrong level (or the wrong competency) — reconsider before outputting.
 - (Domain competencies have no proficiency level — omit `proficiency_rationale` for Domain.)
 
-**2.3. Delivery Mode Guardrail — State Department Capacity-Building Plans**
-- For every competency, determine `delivery_mode` as **`Online`, `Offline`, or `Blended`** based on the **competency requirements, the role's Roles & Responsibilities (R&R), role Activities, role context, competency type, scale of the target cadre and the delivery responsibilities of the State department and its attached training institutions**.
-- **Before assigning any delivery mode, always analyse both the competency itself and how that competency is applied in the specific role by reading the role's R&R and Activities. Do not assign delivery mode based on the competency name alone.**
-- These Capacity Building Plans are being prepared for various State departments. Their attached training institutions — including ATIs, departmental training institutes and other State-level academies — are responsible for delivering tactical and operational training to large cadres, including frontline functionaries. Therefore, institutional mandate and mass-scale delivery capability must be treated as important contextual factors, while ensuring that the final decision remains learning-need based.
+**2.3. Delivery-Mode Guardrail**
 
-**Consider the following factors together**
+For every competency, assign `delivery_mode` as exactly one of: Online, Offline, Blended.
 
-**1. Competency Nature and Requirement**
-Determine whether the competency is primarily:
-- Knowledge, concept, policy, scheme, process or SOP based; or
-- Practical application, behavioural development, interpersonal engagement, field exposure or hands-on practice based.
+**STEP 1 — Competency type decides which modes are allowed (apply this FIRST)**
 
-Assess what a learner actually needs to **know, understand, practise and demonstrate** to develop the competency.
+Copy the competency's `type` exactly as given in the input dataset. Do not re-classify it.
 
-**2. Role, R&R and Activities — Mandatory Assessment**
-**Always read and analyse the role's R&R and Activities before determining the delivery mode.**
+| type        | Allowed delivery_mode       |
+|-------------|-----------------------------|
+| Functional  | Online / Offline / Blended  |
+| Behavioural | Online / Offline ONLY       |
+| Domain      | Online / Offline ONLY       |
 
-Assess:
-- What the role is responsible for performing.
-- What activities the role performs in practice.
-- Where and how the competency will be used in the role.
-- Whether the competency is applied through execution, analysis, planning, supervision, coordination, decision-making, stakeholder engagement, service delivery or field implementation.
-- Whether the role requires the learner to demonstrate, practise, apply or repeatedly perform the competency.
-- Whether the competency is primarily required as knowledge or must be demonstrated through practical or behavioural application.
+- Behavioural → never Blended.
+- Domain → never Blended.
+- Only Functional may be Blended.
 
-**The delivery mode must reflect the actual learning need created by the combination of the competency and the role's R&R and Activities.**
+For Behavioural and Domain competencies, choose only between Online and Offline. Do not consider Blended at all.
 
-Do not determine delivery mode from the competency name, theme or sub-theme alone.
+**STEP 2 — Analyse the competency together with the role**
 
-**3. Role Level and Work Context**
-Consider the designation, seniority, cadre, functional responsibilities, decision-making authority and operating environment.
+Never decide delivery mode from the competency name, theme or sub-theme alone. Always read the role's Roles & Responsibilities (R&R) and Activities and assess:
+- What the role does in practice, and where and how this competency is used in it.
+- Whether the competency is mainly knowledge (policy, scheme, process, SOP) or must be practised or demonstrated (hands-on, behavioural, interpersonal, field, supervision, stakeholder engagement).
+- Role level and work context (designation, cadre, decision authority, operating environment). Do not decide from seniority alone.
+- Level of application:
+  - Operational: execution, SOPs, systems/equipment, citizen interaction, frontline service.
+  - Tactical: analysis, supervision, coordination, programme management.
+  - Strategic: policy, institutional leadership, long-term planning.
+  Do not automatically give Online to operational or tactical roles, or Offline to senior roles.
 
-Do not determine the delivery mode based on seniority alone.
+**STEP 3 — Choose the mode**
 
-**4. Level of Competency Application**
-- **Operational competencies** generally relate to execution, application of SOPs, use of systems or equipment, citizen interaction and frontline service delivery.
-- **Tactical competencies** generally involve analysis, supervision, coordination, problem-solving, programme management and translation of policy into implementation.
-- **Strategic competencies** generally involve policy formulation, institutional leadership, high-level decision-making and long-term planning.
+**Online** — the competency can be developed effectively through digital content (readings, videos, case material, digital simulations, online assessments, policy/scheme/SOP learning), and the R&R and Activities do not need substantial live or practical practice.
 
-Do not automatically assign `Online` to operational or tactical competencies. Where the **R&R and Activities show that the competency must be practised, demonstrated, simulated, supervised or applied in the field**, `Offline` or, where permitted, `Blended` may be appropriate.
+**Offline** — the competency and the R&R/Activities show that learning needs live facilitation, hands-on practice, role-play, simulation, coaching, mentoring, equipment/lab use, supervised application, field exposure or live feedback.
 
-**Actual Learning Requirement**
+**Blended (Functional ONLY)** — the R&R and Activities show that BOTH an Online knowledge component AND an Offline practical component are materially required. Do not assign Blended just because multiple formats are possible. Do not make every Functional competency Blended.
 
-**Assign `Online` when:** the competency can be effectively developed through:
-- Self-paced digital content
-- Readings
-- Videos
-- Demonstrations
-- Case material
-- Digital simulations
-- Online assessments
-- Policy, scheme, process or SOP-based learning
+Tie-breaker for Behavioural and Domain: if both components seem useful, choose Offline when live practice, feedback or behavioural rehearsal is essential; otherwise choose Online.
 
-and the role's **R&R and Activities do not require substantial live, supervised or physical practice** to develop the competency.
+**STEP 4 — State delivery context (supporting factors only)**
 
-**Assign `Offline` when:** the competency and the role's **R&R and Activities** show that effective learning primarily requires:
-- Live facilitation
-- Face-to-face discussion
-- Hands-on practice
-- Demonstration
-- Simulation
-- Role-play
-- Coaching
-- Mentoring
-- Laboratory or equipment use
-- Peer learning
-- Supervised application
-- Field-based exposure
-- Live feedback
-- Experiential learning
+- State training institutions (ATIs, departmental institutes, State academies) deliver tactical and operational training at scale through batches, decentralised centres, master trainers, train-the-trainer models and repeated cohorts. This makes Offline feasible where it is needed, but never assign Offline or Blended just because an institution exists.
+- One designation/row represents a whole cadre across the State, not one learner. Large volume is not an automatic reason for Online.
+- Prefer Online for high-volume foundational knowledge, standardised processes, policy awareness, prerequisites and refreshers.
 
-**Blended Learning — Strictly for Functional Competencies**
-**`Blended` delivery is permitted ONLY for Functional competencies.**
+**Output rules**
 
-A Functional competency should be assigned **`Blended`** when analysis of the **competency + role R&R + role Activities** shows that both Online and Offline components are materially required to develop the competency effectively.
-
-Typical Blended Functional competencies have:
-- **Online component:** Knowledge, concepts, policies, schemes, procedures, rules, frameworks, technical concepts, system knowledge or SOP understanding.
-- **Offline component:** Practical application, demonstration, hands-on practice, supervised application, simulation, contextual problem-solving, coaching, feedback or field application.
-
-Both components must contribute meaningfully to the competency required by the role.
-
-**Functional competency decision rule** — for a **Functional** competency:
-- If the competency and role R&R/Activities show that Online learning is sufficient → **`Online`**
-- If the competency and role R&R/Activities show that Offline/practical learning is primarily required → **`Offline`**
-- If the competency and role R&R/Activities show that both Online knowledge development **and** Offline practical/application-based learning are substantively required → **`Blended`**
-
-**Do not assign `Blended` merely because a Functional competency can be delivered using multiple formats. The role's R&R and Activities must demonstrate the need for both learning components.**
-
-**Strict Competency-Type Rules**
-- **Functional** — allowed delivery modes: **`Online` / `Offline` / `Blended`**. Functional competencies are the **only competency type eligible for Blended delivery**.
-- **Behavioural** — allowed delivery modes: **`Online` / `Offline` only**. **Never assign `Blended` to Behavioural competencies.** Select `Online` or `Offline` based on the actual behavioural learning requirement and the role's R&R and Activities.
-- **Domain** — allowed delivery modes: **`Online` / `Offline` only**. **Never assign `Blended` to Domain competencies.** Select `Online` or `Offline` based on the actual domain learning requirement and the role's R&R and Activities.
-
-**Mandatory Competency-Type Rule**
-
-| Competency Type | Allowed Delivery Mode |
-| --------------- | ------------------------------ |
-| **Functional**  | **Online / Offline / Blended** |
-| **Behavioural** | **Online / Offline**           |
-| **Domain**      | **Online / Offline**           |
-
-**Critical rule:** Before assigning `Blended`, first identify the competency type.
-- If **Functional** → `Blended` may be considered after analysing R&R and Activities.
-- If **Behavioural** → `Blended` is prohibited.
-- If **Domain** → `Blended` is prohibited.
-
-If the competency is Behavioural or Domain and both Online and Offline approaches appear useful, select **either `Online` or `Offline`** based on the primary and most critical learning requirement.
-
-**Institutional Responsibility and Capability**
-State training institutions are expected to deliver tactical and operational training at scale. Their availability should therefore strengthen the feasibility of `Offline` delivery where live or practical learning is required and, for eligible Functional competencies, the Offline component of `Blended` learning.
-
-However, **`Offline` or `Blended` must not be assigned merely because an ATI or departmental training institution exists.**
-
-The institutional mandate is a supporting factor; the actual competency requirement and the role's R&R and Activities remain the primary decision factors.
-
-**Scale and Delivery Feasibility**
-Assess the total target cadre across the department or State, rather than treating each designation or data row as representing only one learner.
-
-Large-scale `Offline` or `Blended` training may be feasible through:
-- Batch-based delivery
-- Decentralised training centres
-- Master trainers
-- Train-the-trainer models
-- Repeated cohorts
-
-Do not treat large learner volume as an automatic reason for `Online` delivery.
-
-Prefer `Online` for high-volume foundational knowledge, standardised processes, policy awareness, prerequisites and refresher learning where live intervention does not add substantial value.
-
-For eligible Functional competencies, consider whether Online learning can provide the common knowledge foundation before Offline sessions are used for practical application, contextual problem-solving, practice or feedback.
-
-**Primary Decision Principle**
-The delivery mode must be based on **the competency + the role's R&R + the role's Activities**.
-
-Do not assign a delivery mode based only on:
-- Competency name
-- Competency theme or sub-theme
-- Designation or seniority
-- Competency level
-- Learner volume
-- Availability of a training institution
-
-Use the following principle:
-- **`Online`** → The competency can be effectively developed digitally, and the role's R&R and Activities do not require substantial live/practical intervention.
-- **`Offline`** → The competency and the role's R&R and Activities show that live, practical, experiential, supervised or field-based learning is essential.
-- **`Blended`** → The competency is **Functional**, and the role's R&R and Activities show that both Online knowledge development and Offline practical/application-based learning are materially required.
-
-**Decision Flow**
-**Competency Type → Competency Nature → Read Role R&R → Read Role Activities → Determine How the Competency Is Applied in the Role → Role Level and Work Context → Actual Learning Requirement → Blended Eligibility Check → Target-Cadre Scale → Training-Institution Mandate and Capability → Final `delivery_mode`**
-
-⚠️ **Mandatory Rules**
-- Delivery mode must be learning-need based and operationally feasible.
-- **Always analyse the competency together with the role's R&R and Activities before assigning delivery mode.**
-- **Never assign delivery mode based on the competency name alone.**
-- `delivery_mode` must be exactly one of: **`Online`, `Offline`, `Blended`**.
-- **`Blended` is strictly permitted only for Functional competencies.**
-- Never assign `Blended` to Behavioural competencies.
-- Never assign `Blended` to Domain competencies.
-- For Functional competencies, assign `Blended` only when both Online and Offline components are substantively required based on the competency, R&R and Activities.
-- Do not classify every Functional competency as `Blended`.
-- Do not assign `Offline` automatically to senior or strategic roles.
-- Do not assign `Online` automatically to operational, tactical, junior or frontline roles.
-- Do not assign `Offline` or `Blended` solely because an ATI or departmental training institution is available.
-- Do not assume that one designation or one data row represents only one learner; consider the likely cadre size across the State.
-- Do not treat large learner volume as an automatic reason for `Online` delivery.
-- Prefer `Online` where standardised knowledge can be developed effectively at scale through digital learning.
-- Assign `Offline` where practical application, behavioural development, contextual problem-solving, live feedback or field-based learning is essential.
-- Recognise the responsibility of State training institutions to deliver tactical and operational training at scale through structured cohorts.
-- The final decision must reflect **how the competency needs to be developed for the specific role, based on its R&R and Activities, within the State's institutional and delivery context.**
+- In every competency object, write `type` BEFORE `delivery_mode`.
+- `delivery_mode` must be exactly: Online, Offline or Blended. No other value.
 
 **Justify every delivery mode — `delivery_mode_rationale` (REQUIRED for EVERY competency, Domain included):**
 - Alongside `delivery_mode`, output a `delivery_mode_rationale`: ONE short sentence (max ~30 words) stating WHY that mode is right for this competency and this role.
