@@ -219,7 +219,7 @@ async def update_user(
         updated_user = await crud_user.update(db, user.user_id, user_update)
         
         # Prepare response with updated related data
-        # updated_user = await crud_user.get_by_id_with_relations(db, user_id)
+        updated_user = await crud_user.get_by_id_with_relations(db, user_id)
         
         response = await _prepare_user_response(updated_user)
         

@@ -12,7 +12,7 @@ reference an existing approval_request_id:
      isn't PENDING, it's either already fully APPROVED (ALREADY_APPROVED) or in some other terminal state
      like REJECTED/DRAFT (SKIPPED_NOT_PENDING) -- either way, nothing is published.
   2. PUBLISH (mirrors the MDO publish controller): lock the PENDING request (SELECT … FOR UPDATE), and for
-     each PENDING item call `POST {CB_EXT_COURSE_SERVICE_URL}/cbplan/v2/aicbp/create` + `/aicbp/publish`
+     each PENDING item call `POST {CB_EXT_COURSE_SERVICE_URL}/cbplan/v3/aicbp/create` + `/aicbp/publish`
      directly. ONLY an item whose create+publish BOTH succeed gets an mdo_approval row (with the returned
      igot_cbp_plan_id) and is flipped to APPROVED; a failed item gets no DB write at all and stays PENDING,
      so the next run's PENDING-items query retries exactly it. The request itself is flipped to APPROVED
@@ -76,7 +76,7 @@ no separate failures/audit JSON files. Columns: every column from the input file
 original order), followed by cbp_plan_name, cbp_plan_id, due_date, status, error, published_by.
 
 Run (dry-run; user_token is always fetched fresh from SSO at startup):
-    python bulk_scripts/bulk_training_plan_approval.py --excel plans.xlsx --user-id <uuid> --due-date 2027-03-31
+    python bulk_scripts/bulk_training_plan_approval.py --excel plans.xlsx --user-id <uuid> --due-date 2027-03-31 --plan-year 2026-27
 Run (execute):
     ... --execute
 """
@@ -89,6 +89,7 @@ import enum
 import json
 import logging
 import os
+import re
 import sys
 import time
 import uuid
@@ -204,6 +205,7 @@ class Config:
     user_id: uuid.UUID
     published_by: str  # user id extracted from user_token's `sub` claim (NOT --user-id).
     default_due_date: str
+    plan_year: str  # e.g. "2026-27" -- sent as planYear on the create call.
     max_retries: int
     backoff: float
     # notify is read from ENABLE_EMAIL_NOTIFICATION (env) -- process_row calls send_approval_email for
@@ -528,8 +530,8 @@ def _cb_ext_course_headers(cfg):
 
 
 async def call_igot_create(client, cfg, org_id, plan_name, due_date, designation, content_ids):
-    """POST {CB_EXT_COURSE_SERVICE_URL}/cbplan/v2/aicbp/create. Returns (plan_id|None, error)."""
-    url = f"{cfg.cb_ext_course_base}/cbplan/v2/aicbp/create"
+    """POST {CB_EXT_COURSE_SERVICE_URL}/cbplan/v3/aicbp/create. Returns (plan_id|None, error)."""
+    url = f"{cfg.cb_ext_course_base}/cbplan/v3/aicbp/create"
     payload = {
         "request": {
             "comment": f"{plan_name} is created",
@@ -554,6 +556,7 @@ async def call_igot_create(client, cfg, org_id, plan_name, due_date, designation
             "name": plan_name,
             "targetedOrganisation": org_id,
             "planType": "AICBP",
+            "planYear": cfg.plan_year,
         }
     }
     
@@ -574,8 +577,8 @@ async def call_igot_create(client, cfg, org_id, plan_name, due_date, designation
 
 
 async def call_igot_publish(client, cfg, org_id, plan_id):
-    """POST {CB_EXT_COURSE_SERVICE_URL}/cbplan/v2/aicbp/publish. Returns (ok, error)."""
-    url = f"{cfg.cb_ext_course_base}/cbplan/v2/aicbp/publish"
+    """POST {CB_EXT_COURSE_SERVICE_URL}/cbplan/v3/aicbp/publish. Returns (ok, error)."""
+    url = f"{cfg.cb_ext_course_base}/cbplan/v3/aicbp/publish"
     payload = {"request": {"id": plan_id, "comment": "CBP plan approved", "targetedOrganisation": org_id}}
     resp, err, _att = await with_retry(client, url, payload, _cb_ext_course_headers(cfg),
                                        description="cb-ext-course-publish", max_retries=cfg.max_retries,
@@ -1012,6 +1015,8 @@ async def main():
     parser.add_argument("--due-date", required=True,
                         help="Default due_date for rows without a due_date column (YYYY-MM-DD or ISO datetime). "
                              "Mandatory.")
+    parser.add_argument("--plan-year", required=True,
+                        help="Plan year sent as planYear on the iGOT create call, e.g. 2026-27. Mandatory.")
     parser.add_argument("--batch-size", type=int, default=DEFAULT_BATCH_SIZE,
                         help=f"Max rows in flight (default {DEFAULT_BATCH_SIZE}).")
     parser.add_argument("--timeout", type=float, default=DEFAULT_TIMEOUT,
@@ -1064,6 +1069,11 @@ async def main():
     except ValueError as e:
         sys.exit(f"Aborting: --due-date {args.due_date!r} is not a valid date: {e}")
 
+    plan_year = args.plan_year.strip()
+    m = re.fullmatch(r"(\d{4})-(\d{2})", plan_year)
+    if not m or (int(m.group(1)) + 1) % 100 != int(m.group(2)):
+        sys.exit(f"Aborting: --plan-year {args.plan_year!r} must look like 2026-27 (YYYY-YY, consecutive years).")
+
     rows = read_rows(args.excel)
     if not rows:
         sys.exit("Input file has no data rows.")
@@ -1076,7 +1086,7 @@ async def main():
     logger.info(f"Log file: {LOG_FILE}")
     logger.info(f"Loaded {len(rows)} row(s) from {args.excel}. Mode: {mode}. "
                 f"Batch size: {args.batch_size}. Retries: {args.max_retries}. published_by: {published_by}.")
-    logger.info(f"Publish defaults: due_date={default_due_date} (cbp_plan_name is built at request level "
+    logger.info(f"Publish defaults: due_date={default_due_date}, plan_year={plan_year} (cbp_plan_name is built at request level "
                 f"from the request's own designation -- not read from the input row).")
 
     cfg = Config(
@@ -1085,6 +1095,7 @@ async def main():
         user_token=user_token, published_by=published_by, approver_name=approver_name,
         user_id=args.user_id,
         default_due_date=default_due_date,
+        plan_year=plan_year,
         max_retries=max(0, args.max_retries),
         backoff=max(0.0, args.retry_backoff),
         notify=enable_email_notification, notification_base=notification_base_url.rstrip("/"),
