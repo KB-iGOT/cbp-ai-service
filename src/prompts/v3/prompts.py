@@ -523,6 +523,8 @@ Tie-breaker for Behavioural and Domain: if both components seem useful, choose O
 
 - In every competency object, write `type` BEFORE `delivery_mode`.
 - `delivery_mode` must be exactly: Online, Offline or Blended. No other value.
+- Do not randomly generate/assign blended delivery mode. Generate only if it is must required based on the R&R and Activities of the role.
+- Make sure Blended delivery mode is assigned only for Functional competencies, never for Behavioural or Domain competencies.  
 
 **Justify every delivery mode — `delivery_mode_rationale` (REQUIRED for EVERY competency, Domain included):**
 - Alongside `delivery_mode`, output a `delivery_mode_rationale`: ONE short sentence (max ~30 words) stating WHY that mode is right for this competency and this role.
@@ -763,6 +765,8 @@ Tie-breaker for Behavioural and Domain: if both components seem useful, choose O
 
 - In every competency object, write `type` BEFORE `delivery_mode`.
 - `delivery_mode` must be exactly: Online, Offline or Blended. No other value.
+- Do not randomly generate/assign blended delivery mode. Generate only if it is must required based on the R&R and Activities of the role.
+- Make sure Blended delivery mode is assigned only for Functional competencies, never for Behavioural or Domain competencies.  
 
 **Justify every delivery mode — `delivery_mode_rationale` (REQUIRED for EVERY competency, Domain included):**
 - Alongside `delivery_mode`, output a `delivery_mode_rationale`: ONE short sentence (max ~30 words) stating WHY that mode is right for this competency and this role.
