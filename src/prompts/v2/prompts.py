@@ -214,7 +214,7 @@ Your task is to generate a **designation-specific FRAC role mapping** for Govern
 - (Domain competencies have NO `competency_id` — leave that field out for Domain.)
 
 **2.2. Proficiency Level — SELECT EXACTLY ONE PER COMPETENCY**
-- Every KCM entry lists its levels under `proficiency_levels`, each with a `level` name (`Operational`, `Tactical`, `Strategic`), a short `label`, and a detailed `description`.
+- Every KCM entry lists its levels under `proficiency_levels`, each with a `level` name (`Operational`, `Tactical`, `Strategic`) and a one-line `label` describing what that level looks like in practice.
 - For each Behavioural/Functional competency you select, you MUST output exactly ONE `proficiency_level`.
 
 **How to determine the level — per competency, from the work itself:**
@@ -227,7 +227,7 @@ Decide it as: **Role & Responsibilities + Activities → the competency behaviou
 **SUPPORTING input — used only to interpret the two above, never decisive on its own:**
 3. **Designation context** — functional/administrative scope, authority and reporting context. It frames how to read the R&R and Activities; it NEVER sets the level by itself, and the title alone is never a reason for any level.
 
-Then compare that required behaviour against the `label` and `description` of EACH level in THIS competency's own `proficiency_levels`, and pick the closest match. The competency's own level descriptions are the authoritative definition of what each level means for that competency — match the substance of the work, not keywords.
+Then compare that required behaviour against the `label` of EACH level in THIS competency's own `proficiency_levels`, and pick the closest match. The competency's own level labels are the authoritative definition of what each level means for that competency — match the substance of the work, not keywords.
 
 **Level meanings (general guidance — the competency's own descriptions always win):**
 - `Operational` — executes, applies, follows, gathers, organises or maintains using established processes and tools; defined scope, limited independent decision-making.
@@ -371,10 +371,9 @@ Field usage:
 - `sub_theme_description`: What the sub-theme means — use this to judge whether it fits the designation's specific activities, and to decide `delivery_mode`. Do NOT output this field.
 - `proficiency_levels`: The levels this competency defines. Each has:
     - `level` — the level name (`Operational`, `Tactical`, `Strategic`). **Select exactly ONE per competency and output it as `proficiency_level`.**
-    - `label` — a one-line summary of what that level looks like in practice. Use it to judge fit. Do NOT output this field.
-    - `description` — the detailed behaviours expected at that level. Use it to judge fit against the designation's responsibilities and activities. Do NOT output this field.
+    - `label` — a one-line summary of what that level looks like in practice. Use it to judge fit against the designation's responsibilities and activities. Do NOT output this field.
 
-Selection process: For each designation, read the `theme_description` and `sub_theme_description` of candidate entries to assess fit against the designation's actual roles and activities. Only select entries where the description genuinely matches the role context. Output the chosen entry's `competency_id` and copy its `type`, `theme`, and `sub_theme` verbatim from that one entry — no paraphrasing, no renaming, no mixing fields across entries. Then read that entry's `proficiency_levels` and output the ONE `level` whose `label`/`description` matches the competency behaviour this designation's Role/Responsibilities and Activities actually require (per 2.2), plus a `delivery_mode` of `Online` or `Offline` decided per the criteria in 2.3.
+Selection process: For each designation, read the `theme_description` and `sub_theme_description` of candidate entries to assess fit against the designation's actual roles and activities. Only select entries where the description genuinely matches the role context. Output the chosen entry's `competency_id` and copy its `type`, `theme`, and `sub_theme` verbatim from that one entry — no paraphrasing, no renaming, no mixing fields across entries. Then read that entry's `proficiency_levels` and output the ONE `level` whose `label` matches the competency behaviour this designation's Role/Responsibilities and Activities actually require (per 2.2), plus a `delivery_mode` of `Online` or `Offline` decided per the criteria in 2.3.
 
 {kcm_competencies}
 
