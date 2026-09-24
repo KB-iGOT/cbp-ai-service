@@ -81,6 +81,9 @@ class CourseCardData:
         self.relevancy = course.get("relevancy", 0)
         self.is_public = course.get("is_public", False)
         self.provider = self._extract_provider(course)
+        # Proficiency level of the course itself (Operational/Tactical/Strategic). Absent on
+        # public/general courses and on plans saved before course_level was captured.
+        self.course_level = (course.get("course_level") or "").strip() or None
         
         # Group competencies
         competencies = course.get("competencies") or course.get("competencies_v6") or []
@@ -103,6 +106,7 @@ class CourseCardData:
             "provider": self.provider,
             "relevancy": self.relevancy,
             "is_public": self.is_public,
+            "course_level": self.course_level,
             "functional": self.functional,
             "domain": self.domain,
             "behavioral": self.behavioral,

@@ -21,7 +21,10 @@ with open("data/competencies_level.json") as f:
     COMPETENCY_MAPPING = json.load(f)
 
 # Valid delivery modes the LLM may suggest for a competency (how it is best learned).
-DELIVERY_MODES = ("Online", "Offline")
+# "Blended" is permitted for Functional competencies only — Behavioural and Domain are
+# restricted to Online/Offline, enforced in _resolve_delivery_mode.
+DELIVERY_MODES = ("Online", "Offline", "Blended")
+BLENDED_ELIGIBLE_TYPES = ("Functional",)
 
 # Deterministic KCM canonicalization index (id -> exact {type, theme, sub_theme} plus the
 # competency's valid proficiency levels).
@@ -175,7 +178,7 @@ center_json_output = {
                 "sub_theme": "string",
                 "proficiency_level": "Operational | Tactical | Strategic (REQUIRED for Behavioural & Functional; omit for Domain)",
                 "proficiency_rationale": "one short sentence citing the R&R/Activity that justifies the level (REQUIRED for Behavioural & Functional; omit for Domain)",
-                "delivery_mode": "Online | Offline",
+                "delivery_mode": "Online | Offline for Behavioural and Domain; Online | Offline | Blended for Functional ONLY",
                 "delivery_mode_rationale": "one short sentence naming the deciding factor — learning requirement, level of application, cadre scale, or institutional capability (REQUIRED for every competency, including Domain)"
             }
         ],
@@ -198,7 +201,7 @@ state_json_output = {
                 "sub_theme": "string",
                 "proficiency_level": "Operational | Tactical | Strategic (REQUIRED for Behavioural & Functional; omit for Domain)",
                 "proficiency_rationale": "one short sentence citing the R&R/Activity that justifies the level (REQUIRED for Behavioural & Functional; omit for Domain)",
-                "delivery_mode": "Online | Offline",
+                "delivery_mode": "Online | Offline for Behavioural and Domain; Online | Offline | Blended for Functional ONLY",
                 "delivery_mode_rationale": "one short sentence naming the deciding factor — learning requirement, level of application, cadre scale, or institutional capability (REQUIRED for every competency, including Domain)"
             }
         ],
@@ -226,7 +229,7 @@ class FRACCompetency(BaseModel):
     sub_theme: str = Field(description="Competency sub theme")
     proficiency_level: Optional[str] = Field(default=None, description="The single best-fit proficiency level for THIS designation, selected from the competency's proficiency_levels (Operational, Tactical or Strategic). REQUIRED for Behavioural & Functional; omit for Domain.")
     proficiency_rationale: Optional[str] = Field(default=None, description="One short sentence naming the specific Role/Responsibility or Activity of this designation that justifies the chosen proficiency_level. REQUIRED for Behavioural & Functional; omit for Domain.")
-    delivery_mode: Literal["Online", "Offline"] = Field(description="Whether this competency is best learned Online (self-paced digital content) or Offline (live facilitation, practice, feedback, field exposure), judged from the actual learning requirement, the level of application in this role, cadre scale and delivery feasibility, and institutional capability")
+    delivery_mode: Literal["Online", "Offline", "Blended"] = Field(description="Before choosing, read the `type` field of THIS SAME competency. If type is Behavioural or Domain you MUST choose Online or Offline only — Blended is forbidden there and will be rejected. Choose Blended only when type is Functional. Online = self-paced digital content; Offline = live facilitation, practice, feedback, field exposure; Blended = both materially required. Judge from the competency plus the role's R&R and Activities, cadre scale and institutional capability.")
     delivery_mode_rationale: Optional[str] = Field(default=None, description="One short sentence justifying the chosen delivery_mode by naming the deciding factor: the actual learning requirement, the level of application in this role, cadre scale and delivery feasibility, or institutional capability. Seniority alone or the mere existence of a training institution is not sufficient. REQUIRED for every competency, including Domain.")
     
 class FRACRoleMapping(BaseModel):
@@ -496,17 +499,25 @@ class RoleMappingService:
         return "Domain"
 
     def _resolve_delivery_mode(self, competency: Dict[str, Any], metrics: Dict[str, Any]) -> str:
-        """Normalize the LLM's delivery_mode to exactly 'Online' or 'Offline'.
+        """Normalize the LLM's delivery_mode to exactly 'Online', 'Offline' or 'Blended'.
 
-        Defaults to 'Online' when missing or unrecognised so the field is always populated;
-        the fallback is counted so a model that stops emitting it is visible in the logs.
+        'Blended' is valid ONLY for Functional competencies; on Behavioural or Domain it is
+        downgraded to 'Offline' (the component a blend exists for) so the type rule holds
+        even if the model ignores it. Defaults to 'Online' when missing or unrecognised so
+        the field is always populated; both corrections are counted for the logs.
         """
         raw = (competency.get("delivery_mode") or "").strip().casefold()
-        for mode in DELIVERY_MODES:
-            if raw == mode.casefold():
-                return mode
-        metrics["bad_delivery_mode"] += 1
-        return "Online"
+        resolved = next((m for m in DELIVERY_MODES if raw == m.casefold()), None)
+
+        if resolved is None:
+            metrics["bad_delivery_mode"] += 1
+            return "Online"
+
+        if resolved == "Blended" and self._norm_type(competency.get("type", "")) not in BLENDED_ELIGIBLE_TYPES:
+            metrics["blended_not_allowed"] += 1
+            return "Offline"
+
+        return resolved
 
     def _resolve_proficiency_level(
         self, competency: Dict[str, Any], canon: Dict[str, Any], metrics: Dict[str, Any]
@@ -547,7 +558,8 @@ class RoleMappingService:
             "name_mismatch": 0, "type_mismatch": 0, "id_missing_or_bad": 0,
             "clean": 0,            # LLM emitted a valid id AND echoed type/theme/sub exactly (no LLM error)
             "bad_level": 0,        # LLM omitted the proficiency level or named one this competency lacks
-            "bad_delivery_mode": 0,  # LLM omitted delivery_mode or emitted a value outside Online/Offline
+            "bad_delivery_mode": 0,  # LLM omitted delivery_mode or emitted a value outside the allowed set
+            "blended_not_allowed": 0,  # LLM assigned Blended to a Behavioural/Domain competency
             "dropped_items": [],
             "records": [],         # per-competency raw-LLM-output vs canonical decision (for the hallucination report)
         }
@@ -649,7 +661,8 @@ class RoleMappingService:
         # competency back to its exact KCM entry by id (drops out-of-KCM items,
         # corrects swapped types, restores altered names). Domain is untouched.
         agg = {"bf_total": 0, "resolved": 0, "dropped": 0, "name_mismatch": 0, "type_mismatch": 0,
-               "id_missing_or_bad": 0, "clean": 0, "bad_level": 0, "bad_delivery_mode": 0}
+               "id_missing_or_bad": 0, "clean": 0, "bad_level": 0, "bad_delivery_mode": 0,
+               "blended_not_allowed": 0}
         for mapping in frac_mappings:
             result = self._reconcile_competency_against_kcm(mapping.get("competencies", []))
             mapping["competencies"] = result["competencies"]
@@ -662,7 +675,8 @@ class RoleMappingService:
             f"KCM canonicalization — B/F={agg['bf_total']} clean(LLM-correct)={agg['clean']} "
             f"resolved={agg['resolved']} dropped={agg['dropped']} name_mismatch={agg['name_mismatch']} "
             f"type_mismatch={agg['type_mismatch']} bad_id={agg['id_missing_or_bad']} "
-            f"bad_level={agg['bad_level']} bad_delivery_mode={agg['bad_delivery_mode']}"
+            f"bad_level={agg['bad_level']} bad_delivery_mode={agg['bad_delivery_mode']} "
+            f"blended_not_allowed={agg['blended_not_allowed']}"
         )
 
         # DB persists the US spelling "Behavioral" even though the KCM dataset and all

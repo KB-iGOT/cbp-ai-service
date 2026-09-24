@@ -433,7 +433,7 @@ You will be provided with the following inputs:
 - **Administrative/office guardrail.** Administrative or office-function competencies (e.g. Office Management, Establishment & HR, Handling Leave & Travel, Financial/Expenditure Management, Procurement, File/Records management) may be assigned ONLY to designations whose actual duties include those administrative functions (e.g. clerical, HR, accounts, secretariat roles). Do NOT assign them to purely field, operational, security, or technical roles (e.g. Constable, Driver, Sweeper, Cleaner, Technician, Guard) unless that role genuinely performs office/admin work. For such field/operational roles, prefer functional competencies that match their actual on-ground work.
 
 2.2.1. **Proficiency Level — SELECT EXACTLY ONE PER COMPETENCY**
-- Every KCM entry lists its levels under `proficiency_levels`, each with a `level` name (`Operational`, `Tactical`, `Strategic`), a short `label`, and a detailed `description`.
+- Every KCM entry lists its levels under `proficiency_levels`, each with a `level` name (`Operational`, `Tactical`, `Strategic`) and a one-line `label` describing what that level looks like in practice.
 - For each Behavioural/Functional competency you select, you MUST output exactly ONE `proficiency_level`.
 
 **How to determine the level — per competency, from the work itself:**
@@ -446,7 +446,7 @@ Decide it as: **Role & Responsibilities + Activities → the competency behaviou
 **SUPPORTING input — used only to interpret the two above, never decisive on its own:**
 3. **Designation context** — functional/administrative scope, authority and reporting context. It frames how to read the R&R and Activities; it NEVER sets the level by itself, and the title alone is never a reason for any level.
 
-Then compare that required behaviour against the `label` and `description` of EACH level in THIS competency's own `proficiency_levels`, and pick the closest match. The competency's own level descriptions are the authoritative definition of what each level means for that competency — match the substance of the work, not keywords.
+Then compare that required behaviour against the `label` of EACH level in THIS competency's own `proficiency_levels`, and pick the closest match. The competency's own level labels are the authoritative definition of what each level means for that competency — match the substance of the work, not keywords.
 
 **Level meanings (general guidance — the competency's own descriptions always win):**
 - `Operational` — executes, applies, follows, gathers, organises or maintains using established processes and tools; defined scope, limited independent decision-making.
@@ -471,46 +471,65 @@ Then compare that required behaviour against the `label` and `description` of EA
 - If you cannot write such a sentence from the R&R and Activities, you have chosen the wrong level (or the wrong competency) — reconsider before outputting.
 - (Domain competencies have no proficiency level — omit `proficiency_rationale` for Domain.)
 
-2.2.2. **Delivery Mode — ONLINE vs OFFLINE**
-- For every competency, determine `delivery_mode` as either `Online` or `Offline` based on the actual learning requirement, role context, scale of the target cadre and the delivery responsibilities of the State department and its attached training institutions.
-- These Capacity Building Plans are being prepared for various State departments. Their attached training institutions — including ATIs, departmental training institutes and other State-level academies — are responsible for delivering tactical and operational training to large cadres, including frontline functionaries. Therefore, institutional mandate and mass-scale delivery capability must be treated as important contextual factors, while ensuring that the final decision remains learning-need based.
+2.2.2. **Delivery-Mode Guardrail**
 
-**Consider the following factors together:**
-- **Nature of the competency:** Determine whether the competency is primarily knowledge, concept, policy, scheme, process or SOP based, or whether it requires practical application, behavioural development, interpersonal engagement, field exposure or hands-on practice.
-- **Role level and work context:** Consider the designation, seniority, cadre, functional responsibilities, decision-making authority and operating environment. Do not determine the delivery mode based on seniority alone.
-- **Roles, responsibilities and activities:** Assess how the competency will be applied in the actual role, including execution, analysis, planning, supervision, coordination, decision-making, stakeholder engagement, service delivery and field implementation.
-- **Level of competency application:**
-  - `Operational` competencies generally relate to execution, application of SOPs, use of systems or equipment, citizen interaction and frontline service delivery.
-  - `Tactical` competencies generally involve analysis, supervision, coordination, problem-solving, programme management and translation of policy into implementation.
-  - `Strategic` competencies generally involve policy formulation, institutional leadership, high-level decision-making and long-term planning.
-  - Do not automatically assign `Online` to operational or tactical competencies. Where these competencies require practice, demonstration, simulation, role-play, supervised application, peer learning or field exposure, assign `Offline`.
-- **Actual learning requirement:**
-  - Assign `Offline` when effective learning requires live facilitation, discussion, practice, feedback, simulation, role-play, coaching, mentoring, laboratory or equipment use, peer learning or field-based exposure.
-  - Assign `Online` when the learning objective can be adequately achieved through self-paced digital content, readings, videos, demonstrations, case material and online assessments.
-- **Institutional responsibility and capability:** State training institutions are expected to deliver tactical and operational training at scale. Their availability should therefore strengthen the feasibility of `Offline` delivery where live or practical learning is required. However, `Offline` must not be assigned merely because an institution exists.
-- **Scale and delivery feasibility:** Assess the total target cadre across the department or State, rather than treating each designation or data row as representing only one learner. Large-scale `Offline` training may be feasible through batch-based delivery, decentralised centres, master trainers and repeated cohorts. At the same time, prefer `Online` for high-volume foundational knowledge, standardised processes, policy awareness, prerequisites and refresher learning where live intervention does not add substantial value.
-- **Primary mode selection:** Where a competency could benefit from both digital and classroom components, select the mode that should constitute the primary and most critical mode of learning. Since the required output allows only one value, do not return "Blended" or any explanation.
+For every competency, assign `delivery_mode` as exactly one of: Online, Offline, Blended.
 
-**Decision Flow**
-Competency nature → Role level and work context → R&R and activities → Operational/Tactical/Strategic application → Actual learning requirement → Target-cadre scale → Training-institution mandate and capability → Final `delivery_mode`
+**STEP 1 — Competency type decides which modes are allowed (apply this FIRST)**
 
-⚠️ **Mandatory Rules**
-- Delivery mode must be learning-need based and operationally feasible.
-- Do not assign `Offline` automatically to senior or strategic roles.
-- Do not assign `Online` automatically to operational, tactical, junior or frontline roles.
-- Do not assign `Offline` solely because an ATI or departmental training institution is available.
-- Do not assume that one designation or one data row represents only one learner; consider the likely cadre size across the State.
-- Do not treat large learner volume as an automatic reason for `Online` delivery.
-- Prefer `Online` where standardised knowledge can be developed effectively at scale through digital learning.
-- Assign `Offline` where practical application, behavioural change, contextual problem-solving, live feedback or field-based learning is essential.
-- Recognise the responsibility of State training institutions to deliver tactical and operational training at scale through structured cohorts.
-- The final decision must reflect how the competency can be developed most effectively for the role within the State's institutional and delivery context.
+Copy the competency's `type` exactly as given in the input dataset. Do not re-classify it.
+
+| type        | Allowed delivery_mode       |
+|-------------|-----------------------------|
+| Functional  | Online / Offline / Blended  |
+| Behavioural | Online / Offline ONLY       |
+| Domain      | Online / Offline ONLY       |
+
+- Behavioural → never Blended.
+- Domain → never Blended.
+- Only Functional may be Blended.
+
+For Behavioural and Domain competencies, choose only between Online and Offline. Do not consider Blended at all.
+
+**STEP 2 — Analyse the competency together with the role**
+
+Never decide delivery mode from the competency name, theme or sub-theme alone. Always read the role's Roles & Responsibilities (R&R) and Activities and assess:
+- What the role does in practice, and where and how this competency is used in it.
+- Whether the competency is mainly knowledge (policy, scheme, process, SOP) or must be practised or demonstrated (hands-on, behavioural, interpersonal, field, supervision, stakeholder engagement).
+- Role level and work context (designation, cadre, decision authority, operating environment). Do not decide from seniority alone.
+- Level of application:
+  - Operational: execution, SOPs, systems/equipment, citizen interaction, frontline service.
+  - Tactical: analysis, supervision, coordination, programme management.
+  - Strategic: policy, institutional leadership, long-term planning.
+  Do not automatically give Online to operational or tactical roles, or Offline to senior roles.
+
+**STEP 3 — Choose the mode**
+
+**Online** — the competency can be developed effectively through digital content (readings, videos, case material, digital simulations, online assessments, policy/scheme/SOP learning), and the R&R and Activities do not need substantial live or practical practice.
+
+**Offline** — the competency and the R&R/Activities show that learning needs live facilitation, hands-on practice, role-play, simulation, coaching, mentoring, equipment/lab use, supervised application, field exposure or live feedback.
+
+**Blended (Functional ONLY)** — the R&R and Activities show that BOTH an Online knowledge component AND an Offline practical component are materially required. Do not assign Blended just because multiple formats are possible. Do not make every Functional competency Blended.
+
+Tie-breaker for Behavioural and Domain: if both components seem useful, choose Offline when live practice, feedback or behavioural rehearsal is essential; otherwise choose Online.
+
+**STEP 4 — State delivery context (supporting factors only)**
+
+- State training institutions (ATIs, departmental institutes, State academies) deliver tactical and operational training at scale through batches, decentralised centres, master trainers, train-the-trainer models and repeated cohorts. This makes Offline feasible where it is needed, but never assign Offline or Blended just because an institution exists.
+- One designation/row represents a whole cadre across the State, not one learner. Large volume is not an automatic reason for Online.
+- Prefer Online for high-volume foundational knowledge, standardised processes, policy awareness, prerequisites and refreshers.
+
+**Output rules**
+
+- In every competency object, write `type` BEFORE `delivery_mode`.
+- `delivery_mode` must be exactly: Online, Offline or Blended. No other value.
 
 **Justify every delivery mode — `delivery_mode_rationale` (REQUIRED for EVERY competency, Domain included):**
 - Alongside `delivery_mode`, output a `delivery_mode_rationale`: ONE short sentence (max ~30 words) stating WHY that mode is right for this competency and this role.
 - It MUST name the **deciding factor(s)** from the criteria above — the actual learning requirement, the level of application in this role, cadre scale and delivery feasibility, or institutional capability — and not merely restate the mode.
 - ✅ "Fluency improves only through live practice with feedback and observed delivery, which self-paced modules cannot provide." ✅ "Standardised procedural rules for a large frontline cadre transfer reliably through self-paced digital content at scale." ✅ "Frontline grievance handling needs supervised role-play, deliverable in batches through the ATI." ❌ "This competency is best delivered offline." ❌ "Offline mode suits this designation."
 - Where scale, role level or institutional capability changed the answer from what the competency's nature alone would suggest, say so in the sentence.
+- For a `Blended` competency, the sentence MUST identify BOTH components — what is learned online and what requires offline practice or application.
 - A rationale that cites only seniority, or only the existence of a training institution, is INVALID — those are explicitly not sufficient grounds.
 
 2.3. **Domain Competencies**
@@ -565,10 +584,9 @@ Field usage:
 - `sub_theme_description`: What the sub-theme means — use this to judge whether it fits the designation's specific activities, and to decide `delivery_mode`. Do NOT output this field.
 - `proficiency_levels`: The levels this competency defines. Each has:
     - `level` — the level name (`Operational`, `Tactical`, `Strategic`). **Select exactly ONE per competency and output it as `proficiency_level`.**
-    - `label` — a one-line summary of what that level looks like in practice. Use it to judge fit. Do NOT output this field.
-    - `description` — the detailed behaviours expected at that level. Use it to judge fit against the designation's responsibilities and activities. Do NOT output this field.
+    - `label` — a one-line summary of what that level looks like in practice. Use it to judge fit against the designation's responsibilities and activities. Do NOT output this field.
 
-Selection process: For each designation, read the `theme_description` and `sub_theme_description` of candidate entries to assess fit against the designation's actual roles and activities. Only select entries where the description genuinely matches the role context. Output the chosen entry's `competency_id` and copy its `type`, `theme`, and `sub_theme` verbatim from that one entry — no paraphrasing, no renaming, no mixing fields across entries. Then read that entry's `proficiency_levels` and output the ONE `level` whose `label`/`description` matches the competency behaviour this designation's Role/Responsibilities and Activities actually require (per 2.2.1), plus a `delivery_mode` of `Online` or `Offline` decided per the criteria in 2.2.2.
+Selection process: For each designation, read the `theme_description` and `sub_theme_description` of candidate entries to assess fit against the designation's actual roles and activities. Only select entries where the description genuinely matches the role context. Output the chosen entry's `competency_id` and copy its `type`, `theme`, and `sub_theme` verbatim from that one entry — no paraphrasing, no renaming, no mixing fields across entries. Then read that entry's `proficiency_levels` and output the ONE `level` whose `label` matches the competency behaviour this designation's Role/Responsibilities and Activities actually require (per 2.2.1), plus a `delivery_mode` of `Online` or `Offline` decided per the criteria in 2.2.2.
 
 {kcm_competencies}
 
@@ -655,7 +673,7 @@ You will be provided with the following inputs:
 - **Administrative/office guardrail.** Administrative or office-function competencies (e.g. Office Management, Establishment & HR, Handling Leave & Travel, Financial/Expenditure Management, Procurement, File/Records management) may be assigned ONLY to designations whose actual duties include those administrative functions (e.g. clerical, HR, accounts, secretariat roles). Do NOT assign them to purely field, operational, security, or technical roles (e.g. Constable, Driver, Sweeper, Cleaner, Technician, Guard) unless that role genuinely performs office/admin work. For such field/operational roles, prefer functional competencies that match their actual on-ground work.
 
 2.2.1. **Proficiency Level — SELECT EXACTLY ONE PER COMPETENCY**
-- Every KCM entry lists its levels under `proficiency_levels`, each with a `level` name (`Operational`, `Tactical`, `Strategic`), a short `label`, and a detailed `description`.
+- Every KCM entry lists its levels under `proficiency_levels`, each with a `level` name (`Operational`, `Tactical`, `Strategic`) and a one-line `label` describing what that level looks like in practice.
 - For each Behavioural/Functional competency you select, you MUST output exactly ONE `proficiency_level`.
 
 **How to determine the level — per competency, from the work itself:**
@@ -668,7 +686,7 @@ Decide it as: **Role & Responsibilities + Activities → the competency behaviou
 **SUPPORTING input — used only to interpret the two above, never decisive on its own:**
 3. **Designation context** — functional/administrative scope, authority and reporting context. It frames how to read the R&R and Activities; it NEVER sets the level by itself, and the title alone is never a reason for any level.
 
-Then compare that required behaviour against the `label` and `description` of EACH level in THIS competency's own `proficiency_levels`, and pick the closest match. The competency's own level descriptions are the authoritative definition of what each level means for that competency — match the substance of the work, not keywords.
+Then compare that required behaviour against the `label` of EACH level in THIS competency's own `proficiency_levels`, and pick the closest match. The competency's own level labels are the authoritative definition of what each level means for that competency — match the substance of the work, not keywords.
 
 **Level meanings (general guidance — the competency's own descriptions always win):**
 - `Operational` — executes, applies, follows, gathers, organises or maintains using established processes and tools; defined scope, limited independent decision-making.
@@ -693,46 +711,65 @@ Then compare that required behaviour against the `label` and `description` of EA
 - If you cannot write such a sentence from the R&R and Activities, you have chosen the wrong level (or the wrong competency) — reconsider before outputting.
 - (Domain competencies have no proficiency level — omit `proficiency_rationale` for Domain.)
 
-2.2.2. **Delivery Mode — ONLINE vs OFFLINE**
-- For every competency, determine `delivery_mode` as either `Online` or `Offline` based on the actual learning requirement, role context, scale of the target cadre and the delivery responsibilities of the State department and its attached training institutions.
-- These Capacity Building Plans are being prepared for various State departments. Their attached training institutions — including ATIs, departmental training institutes and other State-level academies — are responsible for delivering tactical and operational training to large cadres, including frontline functionaries. Therefore, institutional mandate and mass-scale delivery capability must be treated as important contextual factors, while ensuring that the final decision remains learning-need based.
+2.2.2. **Delivery-Mode Guardrail**
 
-**Consider the following factors together:**
-- **Nature of the competency:** Determine whether the competency is primarily knowledge, concept, policy, scheme, process or SOP based, or whether it requires practical application, behavioural development, interpersonal engagement, field exposure or hands-on practice.
-- **Role level and work context:** Consider the designation, seniority, cadre, functional responsibilities, decision-making authority and operating environment. Do not determine the delivery mode based on seniority alone.
-- **Roles, responsibilities and activities:** Assess how the competency will be applied in the actual role, including execution, analysis, planning, supervision, coordination, decision-making, stakeholder engagement, service delivery and field implementation.
-- **Level of competency application:**
-  - `Operational` competencies generally relate to execution, application of SOPs, use of systems or equipment, citizen interaction and frontline service delivery.
-  - `Tactical` competencies generally involve analysis, supervision, coordination, problem-solving, programme management and translation of policy into implementation.
-  - `Strategic` competencies generally involve policy formulation, institutional leadership, high-level decision-making and long-term planning.
-  - Do not automatically assign `Online` to operational or tactical competencies. Where these competencies require practice, demonstration, simulation, role-play, supervised application, peer learning or field exposure, assign `Offline`.
-- **Actual learning requirement:**
-  - Assign `Offline` when effective learning requires live facilitation, discussion, practice, feedback, simulation, role-play, coaching, mentoring, laboratory or equipment use, peer learning or field-based exposure.
-  - Assign `Online` when the learning objective can be adequately achieved through self-paced digital content, readings, videos, demonstrations, case material and online assessments.
-- **Institutional responsibility and capability:** State training institutions are expected to deliver tactical and operational training at scale. Their availability should therefore strengthen the feasibility of `Offline` delivery where live or practical learning is required. However, `Offline` must not be assigned merely because an institution exists.
-- **Scale and delivery feasibility:** Assess the total target cadre across the department or State, rather than treating each designation or data row as representing only one learner. Large-scale `Offline` training may be feasible through batch-based delivery, decentralised centres, master trainers and repeated cohorts. At the same time, prefer `Online` for high-volume foundational knowledge, standardised processes, policy awareness, prerequisites and refresher learning where live intervention does not add substantial value.
-- **Primary mode selection:** Where a competency could benefit from both digital and classroom components, select the mode that should constitute the primary and most critical mode of learning. Since the required output allows only one value, do not return "Blended" or any explanation.
+For every competency, assign `delivery_mode` as exactly one of: Online, Offline, Blended.
 
-**Decision Flow**
-Competency nature → Role level and work context → R&R and activities → Operational/Tactical/Strategic application → Actual learning requirement → Target-cadre scale → Training-institution mandate and capability → Final `delivery_mode`
+**STEP 1 — Competency type decides which modes are allowed (apply this FIRST)**
 
-⚠️ **Mandatory Rules**
-- Delivery mode must be learning-need based and operationally feasible.
-- Do not assign `Offline` automatically to senior or strategic roles.
-- Do not assign `Online` automatically to operational, tactical, junior or frontline roles.
-- Do not assign `Offline` solely because an ATI or departmental training institution is available.
-- Do not assume that one designation or one data row represents only one learner; consider the likely cadre size across the State.
-- Do not treat large learner volume as an automatic reason for `Online` delivery.
-- Prefer `Online` where standardised knowledge can be developed effectively at scale through digital learning.
-- Assign `Offline` where practical application, behavioural change, contextual problem-solving, live feedback or field-based learning is essential.
-- Recognise the responsibility of State training institutions to deliver tactical and operational training at scale through structured cohorts.
-- The final decision must reflect how the competency can be developed most effectively for the role within the State's institutional and delivery context.
+Copy the competency's `type` exactly as given in the input dataset. Do not re-classify it.
+
+| type        | Allowed delivery_mode       |
+|-------------|-----------------------------|
+| Functional  | Online / Offline / Blended  |
+| Behavioural | Online / Offline ONLY       |
+| Domain      | Online / Offline ONLY       |
+
+- Behavioural → never Blended.
+- Domain → never Blended.
+- Only Functional may be Blended.
+
+For Behavioural and Domain competencies, choose only between Online and Offline. Do not consider Blended at all.
+
+**STEP 2 — Analyse the competency together with the role**
+
+Never decide delivery mode from the competency name, theme or sub-theme alone. Always read the role's Roles & Responsibilities (R&R) and Activities and assess:
+- What the role does in practice, and where and how this competency is used in it.
+- Whether the competency is mainly knowledge (policy, scheme, process, SOP) or must be practised or demonstrated (hands-on, behavioural, interpersonal, field, supervision, stakeholder engagement).
+- Role level and work context (designation, cadre, decision authority, operating environment). Do not decide from seniority alone.
+- Level of application:
+  - Operational: execution, SOPs, systems/equipment, citizen interaction, frontline service.
+  - Tactical: analysis, supervision, coordination, programme management.
+  - Strategic: policy, institutional leadership, long-term planning.
+  Do not automatically give Online to operational or tactical roles, or Offline to senior roles.
+
+**STEP 3 — Choose the mode**
+
+**Online** — the competency can be developed effectively through digital content (readings, videos, case material, digital simulations, online assessments, policy/scheme/SOP learning), and the R&R and Activities do not need substantial live or practical practice.
+
+**Offline** — the competency and the R&R/Activities show that learning needs live facilitation, hands-on practice, role-play, simulation, coaching, mentoring, equipment/lab use, supervised application, field exposure or live feedback.
+
+**Blended (Functional ONLY)** — the R&R and Activities show that BOTH an Online knowledge component AND an Offline practical component are materially required. Do not assign Blended just because multiple formats are possible. Do not make every Functional competency Blended.
+
+Tie-breaker for Behavioural and Domain: if both components seem useful, choose Offline when live practice, feedback or behavioural rehearsal is essential; otherwise choose Online.
+
+**STEP 4 — State delivery context (supporting factors only)**
+
+- State training institutions (ATIs, departmental institutes, State academies) deliver tactical and operational training at scale through batches, decentralised centres, master trainers, train-the-trainer models and repeated cohorts. This makes Offline feasible where it is needed, but never assign Offline or Blended just because an institution exists.
+- One designation/row represents a whole cadre across the State, not one learner. Large volume is not an automatic reason for Online.
+- Prefer Online for high-volume foundational knowledge, standardised processes, policy awareness, prerequisites and refreshers.
+
+**Output rules**
+
+- In every competency object, write `type` BEFORE `delivery_mode`.
+- `delivery_mode` must be exactly: Online, Offline or Blended. No other value.
 
 **Justify every delivery mode — `delivery_mode_rationale` (REQUIRED for EVERY competency, Domain included):**
 - Alongside `delivery_mode`, output a `delivery_mode_rationale`: ONE short sentence (max ~30 words) stating WHY that mode is right for this competency and this role.
 - It MUST name the **deciding factor(s)** from the criteria above — the actual learning requirement, the level of application in this role, cadre scale and delivery feasibility, or institutional capability — and not merely restate the mode.
 - ✅ "Fluency improves only through live practice with feedback and observed delivery, which self-paced modules cannot provide." ✅ "Standardised procedural rules for a large frontline cadre transfer reliably through self-paced digital content at scale." ✅ "Frontline grievance handling needs supervised role-play, deliverable in batches through the ATI." ❌ "This competency is best delivered offline." ❌ "Offline mode suits this designation."
 - Where scale, role level or institutional capability changed the answer from what the competency's nature alone would suggest, say so in the sentence.
+- For a `Blended` competency, the sentence MUST identify BOTH components — what is learned online and what requires offline practice or application.
 - A rationale that cites only seniority, or only the existence of a training institution, is INVALID — those are explicitly not sufficient grounds.
 
 2.3. **Domain Competencies**
@@ -795,10 +832,9 @@ Field usage:
 - `sub_theme_description`: What the sub-theme means — use this to judge whether it fits the designation's specific activities, and to decide `delivery_mode`. Do NOT output this field.
 - `proficiency_levels`: The levels this competency defines. Each has:
     - `level` — the level name (`Operational`, `Tactical`, `Strategic`). **Select exactly ONE per competency and output it as `proficiency_level`.**
-    - `label` — a one-line summary of what that level looks like in practice. Use it to judge fit. Do NOT output this field.
-    - `description` — the detailed behaviours expected at that level. Use it to judge fit against the designation's responsibilities and activities. Do NOT output this field.
+    - `label` — a one-line summary of what that level looks like in practice. Use it to judge fit against the designation's responsibilities and activities. Do NOT output this field.
 
-Selection process: For each designation, read the `theme_description` and `sub_theme_description` of candidate entries to assess fit against the designation's actual roles and activities. Only select entries where the description genuinely matches the role context. Output the chosen entry's `competency_id` and copy its `type`, `theme`, and `sub_theme` verbatim from that one entry — no paraphrasing, no renaming, no mixing fields across entries. Then read that entry's `proficiency_levels` and output the ONE `level` whose `label`/`description` matches the competency behaviour this designation's Role/Responsibilities and Activities actually require (per 2.2.1), plus a `delivery_mode` of `Online` or `Offline` decided per the criteria in 2.2.2.
+Selection process: For each designation, read the `theme_description` and `sub_theme_description` of candidate entries to assess fit against the designation's actual roles and activities. Only select entries where the description genuinely matches the role context. Output the chosen entry's `competency_id` and copy its `type`, `theme`, and `sub_theme` verbatim from that one entry — no paraphrasing, no renaming, no mixing fields across entries. Then read that entry's `proficiency_levels` and output the ONE `level` whose `label` matches the competency behaviour this designation's Role/Responsibilities and Activities actually require (per 2.2.1), plus a `delivery_mode` of `Online` or `Offline` decided per the criteria in 2.2.2.
 
 {kcm_competencies}
 
