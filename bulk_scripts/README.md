@@ -23,7 +23,7 @@ moving to the next.
 | 3 | Role mapping generation | `batch_rolemapping_generate.py` | For each designation, generate a v3 role mapping (roles & responsibilities, activities, competencies) from the document summaries produced in stage 2. |
 | 4 | Course recommendation + CBP plan generation | `batch_generate_and_save_cbp_plan.py` | For each role mapping, run hybrid vector search + LLM filtering to recommend courses, then save the CBP plan. |
 | 5 | Approval request submission | `batch_send_approval_requests.py` | Submit each generated CBP plan as an approval request (one request per designation) and notify the approving MDO. |
-| 6 | Publishing to iGOT | `bulk_training_plan_approval.py` | Once approved, publish the Training Plan to iGOT via the CB ext course service's AICBP create/publish APIs. |
+| 6 | Publishing to iGOT | `bulk_training_plan_approval.py` | Once approved, publish the Training Plan to iGOT via the CB ext course service: create a user group (`/usergroup/v1/create`), then the AICBP v4 create/publish APIs (`/cbplan/v4/aicbp/create` + `/publish`). |
 
 Full usage details for each script — CLI flags, required environment variables, input file column
 requirements, output file locations, and example commands — follow below.
@@ -580,15 +580,18 @@ python bulk_scripts/batch_send_approval_requests.py --excel <path/to/file.xlsx> 
 ## 6. `bulk_training_plan_approval.py`
 
 **What it does**: Bulk-**publishes** Training Plan approval requests that already exist and are
-`PENDING` — it does not create requests. Talks directly to the CB ext course service's AICBP
-create/publish APIs and the shared DB.
+`PENDING` — it does not create requests. Talks directly to the CB ext course service and the shared
+DB. For each item it creates a user group (`POST /usergroup/v1/create`, criteria = designation +
+rootOrgId), creates the plan referencing that group (`POST /cbplan/v4/aicbp/create`), then publishes
+it (`POST /cbplan/v4/aicbp/publish`). The approver's SSO user must be `MDO_ADMIN` or `MDO_LEADER`,
+otherwise user group create returns 403.
 
 **What it handles**: A blank/invalid `approval_request_id` is skipped, not fatal. A request that
 exists but doesn't belong to `--user-id`, or has no items to derive a CBP plan name from, is
 reported `FAILED` with a clear reason. A request already fully `APPROVED` is reported
 `already_approved` (no writes). A request with some items still `PENDING` from a prior partial
 failure (e.g. a transient iGOT error) picks up exactly where it left off on the next run — only an
-item whose create+publish both succeed gets written; a failed item stays `PENDING` and is retried
+item whose user-group create + plan create + publish all succeed gets written; a failed item stays `PENDING` and is retried
 automatically. The approver's user token is always fetched fresh from SSO at startup — there's no
 token env var to configure or go stale.
 
