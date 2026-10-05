@@ -12,8 +12,9 @@ reference an existing approval_request_id:
      isn't PENDING, it's either already fully APPROVED (ALREADY_APPROVED) or in some other terminal state
      like REJECTED/DRAFT (SKIPPED_NOT_PENDING) -- either way, nothing is published.
   2. PUBLISH (mirrors the MDO publish controller): lock the PENDING request (SELECT … FOR UPDATE), and for
-     each PENDING item call `POST {CB_EXT_COURSE_SERVICE_URL}/usergroup/v1/create` +
-     `/cbplan/v4/aicbp/create` + `/aicbp/publish` directly. ONLY an item whose create+publish BOTH succeed gets an mdo_approval row (with the returned
+     each PENDING item get the user group named after the designation (e.g. `Assistant_Section_Officer`) --
+     `POST {CB_EXT_COURSE_SERVICE_URL}/usergroup/v1/searchV2`, and only if none exists (404)
+     `/usergroup/v1/create` -- then call `/cbplan/v4/aicbp/create` + `/aicbp/publish` directly. ONLY an item whose create+publish BOTH succeed gets an mdo_approval row (with the returned
      igot_cbp_plan_id) and is flipped to APPROVED; a failed item gets no DB write at all and stays PENDING,
      so the next run's PENDING-items query retries exactly it. The request itself is flipped to APPROVED
      only once every one of its items has succeeded (across however many runs that took).
@@ -476,7 +477,13 @@ def extract_content_list(cbp_plan_data_list):
     return content_list
 
 
-# ─────────────────────────────────────── retrying POST (iGOT) ───────────────────────────────────────
+def format_user_group_name(designation):
+    """Trim and join words with underscores, upper-casing each word's first letter (mirrors igot_service):
+    'assistant section officer' -> 'Assistant_Section_Officer'."""
+    return "_".join(word[:1].upper() + word[1:] for word in designation.strip().split())
+
+
+# ─────────────────────────────────────── retrying POST (iGOT) ────────────────────────────────────────
 # HTTP-specific retry helper (status-code + transport-error retry) -- the same exponential-backoff shape
 # as the sibling scripts' with_retry, but built for inspecting an httpx.Response rather than retrying an
 # arbitrary coroutine on any exception.
@@ -529,6 +536,38 @@ def _cb_ext_course_headers(cfg):
         "Content-Type": "application/json",
         "x-authenticated-user-token": cfg.user_token,
     }
+
+
+async def call_igot_search_user_group(client, cfg, org_id, group_name):
+    """POST {CB_EXT_COURSE_SERVICE_URL}/usergroup/v1/searchV2. Returns (user_group_id|None, error): the ACTIVE
+    group with exactly this name in the org, or (None, None) when there is none (the API answers 404)."""
+    url = f"{cfg.cb_ext_course_base}/usergroup/v1/searchV2"
+    payload = {
+        "request": {
+            "filters": {"userGroupName": group_name, "orgId": org_id},
+            "limit": 10,
+            "offset": 0,
+        }
+    }
+    resp, err, _att = await with_retry(client, url, payload, _cb_ext_course_headers(cfg),
+                                       description="cb-ext-usergroup-search", max_retries=cfg.max_retries,
+                                       backoff=cfg.backoff)
+    if resp is None:
+        return None, err
+    if resp.status_code == 404:
+        return None, None
+    if resp.status_code // 100 != 2:
+        return None, f"usergroup search {resp.status_code}: {_http_detail(resp)}"
+    try:
+        groups = resp.json().get("content") or []
+    except (json.JSONDecodeError, ValueError):
+        return None, "usergroup search returned a non-JSON body"
+    for group in groups:
+        if not isinstance(group, dict) or group.get("status", "ACTIVE") != "ACTIVE":
+            continue
+        if group.get("userGroupName") == group_name and group.get("userGroupId"):
+            return str(group["userGroupId"]), None
+    return None, None
 
 
 async def call_igot_create_user_group(client, cfg, org_id, group_name, designation):
@@ -621,9 +660,17 @@ async def publish_single_item(client, cfg, item, org_id, plan_name, due_date_obj
         return {"item_id": str(item.id), "designation_name": designation, "status": "failed",
                 "plan_id": None, "error": "No CBP Plan found for this item."}
 
-    user_group_id, err = await call_igot_create_user_group(client, cfg, org_id,
-                                                           f"{plan_name} - {item.approval_request_id}",
-                                                           designation)
+    group_name = format_user_group_name(designation)
+    user_group_id, err = await call_igot_search_user_group(client, cfg, org_id, group_name)
+    if err:
+        return {"item_id": str(item.id), "designation_name": designation, "status": "failed",
+                "plan_id": None, "error": err}
+    if user_group_id:
+        logger.info(f"  Reusing user group '{group_name}' ({user_group_id}) in org {org_id}")
+    else:
+        user_group_id, err = await call_igot_create_user_group(client, cfg, org_id, group_name, designation)
+        if user_group_id:
+            logger.info(f"  Created user group '{group_name}' ({user_group_id}) in org {org_id}")
     if not user_group_id:
         return {"item_id": str(item.id), "designation_name": designation, "status": "failed",
                 "plan_id": None, "error": err or "iGOT user group create failed"}
