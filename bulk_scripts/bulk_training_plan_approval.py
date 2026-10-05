@@ -544,7 +544,7 @@ async def call_igot_search_user_group(client, cfg, org_id, group_name):
     url = f"{cfg.cb_ext_course_base}/usergroup/v1/searchV2"
     payload = {
         "request": {
-            "filters": {"usergroupname": group_name, "orgId": org_id},
+            "filters": {"usergroupname": group_name, "orgid": org_id},
             "limit": 10,
             "offset": 0,
         }
