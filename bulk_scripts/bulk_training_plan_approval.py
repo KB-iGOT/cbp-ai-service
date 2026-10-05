@@ -12,8 +12,9 @@ reference an existing approval_request_id:
      isn't PENDING, it's either already fully APPROVED (ALREADY_APPROVED) or in some other terminal state
      like REJECTED/DRAFT (SKIPPED_NOT_PENDING) -- either way, nothing is published.
   2. PUBLISH (mirrors the MDO publish controller): lock the PENDING request (SELECT … FOR UPDATE), and for
-     each PENDING item call `POST {CB_EXT_COURSE_SERVICE_URL}/cbplan/v3/aicbp/create` + `/aicbp/publish`
-     directly. ONLY an item whose create+publish BOTH succeed gets an mdo_approval row (with the returned
+     each PENDING item get the user group named after the designation (e.g. `Assistant_Section_Officer`) --
+     `POST {CB_EXT_COURSE_SERVICE_URL}/usergroup/v1/searchV2`, and only if none exists (404)
+     `/usergroup/v1/create` -- then call `/cbplan/v4/aicbp/create` + `/aicbp/publish` directly. ONLY an item whose create+publish BOTH succeed gets an mdo_approval row (with the returned
      igot_cbp_plan_id) and is flipped to APPROVED; a failed item gets no DB write at all and stays PENDING,
      so the next run's PENDING-items query retries exactly it. The request itself is flipped to APPROVED
      only once every one of its items has succeeded (across however many runs that took).
@@ -456,12 +457,13 @@ def _http_detail(resp):
     return " ".join(str(text).split())[:500]
 
 
-def extract_content_ids(cbp_plan_data_list):
-    """Dedup course identifiers from cbp_plan_data[].selected_courses[].identifier (mirrors igot_service)."""
+def extract_content_list(cbp_plan_data_list):
+    """Dedup courses from cbp_plan_data[].selected_courses[] as v4 contentList objects
+    ({identifier, mandatory}) (mirrors igot_service)."""
     seen = set()
-    content_ids = []
+    content_list = []
     if not cbp_plan_data_list:
-        return content_ids
+        return content_list
     records = cbp_plan_data_list if isinstance(cbp_plan_data_list, list) else [cbp_plan_data_list]
     for record in records:
         if not isinstance(record, dict):
@@ -470,11 +472,18 @@ def extract_content_ids(cbp_plan_data_list):
             identifier = course.get("identifier") if isinstance(course, dict) else None
             if identifier and identifier not in seen:
                 seen.add(identifier)
-                content_ids.append(identifier)
-    return content_ids
+                content_list.append({"identifier": identifier,
+                                     "mandatory": bool(course.get("mandatory", False))})
+    return content_list
 
 
-# ─────────────────────────────────────── retrying POST (iGOT) ───────────────────────────────────────
+def format_user_group_name(designation):
+    """Trim and join words with underscores, upper-casing each word's first letter (mirrors igot_service):
+    'assistant section officer' -> 'Assistant_Section_Officer'."""
+    return "_".join(word[:1].upper() + word[1:].lower() for word in designation.strip().split())
+
+
+# ─────────────────────────────────────── retrying POST (iGOT) ────────────────────────────────────────
 # HTTP-specific retry helper (status-code + transport-error retry) -- the same exponential-backoff shape
 # as the sibling scripts' with_retry, but built for inspecting an httpx.Response rather than retrying an
 # arbitrary coroutine on any exception.
@@ -529,25 +538,77 @@ def _cb_ext_course_headers(cfg):
     }
 
 
-async def call_igot_create(client, cfg, org_id, plan_name, due_date, designation, content_ids):
-    """POST {CB_EXT_COURSE_SERVICE_URL}/cbplan/v3/aicbp/create. Returns (plan_id|None, error)."""
-    url = f"{cfg.cb_ext_course_base}/cbplan/v3/aicbp/create"
+async def call_igot_search_user_group(client, cfg, org_id, group_name):
+    """POST {CB_EXT_COURSE_SERVICE_URL}/usergroup/v1/searchV2. Returns (user_group_id|None, error): the ACTIVE
+    group with exactly this name in the org, or (None, None) when there is none (the API answers 404)."""
+    url = f"{cfg.cb_ext_course_base}/usergroup/v1/searchV2"
+    payload = {
+        "request": {
+            "filters": {"userGroupName": group_name, "orgId": org_id},
+            "limit": 10,
+            "offset": 0,
+        }
+    }
+    resp, err, _att = await with_retry(client, url, payload, _cb_ext_course_headers(cfg),
+                                       description="cb-ext-usergroup-search", max_retries=cfg.max_retries,
+                                       backoff=cfg.backoff)
+    if resp is None:
+        return None, err
+    if resp.status_code == 404:
+        return None, None
+    if resp.status_code // 100 != 2:
+        return None, f"usergroup search {resp.status_code}: {_http_detail(resp)}"
+    try:
+        groups = resp.json().get("content") or []
+    except (json.JSONDecodeError, ValueError):
+        return None, "usergroup search returned a non-JSON body"
+    for group in groups:
+        if not isinstance(group, dict) or group.get("status", "ACTIVE") != "ACTIVE":
+            continue
+        if group.get("userGroupName") == group_name and group.get("userGroupId"):
+            return str(group["userGroupId"]), None
+    return None, None
+
+
+async def call_igot_create_user_group(client, cfg, org_id, group_name, designation):
+    """POST {CB_EXT_COURSE_SERVICE_URL}/usergroup/v1/create. Returns (user_group_id|None, error)."""
+    url = f"{cfg.cb_ext_course_base}/usergroup/v1/create"
+    payload = {
+        "request": {
+            "usergroupname": group_name,
+            "criteria": [
+                {"criteriaKey": "designation", "criteriaValue": [designation]},
+                {"criteriaKey": "rootOrgId", "criteriaValue": [org_id]},
+            ],
+        }
+    }
+    resp, err, _att = await with_retry(client, url, payload, _cb_ext_course_headers(cfg),
+                                       description="cb-ext-usergroup-create", max_retries=cfg.max_retries,
+                                       backoff=cfg.backoff)
+    if resp is None:
+        return None, err
+    if resp.status_code // 100 != 2:
+        return None, f"usergroup create {resp.status_code}: {_http_detail(resp)}"
+    try:
+        user_group_id = resp.json().get("result", {}).get("usergroupid")
+    except (json.JSONDecodeError, ValueError):
+        user_group_id = None
+    if not user_group_id:
+        return None, "usergroup create returned no result.usergroupid"
+    return str(user_group_id), None
+
+
+async def call_igot_create(client, cfg, org_id, plan_name, due_date, user_group_id, content_list):
+    """POST {CB_EXT_COURSE_SERVICE_URL}/cbplan/v4/aicbp/create. Returns (plan_id|None, error)."""
+    url = f"{cfg.cb_ext_course_base}/cbplan/v4/aicbp/create"
     payload = {
         "request": {
             "comment": f"{plan_name} is created",
-            "contentList": content_ids,
+            "contentList": content_list,
             "contentType": "Course",
             "contextData": {
                 "accessControl": {
-                    "userGroups": [
-                        {
-                            "userGroupName": "User Group 1",
-                            "userGroupCriteriaList": [
-                                {"criteriaKey": "designation", "criteriaValue": [designation]},
-                                {"criteriaKey": "rootOrgId", "criteriaValue": [org_id]},
-                            ],
-                        }
-                    ],
+                    "userGroups": [{"userGroupId": user_group_id}],
                     "version": 1,
                 }
             },
@@ -577,8 +638,8 @@ async def call_igot_create(client, cfg, org_id, plan_name, due_date, designation
 
 
 async def call_igot_publish(client, cfg, org_id, plan_id):
-    """POST {CB_EXT_COURSE_SERVICE_URL}/cbplan/v3/aicbp/publish. Returns (ok, error)."""
-    url = f"{cfg.cb_ext_course_base}/cbplan/v3/aicbp/publish"
+    """POST {CB_EXT_COURSE_SERVICE_URL}/cbplan/v4/aicbp/publish. Returns (ok, error)."""
+    url = f"{cfg.cb_ext_course_base}/cbplan/v4/aicbp/publish"
     payload = {"request": {"id": plan_id, "comment": "CBP plan approved", "targetedOrganisation": org_id}}
     resp, err, _att = await with_retry(client, url, payload, _cb_ext_course_headers(cfg),
                                        description="cb-ext-course-publish", max_retries=cfg.max_retries,
@@ -591,16 +652,31 @@ async def call_igot_publish(client, cfg, org_id, plan_id):
 
 
 async def publish_single_item(client, cfg, item, org_id, plan_name, due_date_obj):
-    """Create + publish one item's CBP plan on iGOT. Returns the per-item result dict (mirrors the
-    controller's _publish_single_item shape)."""
+    """Create user group + create + publish one item's CBP plan on iGOT. Returns the per-item result
+    dict (mirrors the controller's _publish_single_item shape)."""
     designation = item.igot_designation_name or item.designation_name
-    content_ids = extract_content_ids(item.cbp_plan_data)
-    if not content_ids:
+    content_list = extract_content_list(item.cbp_plan_data)
+    if not content_list:
         return {"item_id": str(item.id), "designation_name": designation, "status": "failed",
                 "plan_id": None, "error": "No CBP Plan found for this item."}
 
+    group_name = format_user_group_name(designation)
+    user_group_id, err = await call_igot_search_user_group(client, cfg, org_id, group_name)
+    if err:
+        return {"item_id": str(item.id), "designation_name": designation, "status": "failed",
+                "plan_id": None, "error": err}
+    if user_group_id:
+        logger.info(f"  Reusing user group '{group_name}' ({user_group_id}) in org {org_id}")
+    else:
+        user_group_id, err = await call_igot_create_user_group(client, cfg, org_id, group_name, designation)
+        if user_group_id:
+            logger.info(f"  Created user group '{group_name}' ({user_group_id}) in org {org_id}")
+    if not user_group_id:
+        return {"item_id": str(item.id), "designation_name": designation, "status": "failed",
+                "plan_id": None, "error": err or "iGOT user group create failed"}
+
     plan_id, err = await call_igot_create(client, cfg, org_id, plan_name, due_date_obj,
-                                          designation, content_ids)
+                                          user_group_id, content_list)
     if not plan_id:
         return {"item_id": str(item.id), "designation_name": designation, "status": "failed",
                 "plan_id": None, "error": err or "iGOT create failed"}
