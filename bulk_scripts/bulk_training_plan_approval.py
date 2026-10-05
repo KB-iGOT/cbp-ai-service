@@ -480,7 +480,7 @@ def extract_content_list(cbp_plan_data_list):
 def format_user_group_name(designation):
     """Trim and join words with underscores, upper-casing each word's first letter (mirrors igot_service):
     'assistant section officer' -> 'Assistant_Section_Officer'."""
-    return "_".join(word[:1].upper() + word[1:] for word in designation.strip().split())
+    return "_".join(word[:1].upper() + word[1:].lower() for word in designation.strip().split())
 
 
 # ─────────────────────────────────────── retrying POST (iGOT) ────────────────────────────────────────
