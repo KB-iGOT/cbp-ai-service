@@ -559,11 +559,11 @@ async def call_igot_search_user_group(client, cfg, org_id, group_name):
     if resp.status_code // 100 != 2:
         return None, f"usergroup search {resp.status_code}: {_http_detail(resp)}"
     try:
-        groups = resp.json().get("content") or []
+        groups = (resp.json().get("result") or {}).get("content") or []
     except (json.JSONDecodeError, ValueError):
         return None, "usergroup search returned a non-JSON body"
     for group in groups:
-        if not isinstance(group, dict) or group.get("status", "ACTIVE") != "ACTIVE":
+        if not isinstance(group, dict) or str(group.get("status", "active")).lower() != "active":
             continue
         if group.get("usergroupname") == group_name and group.get("usergroupid"):
             return str(group["usergroupid"]), None
