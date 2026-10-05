@@ -544,7 +544,7 @@ async def call_igot_search_user_group(client, cfg, org_id, group_name):
     url = f"{cfg.cb_ext_course_base}/usergroup/v1/searchV2"
     payload = {
         "request": {
-            "filters": {"userGroupName": group_name, "orgId": org_id},
+            "filters": {"usergroupname": group_name, "orgId": org_id},
             "limit": 10,
             "offset": 0,
         }
@@ -559,14 +559,14 @@ async def call_igot_search_user_group(client, cfg, org_id, group_name):
     if resp.status_code // 100 != 2:
         return None, f"usergroup search {resp.status_code}: {_http_detail(resp)}"
     try:
-        groups = resp.json().get("content") or []
+        groups = (resp.json().get("result") or {}).get("content") or []
     except (json.JSONDecodeError, ValueError):
         return None, "usergroup search returned a non-JSON body"
     for group in groups:
-        if not isinstance(group, dict) or group.get("status", "ACTIVE") != "ACTIVE":
+        if not isinstance(group, dict) or str(group.get("status", "active")).lower() != "active":
             continue
-        if group.get("userGroupName") == group_name and group.get("userGroupId"):
-            return str(group["userGroupId"]), None
+        if group.get("usergroupname") == group_name and group.get("usergroupid"):
+            return str(group["usergroupid"]), None
     return None, None
 
 
@@ -575,7 +575,7 @@ async def call_igot_create_user_group(client, cfg, org_id, group_name, designati
     url = f"{cfg.cb_ext_course_base}/usergroup/v1/create"
     payload = {
         "request": {
-            "usergroupname": group_name,
+            "userGroupName": group_name,
             "criteria": [
                 {"criteriaKey": "designation", "criteriaValue": [designation]},
                 {"criteriaKey": "rootOrgId", "criteriaValue": [org_id]},
