@@ -572,9 +572,10 @@ async def call_igot_search_user_group(client, cfg, org_id, group_name):
 
 async def call_igot_create_user_group(client, cfg, org_id, group_name, designation):
     """POST {CB_EXT_COURSE_SERVICE_URL}/usergroup/v1/create. Returns (user_group_id|None, error)."""
-    url = f"{cfg.cb_ext_course_base}/usergroup/v1/create"
+    url = f"{cfg.cb_ext_course_base}/usergroup/v1/admin/create"
     payload = {
         "request": {
+             "rootOrgId": org_id,
             "userGroupName": group_name,
             "criteria": [
                 {"criteriaKey": "designation", "criteriaValue": [designation]},
