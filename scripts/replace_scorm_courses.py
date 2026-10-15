@@ -4,7 +4,8 @@ Replace retired SCORM course references with their new non-SCORM course across t
 The old SCORM content has been deleted from iGOT and a non-SCORM copy published under a new
 identifier. Every place the old identifier is stored is pointed at the new one instead, in:
 
-    1. recommended_courses      filtered_courses[].identifier, actual_courses[].identifier
+    1. recommended_courses      filtered_courses[].identifier
+                                (actual_courses, the raw vector-search audit trail, is left as is)
     2. suggested_courses        course_identifiers[]            (array of bare id strings)
     3. cbp_plans                selected_courses[].identifier
     4. approval_request_items   cbp_plan_data[].selected_courses[].identifier
@@ -29,10 +30,14 @@ If the new identifier is already present in the same list, the old entry is remo
 replaced, so no list ever ends up holding the same course twice. Both kinds of removal are reported
 per table as entries_removed and logged with their reason. Array order is otherwise preserved.
 
-Rows are processed one at a time, in file order. Each CSV row is one transaction covering all four
-tables -- either all four are updated for that row or none are -- and under --execute the rows
-being edited are locked (SELECT ... FOR UPDATE) so a concurrent app edit cannot be clobbered. A row
-that fails is rolled back on its own and reported as 'error'; the run carries on.
+How it runs (built for production volumes): course identifiers live inside JSON arrays, so no
+index can find them and every lookup is a full table scan. Each table is therefore scanned ONCE for
+all old identifiers together (returning only row ids), and every matching row is then rewritten
+once with all mappings applied in a single pass. Rows are re-read, rewritten and updated in batches
+of --batch-size; under --execute each batch is its own transaction and locks its rows
+(SELECT ... FOR UPDATE) only for that batch, so a concurrent app edit cannot be clobbered and no
+lock is held for long. If a batch fails the run stops; batches already committed stay committed,
+and a re-run is safe -- identifiers already replaced are simply no longer found.
 
 Nothing is written unless --execute is passed. A plain run is a dry run: it finds and rewrites
 exactly the same entries in memory and reports what would change, but issues no UPDATE.
@@ -48,9 +53,14 @@ Rows are skipped (and reported) when: the Non-SCORM ID is not a do_ identifier (
 'Upload Pending'), both ids are the same, the SCORM_ID repeats an earlier row, or the new id is
 itself the SCORM_ID of another row. Fully blank lines are ignored.
 
-Output: a log under scripts/logs/ and an outcome CSV (one row per input row, with rows updated and
-entries replaced per table) next to the input file unless --out is given. The terminal ends with a
-per-table summary of rows impacted.
+Output:
+    - outcome CSV next to the input file (or --out): one row per input row with its status and,
+      per table, rows updated / entries replaced / entries removed
+    - log under scripts/logs/: progress and summary, plus the OLD -> NEW object of every changed
+      entry by default. That is ~1-3 KB per entry, i.e. gigabytes at production volume -- check
+      free disk first, or cap it with --log-entries N (first N changes per mapping per table;
+      0 = none). Entry-level detail goes to the log file only, not the terminal.
+    - terminal: progress and a per-table summary of rows impacted
 
 Usage:
     python scripts/replace_scorm_courses.py --csv "~/Downloads/SCORM to Non_SCORM.csv"
@@ -74,12 +84,13 @@ import logging
 import os
 import re
 import sys
-from collections import Counter
+import time
+from collections import Counter, defaultdict
 from dataclasses import dataclass, field
 from datetime import date, datetime
 from decimal import Decimal
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 
 import asyncpg
 
@@ -140,8 +151,14 @@ TABLES = [
 
 APPROVAL_STATUSES = {"draft", "pending", "approved", "rejected", "failed"}
 
+DEFAULT_BATCH_SIZE = 500
+DEFAULT_LOG_ENTRIES = -1  # -1 = log every change
+
 # A real content identifier; '-' / 'Upload Pending' / blanks fail this and the row is skipped.
 CONTENT_ID_RE = re.compile(r"^do_\w+$")
+
+REASON_DUPLICATE = "new course already in list"
+REASON_NO_METADATA = "new course not in course_metadata_weightage"
 
 COURSE_METADATA_SQL = """
     SELECT DISTINCT ON (identifier)
@@ -164,11 +181,22 @@ class Mapping:
 
 
 @dataclass
+class Action:
+    """What to do with one old identifier wherever it is found."""
+    m: Mapping
+    meta: Optional[dict]
+    remove_only: bool  # new course has no metadata and --on-missing-metadata=remove
+
+
+@dataclass
 class TableResult:
-    rows: int = 0         # DB rows rewritten
+    rows: int = 0         # DB rows containing the course (= rows rewritten)
     replaced: int = 0     # entries whose identifier was swapped to the new course
     removed: int = 0      # old entries removed without a replacement (duplicate / no metadata)
-    row_ids: Set[str] = field(default_factory=set)
+
+
+# {old_id: [replaced, removed]} for the row currently being rewritten.
+RowHits = Dict[str, List[int]]
 
 
 # --- JSON helpers --------------------------------------------------------------------------
@@ -237,249 +265,263 @@ def _rebuild_entry(entry: dict, m: Mapping, meta: Optional[dict]) -> dict:
     return new_entry
 
 
-REASON_DUPLICATE = "new course already in list"
-REASON_NO_METADATA = "new course not in course_metadata_weightage"
+# Per-mapping-per-table cap on OLD/NEW samples in the log (-1 = unlimited); set from
+# --log-entries. Counted in _entries_logged keyed by (table, old_id).
+_log_entries_limit = DEFAULT_LOG_ENTRIES
+_entries_logged: Counter = Counter()
 
 
-def _log_change(where: Optional[str], old, new=None, reason: str = "") -> None:
-    """Log one entry's before/after. `new` is None for an old entry removed without replacement."""
-    if where is None:
+def _log_change(where: str, old_id: str, old, new=None, reason: str = "") -> None:
+    """Entry-level detail: log file only (DEBUG), so the terminal is not flooded. With
+    --log-entries N only the first N changes per mapping per table are logged."""
+    key = (where.split(" ", 1)[0], old_id)  # `where` starts with the table name
+    if _log_entries_limit >= 0 and _entries_logged[key] >= _log_entries_limit:
         return
+    _entries_logged[key] += 1
     if new is None:
-        logger.info(f"    {where}: REMOVED ({reason}) OLD {_dumps(old)}")
+        logger.debug(f"    {where}: REMOVED ({reason}) OLD {_dumps(old)}")
     else:
-        logger.info(f"    {where}:\n      OLD {_dumps(old)}\n      NEW {_dumps(new)}")
+        logger.debug(f"    {where}:\n      OLD {_dumps(old)}\n      NEW {_dumps(new)}")
 
 
-def replace_in_courses(
-    courses, m: Mapping, meta: Optional[dict], where: Optional[str] = None,
-    remove_only: bool = False,
-) -> Tuple[Any, int, int]:
-    """Swap the old course for the new one in a list of course objects; with `remove_only` the
-    old course is just removed. Returns (new_list, replaced, removed); a non-list value is passed
-    through untouched. Each change is logged against `where` (table/row/column) when given."""
-    if not isinstance(courses, list):
-        return courses, 0, 0
-    has_new = any(_identifier_of(c) == m.new_id for c in courses)
-    result, replaced, removed = [], 0, 0
-    for course in courses:
-        if _identifier_of(course) != m.old_id:
-            result.append(course)
-        elif remove_only or has_new:
-            _log_change(where, course,
-                        reason=REASON_NO_METADATA if remove_only else REASON_DUPLICATE)
-            removed += 1
-        else:
-            new_course = _rebuild_entry(course, m, meta)
-            _log_change(where, course, new_course)
-            result.append(new_course)
-            replaced += 1
-            has_new = True  # any further copy of the old id would now be a duplicate
-    return result, replaced, removed
+def rewrite_list(values, actions: Dict[str, Action], where: str, hits: RowHits,
+                 bare_ids: bool = False) -> Tuple[Any, bool]:
+    """Apply every mapping to one JSON array in a single pass.
 
+    `values` is a list of course objects, or of bare identifier strings when `bare_ids`.
+    Returns (new_list, changed); a non-list value is passed through untouched. Per-old-id
+    replaced/removed counts are added to `hits`."""
+    if not isinstance(values, list):
+        return values, False
 
-def replace_in_identifiers(
-    ids, m: Mapping, where: Optional[str] = None, remove_only: bool = False
-) -> Tuple[Any, int, int]:
-    """Same as replace_in_courses for an array of bare identifier strings."""
-    if not isinstance(ids, list):
-        return ids, 0, 0
-    has_new = any(str(i).strip() == m.new_id for i in ids)
-    result, replaced, removed = [], 0, 0
-    for value in ids:
-        if str(value).strip() != m.old_id:
+    def ident(value):
+        return (str(value).strip() if value is not None else None) if bare_ids \
+            else _identifier_of(value)
+
+    present = {i for i in map(ident, values) if i is not None}
+    result, changed = [], False
+    for value in values:
+        old_id = ident(value)
+        action = actions.get(old_id) if old_id is not None else None
+        if action is None:
             result.append(value)
-        elif remove_only or has_new:
-            _log_change(where, value,
-                        reason=REASON_NO_METADATA if remove_only else REASON_DUPLICATE)
-            removed += 1
+            continue
+
+        changed = True
+        new_id = action.m.new_id
+        if action.remove_only or new_id in present:
+            reason = REASON_NO_METADATA if action.remove_only else REASON_DUPLICATE
+            _log_change(where, old_id, value, reason=reason)
+            hits[old_id][1] += 1
         else:
-            _log_change(where, value, m.new_id)
-            result.append(m.new_id)
-            replaced += 1
-            has_new = True
-    return result, replaced, removed
+            new_value = new_id if bare_ids else _rebuild_entry(value, action.m, action.meta)
+            _log_change(where, old_id, value, new_value)
+            result.append(new_value)
+            present.add(new_id)  # any further copy now counts as a duplicate
+            hits[old_id][0] += 1
+    return result, changed
 
 
-def replace_in_plan_data(
-    data, m: Mapping, meta: Optional[dict], where: Optional[str] = None,
-    remove_only: bool = False,
-) -> Tuple[Any, int, int]:
+def rewrite_plan_data(data, actions: Dict[str, Action], where: str,
+                      hits: RowHits) -> Tuple[Any, bool]:
     """cbp_plan_data is a list of CBP plan snapshots (a single snapshot object is tolerated, as
     the publish script does), each with its own selected_courses list."""
     plans = data if isinstance(data, list) else [data]
-    new_plans, replaced, removed = [], 0, 0
+    new_plans, changed = [], False
     for index, plan in enumerate(plans):
         if isinstance(plan, dict) and isinstance(plan.get("selected_courses"), list):
-            plan_where = None if where is None else f"{where}[{index}].selected_courses"
-            courses, r, d = replace_in_courses(
-                plan["selected_courses"], m, meta, plan_where, remove_only
+            courses, plan_changed = rewrite_list(
+                plan["selected_courses"], actions, f"{where}[{index}].selected_courses", hits
             )
-            if r or d:
+            if plan_changed:
                 plan = {**plan, "selected_courses": courses}
-            replaced += r
-            removed += d
+                changed = True
         new_plans.append(plan)
-    return (new_plans if isinstance(data, list) else new_plans[0]), replaced, removed
+    return (new_plans if isinstance(data, list) else new_plans[0]), changed
 
 
-# --- One function per table, run in the order listed in the module docstring ---------------
+# --- Per-table definitions -----------------------------------------------------------------
+#
+# scan_sql   one full pass over the table for ALL old ids ($1 text[]), returning only row ids
+# fetch_sql  the full rows for one batch of ids ($1 uuid[]); FOR UPDATE is appended on --execute
+# rewrite    row -> tuple of new column values (in update_sql's $2.. order), or None if unchanged
+# update_sql one row's UPDATE, run with executemany for the whole batch
 
-def _lock(execute: bool) -> str:
-    return "FOR UPDATE" if execute else ""
+def _as_array(expr: str) -> str:
+    """Expand-safe view of a JSON value: anything that is not an array reads as an empty array,
+    so jsonb_array_elements() never errors on a NULL or a stray object."""
+    return f"CASE WHEN jsonb_typeof({expr}) = 'array' THEN {expr} ELSE '[]'::jsonb END"
 
 
-async def replace_in_recommended_courses(conn, m, meta, execute, remove_only) -> TableResult:
-    probe = [{"identifier": m.old_id}]
-    rows = await conn.fetch(
-        f"""SELECT id, filtered_courses, actual_courses
-              FROM recommended_courses
-             WHERE filtered_courses @> $1::jsonb OR actual_courses @> $1::jsonb
-             {_lock(execute)}""",
-        probe,
+def _has_course(col: str) -> str:
+    return (f"EXISTS (SELECT 1 FROM jsonb_array_elements({_as_array(col)}) e "
+            f"WHERE e->>'identifier' = ANY($1::text[]))")
+
+
+@dataclass
+class TableSpec:
+    table: str
+    scan_sql: str
+    fetch_sql: str
+    update_sql: str
+    rewrite: Callable[[Any, Dict[str, Action], RowHits], Optional[tuple]]
+    uses_statuses: bool = False
+
+
+def _rewrite_recommended(row, actions, hits):
+    filtered, changed = rewrite_list(
+        row["filtered_courses"], actions,
+        f"recommended_courses id={row['id']} filtered_courses", hits,
     )
-    result = TableResult()
-    for row in rows:
-        where = f"recommended_courses id={row['id']}"
-        filtered, r1, d1 = replace_in_courses(
-            row["filtered_courses"], m, meta, f"{where} filtered_courses", remove_only
-        )
-        actual, r2, d2 = replace_in_courses(
-            row["actual_courses"], m, meta, f"{where} actual_courses", remove_only
-        )
-        if not (r1 or d1 or r2 or d2):
-            continue
-        if execute:
-            await conn.execute(
-                """UPDATE recommended_courses
-                      SET filtered_courses = $2::jsonb, actual_courses = $3::jsonb,
-                          updated_at = now()
-                    WHERE id = $1""",
-                row["id"], filtered, actual,
-            )
-        result.rows += 1
-        result.replaced += r1 + r2
-        result.removed += d1 + d2
-        result.row_ids.add(str(row["id"]))
-    return result
+    return (filtered,) if changed else None
 
 
-async def replace_in_suggested_courses(conn, m, meta, execute, remove_only) -> TableResult:
-    rows = await conn.fetch(
-        f"""SELECT id, course_identifiers
-              FROM suggested_courses
-             WHERE course_identifiers @> $1::jsonb
-             {_lock(execute)}""",
-        [m.old_id],
+def _rewrite_suggested(row, actions, hits):
+    ids, changed = rewrite_list(
+        row["course_identifiers"], actions,
+        f"suggested_courses id={row['id']} course_identifiers", hits, bare_ids=True,
     )
-    result = TableResult()
-    for row in rows:
-        ids, replaced, removed = replace_in_identifiers(
-            row["course_identifiers"], m,
-            f"suggested_courses id={row['id']} course_identifiers", remove_only,
-        )
-        if not (replaced or removed):
-            continue
-        if execute:
-            await conn.execute(
-                """UPDATE suggested_courses
-                      SET course_identifiers = $2::jsonb, updated_at = now()
-                    WHERE id = $1""",
-                row["id"], ids,
-            )
-        result.rows += 1
-        result.replaced += replaced
-        result.removed += removed
-        result.row_ids.add(str(row["id"]))
-    return result
+    return (ids,) if changed else None
 
 
-async def replace_in_cbp_plans(conn, m, meta, execute, remove_only) -> TableResult:
-    rows = await conn.fetch(
-        f"""SELECT id, selected_courses
-              FROM cbp_plans
-             WHERE selected_courses @> $1::jsonb
-             {_lock(execute)}""",
-        [{"identifier": m.old_id}],
+def _rewrite_cbp_plan(row, actions, hits):
+    courses, changed = rewrite_list(
+        row["selected_courses"], actions, f"cbp_plans id={row['id']} selected_courses", hits
     )
-    result = TableResult()
-    for row in rows:
-        courses, replaced, removed = replace_in_courses(
-            row["selected_courses"], m, meta, f"cbp_plans id={row['id']} selected_courses",
-            remove_only,
-        )
-        if not (replaced or removed):
-            continue
-        if execute:
-            await conn.execute(
-                """UPDATE cbp_plans
-                      SET selected_courses = $2::jsonb, updated_at = now()
-                    WHERE id = $1""",
-                row["id"], courses,
-            )
-        result.rows += 1
-        result.replaced += replaced
-        result.removed += removed
-        result.row_ids.add(str(row["id"]))
-    return result
+    return (courses,) if changed else None
 
 
-async def replace_in_approval_request_items(
-    conn, m, meta, execute, remove_only, statuses: Optional[List[str]]
-) -> TableResult:
-    """cbp_plan_data is JSON rather than JSONB, so it is read as jsonb to be searched and written
-    back as json. The table has no updated_at column."""
-    course = {"identifier": m.old_id}
-    rows = await conn.fetch(
-        f"""SELECT id, cbp_plan_data::jsonb AS data
-              FROM approval_request_items
-             WHERE (cbp_plan_data::jsonb @> $1::jsonb OR cbp_plan_data::jsonb @> $2::jsonb)
-               AND ($3::text[] IS NULL OR lower(status::text) = ANY($3::text[]))
-             {_lock(execute)}""",
-        [{"selected_courses": [course]}],
-        {"selected_courses": [course]},
-        statuses,
+def _rewrite_approval_item(row, actions, hits):
+    data, changed = rewrite_plan_data(
+        row["data"], actions, f"approval_request_items id={row['id']} cbp_plan_data", hits
     )
-    result = TableResult()
-    for row in rows:
-        data, replaced, removed = replace_in_plan_data(
-            row["data"], m, meta, f"approval_request_items id={row['id']} cbp_plan_data",
-            remove_only,
-        )
-        if not (replaced or removed):
-            continue
-        if execute:
-            await conn.execute(
-                "UPDATE approval_request_items SET cbp_plan_data = $2::json WHERE id = $1",
-                row["id"], data,
+    return (data,) if changed else None
+
+
+# cbp_plan_data is JSON (not JSONB); a single snapshot object is treated as a one-element list.
+_APPROVAL_PLANS = """CASE jsonb_typeof(x.d)
+                         WHEN 'array'  THEN x.d
+                         WHEN 'object' THEN jsonb_build_array(x.d)
+                         ELSE '[]'::jsonb END"""
+_STATUS_FILTER = "($2::text[] IS NULL OR lower(a.status::text) = ANY($2::text[]))"
+
+TABLE_SPECS = [
+    TableSpec(
+        table="recommended_courses",
+        scan_sql=f"""SELECT r.id FROM recommended_courses r
+                      WHERE {_has_course('r.filtered_courses')}""",
+        fetch_sql="""SELECT id, filtered_courses
+                       FROM recommended_courses WHERE id = ANY($1::uuid[])""",
+        update_sql="""UPDATE recommended_courses
+                         SET filtered_courses = $2::jsonb, updated_at = now()
+                       WHERE id = $1""",
+        rewrite=_rewrite_recommended,
+    ),
+    TableSpec(
+        table="suggested_courses",
+        # ?| matches top-level string elements of the array against any of the ids.
+        scan_sql="""SELECT s.id FROM suggested_courses s
+                     WHERE jsonb_typeof(s.course_identifiers) = 'array'
+                       AND s.course_identifiers ?| $1::text[]""",
+        fetch_sql="""SELECT id, course_identifiers
+                       FROM suggested_courses WHERE id = ANY($1::uuid[])""",
+        update_sql="""UPDATE suggested_courses
+                         SET course_identifiers = $2::jsonb, updated_at = now()
+                       WHERE id = $1""",
+        rewrite=_rewrite_suggested,
+    ),
+    TableSpec(
+        table="cbp_plans",
+        scan_sql=f"""SELECT p.id FROM cbp_plans p
+                      WHERE {_has_course('p.selected_courses')}""",
+        fetch_sql="""SELECT id, selected_courses
+                       FROM cbp_plans WHERE id = ANY($1::uuid[])""",
+        update_sql="""UPDATE cbp_plans
+                         SET selected_courses = $2::jsonb, updated_at = now()
+                       WHERE id = $1""",
+        rewrite=_rewrite_cbp_plan,
+    ),
+    TableSpec(
+        table="approval_request_items",
+        scan_sql=f"""SELECT a.id
+                       FROM approval_request_items a
+                      CROSS JOIN LATERAL (SELECT a.cbp_plan_data::jsonb AS d) x
+                      WHERE {_STATUS_FILTER}
+                        AND EXISTS (
+                            SELECT 1
+                              FROM jsonb_array_elements({_APPROVAL_PLANS}) plan,
+                                   jsonb_array_elements({_as_array("plan->'selected_courses'")}) c
+                             WHERE c->>'identifier' = ANY($1::text[]))""",
+        fetch_sql=f"""SELECT a.id, a.cbp_plan_data::jsonb AS data
+                        FROM approval_request_items a
+                       WHERE a.id = ANY($1::uuid[]) AND {_STATUS_FILTER}""",
+        # No updated_at column on this table; the jsonb value is written back as json.
+        update_sql="UPDATE approval_request_items SET cbp_plan_data = $2::json WHERE id = $1",
+        rewrite=_rewrite_approval_item,
+        uses_statuses=True,
+    ),
+]
+
+
+async def process_table(
+    conn: asyncpg.Connection,
+    spec: TableSpec,
+    actions: Dict[str, Action],
+    stats: Dict[str, Dict[str, TableResult]],
+    totals: Dict[str, TableResult],
+    execute: bool,
+    batch_size: int,
+    statuses: Optional[List[str]],
+) -> None:
+    """Scan the table once, then rewrite and update the matching rows batch by batch."""
+    extra = (statuses,) if spec.uses_statuses else ()
+    old_ids = list(actions)
+
+    started = time.monotonic()
+    ids = [r["id"] for r in await conn.fetch(spec.scan_sql, old_ids, *extra)]
+    logger.info(f"{spec.table}: {len(ids)} matching rows (scan {time.monotonic() - started:.1f}s)")
+
+    fetch_sql = spec.fetch_sql + (" FOR UPDATE" if execute else "")
+    total = totals[spec.table]
+
+    for start in range(0, len(ids), batch_size):
+        batch = ids[start:start + batch_size]
+        batch_started = time.monotonic()
+
+        async def apply_batch():
+            updates = []
+            for row in await conn.fetch(fetch_sql, batch, *extra):
+                hits: RowHits = defaultdict(lambda: [0, 0])
+                values = spec.rewrite(row, actions, hits)
+                if values is None:
+                    continue  # changed since the scan; nothing left to do in this row
+                updates.append((row["id"], *values))
+                for old_id, (replaced, removed) in hits.items():
+                    result = stats[old_id][spec.table]
+                    result.rows += 1
+                    result.replaced += replaced
+                    result.removed += removed
+                    total.replaced += replaced
+                    total.removed += removed
+            if execute and updates:
+                await conn.executemany(spec.update_sql, updates)
+            total.rows += len(updates)
+
+        try:
+            if execute:
+                async with conn.transaction():
+                    await apply_batch()
+            else:
+                await apply_batch()
+        except Exception:
+            logger.error(
+                f"{spec.table}: batch of rows {start + 1}-{start + len(batch)} failed and was "
+                f"rolled back. Earlier batches are already committed; re-running is safe."
             )
-        result.rows += 1
-        result.replaced += replaced
-        result.removed += removed
-        result.row_ids.add(str(row["id"]))
-    return result
+            raise
 
-
-async def _replace_everywhere(
-    conn, m, meta, execute, remove_only, statuses
-) -> Dict[str, TableResult]:
-    args = (conn, m, meta, execute, remove_only)
-    return {
-        "recommended_courses": await replace_in_recommended_courses(*args),
-        "suggested_courses": await replace_in_suggested_courses(*args),
-        "cbp_plans": await replace_in_cbp_plans(*args),
-        "approval_request_items": await replace_in_approval_request_items(*args, statuses),
-    }
-
-
-async def process_mapping(
-    conn, m, meta, execute, remove_only, statuses
-) -> Dict[str, TableResult]:
-    """All four tables for one mapping; under --execute in a single transaction."""
-    if execute:
-        async with conn.transaction():
-            return await _replace_everywhere(conn, m, meta, execute, remove_only, statuses)
-    return await _replace_everywhere(conn, m, meta, execute, remove_only, statuses)
+        logger.info(f"{spec.table}: {min(start + batch_size, len(ids))}/{len(ids)} rows "
+                    f"processed ({time.monotonic() - batch_started:.1f}s)")
 
 
 # --- Input ---------------------------------------------------------------------------------
@@ -581,13 +623,17 @@ REPORT_COLUMNS = (
 
 
 def configure_logging(log_file: Path) -> None:
-    logger.setLevel(logging.INFO)
+    """Log file gets everything including the per-entry OLD/NEW objects (DEBUG); the terminal
+    gets progress and summary only (INFO)."""
+    logger.setLevel(logging.DEBUG)
     logger.handlers.clear()
     formatter = logging.Formatter("%(asctime)s %(levelname)s %(message)s")
     file_handler = logging.FileHandler(log_file, encoding="utf-8")
+    file_handler.setLevel(logging.DEBUG)
     file_handler.setFormatter(formatter)
     logger.addHandler(file_handler)
     stream_handler = logging.StreamHandler(sys.stdout)
+    stream_handler.setLevel(logging.INFO)
     stream_handler.setFormatter(formatter)
     logger.addHandler(stream_handler)
     logger.info("Logging initialized at %s", log_file)
@@ -618,6 +664,41 @@ def write_report(path: Path, rows: List[Dict[str, Any]]) -> None:
         writer.writerows(rows)
 
 
+def build_report(mappings, skipped, actions, metadata, stats, mode):
+    """One report row per input row, in file order; logs a one-line outcome for each."""
+    rows = []
+    for m in mappings:
+        prefix = f"line {m.line_no} {m.old_id} -> {m.new_id or '-'}"
+        if m.line_no in skipped:
+            status, reason = skipped[m.line_no]
+            logger.info(f"{prefix}: {status} ({reason})")
+            rows.append(_report_row(m, mode, status, reason, "", None))
+            continue
+
+        metadata_found = "yes" if m.new_id in metadata else "no"
+        if m.old_id not in actions:  # no metadata and --on-missing-metadata=skip
+            logger.info(f"{prefix}: skipped_no_metadata ({REASON_NO_METADATA})")
+            rows.append(_report_row(
+                m, mode, "skipped_no_metadata", REASON_NO_METADATA, metadata_found, None
+            ))
+            continue
+
+        per_table = stats[m.old_id]
+        if not any(r.rows for r in per_table.values()):
+            status, reason = "no_match", ""
+        elif actions[m.old_id].remove_only:
+            status, reason = "removed_no_metadata", REASON_NO_METADATA
+        elif metadata_found == "no":
+            status, reason = "replaced", "no metadata - name from CSV, other fields from old course"
+        else:
+            status, reason = "replaced", ""
+        logger.info(f"{prefix}: {status}  " + "  ".join(
+            f"{t}={per_table[t].rows}" for t in TABLES
+        ) + (f"  ({reason})" if reason else ""))
+        rows.append(_report_row(m, mode, status, reason, metadata_found, per_table))
+    return rows
+
+
 # --- Main ----------------------------------------------------------------------------------
 
 def _parse_args():
@@ -639,6 +720,13 @@ def _parse_args():
                         help="When the new course is not in course_metadata_weightage: "
                              "'remove' the old course without adding the new one (default), "
                              "'replace' it anyway using the CSV name, or 'skip' the row")
+    parser.add_argument("--batch-size", type=int, default=DEFAULT_BATCH_SIZE,
+                        help=f"Rows rewritten per batch / transaction "
+                             f"(default: {DEFAULT_BATCH_SIZE})")
+    parser.add_argument("--log-entries", type=int, default=DEFAULT_LOG_ENTRIES,
+                        help="OLD/NEW objects logged per mapping per table "
+                             "(default: -1 = every change, which can be gigabytes in "
+                             "production; 0 = none; N = first N)")
     parser.add_argument("--out", type=Path, default=None,
                         help="Outcome CSV path (default: next to the input, "
                              "<input>_<dryrun|execute>_<timestamp>.csv)")
@@ -646,6 +734,10 @@ def _parse_args():
 
     if args.execute and args.dry_run:
         parser.error("--execute and --dry-run are mutually exclusive")
+    if args.batch_size < 1:
+        parser.error("--batch-size must be at least 1")
+    if args.log_entries < -1:
+        parser.error("--log-entries must be -1 (all), 0 (none) or a positive number")
 
     if args.approval_statuses:
         statuses = [s.strip().lower() for s in args.approval_statuses.split(",") if s.strip()]
@@ -658,7 +750,9 @@ def _parse_args():
 
 
 async def main() -> None:
+    global _log_entries_limit
     args = _parse_args()
+    _log_entries_limit = args.log_entries
     csv_path = args.csv.expanduser()
     if not csv_path.exists():
         raise SystemExit(f"CSV not found: {csv_path}")
@@ -680,81 +774,56 @@ async def main() -> None:
     logger.info(f"Mode: {mode}")
     logger.info(f"Rows read: {len(mappings)}  to process: {len(to_process)}  "
                 f"skipped by validation: {len(skipped)}")
-    logger.info(f"On missing metadata: {args.on_missing_metadata}")
+    logger.info(f"On missing metadata: {args.on_missing_metadata}  "
+                f"Batch size: {args.batch_size}  Log entries per mapping: "
+                f"{'all' if args.log_entries < 0 else args.log_entries}")
     logger.info("approval_request_items statuses: "
                 + (", ".join(args.approval_statuses) if args.approval_statuses else "all"))
 
-    report_rows: List[Dict[str, Any]] = []
+    stats: Dict[str, Dict[str, TableResult]] = defaultdict(
+        lambda: {t: TableResult() for t in TABLES}
+    )
     totals = {t: TableResult() for t in TABLES}
+    run_started = time.monotonic()
 
     conn = await asyncpg.connect(_asyncpg_dsn(_require_env("DATABASE_URL")))
     try:
         await _init_connection(conn)
-        metadata = await fetch_course_metadata(conn, sorted({m.new_id for m in to_process}))
-        logger.info(f"New courses found in course_metadata_weightage: {len(metadata)}/"
-                    f"{len({m.new_id for m in to_process})}")
+        new_ids = sorted({m.new_id for m in to_process})
+        metadata = await fetch_course_metadata(conn, new_ids)
+        logger.info(f"New courses found in course_metadata_weightage: "
+                    f"{len(metadata)}/{len(new_ids)}")
 
-        total = len(mappings)
-        for index, m in enumerate(mappings, start=1):
-            prefix = f"[{index}/{total}] line {m.line_no} {m.old_id} -> {m.new_id or '-'}"
-            if m.line_no in skipped:
-                status, reason = skipped[m.line_no]
-                logger.info(f"{prefix}: {status} ({reason})")
-                report_rows.append(_report_row(m, mode, status, reason, "", None))
-                continue
-
+        actions: Dict[str, Action] = {}
+        for m in to_process:
             meta = metadata.get(m.new_id)
-            metadata_found = "yes" if meta else "no"
             if meta is None and args.on_missing_metadata == "skip":
-                logger.warning(f"{prefix}: skipped_no_metadata ({REASON_NO_METADATA})")
-                report_rows.append(_report_row(
-                    m, mode, "skipped_no_metadata", REASON_NO_METADATA, metadata_found, None
-                ))
                 continue
-            remove_only = meta is None and args.on_missing_metadata == "remove"
+            actions[m.old_id] = Action(
+                m, meta, remove_only=meta is None and args.on_missing_metadata == "remove"
+            )
 
-            try:
-                per_table = await process_mapping(
-                    conn, m, meta, args.execute, remove_only, args.approval_statuses
+        if actions:
+            for spec in TABLE_SPECS:
+                await process_table(
+                    conn, spec, actions, stats, totals,
+                    args.execute, args.batch_size, args.approval_statuses,
                 )
-            except Exception as exc:
-                logger.exception(f"{prefix}: error - rolled back, nothing changed for this row")
-                report_rows.append(_report_row(m, mode, "error", str(exc), metadata_found, None))
-                continue
-
-            changed = any(r.rows for r in per_table.values())
-            if not changed:
-                status, reason = "no_match", ""
-            elif remove_only:
-                status, reason = "removed_no_metadata", REASON_NO_METADATA
-            elif meta is None:
-                status, reason = "replaced", "no metadata - name from CSV, other fields from old course"
-            else:
-                status, reason = "replaced", ""
-            for t in TABLES:
-                totals[t].rows += per_table[t].rows
-                totals[t].replaced += per_table[t].replaced
-                totals[t].removed += per_table[t].removed
-                totals[t].row_ids |= per_table[t].row_ids
-            logger.info(f"{prefix}: {status}  " + "  ".join(
-                f"{t}={per_table[t].rows}" for t in TABLES
-            ) + (f"  ({reason})" if reason else ""))
-            report_rows.append(_report_row(m, mode, status, reason, metadata_found, per_table))
     finally:
         await conn.close()
 
+    report_rows = build_report(mappings, skipped, actions, metadata, stats, mode)
     write_report(out_path, report_rows)
 
     statuses = Counter(r["status"] for r in report_rows)
     verb = "Updated" if args.execute else "Would update"
     logger.info("")
     logger.info(f"Row outcomes: {dict(statuses)}")
-    logger.info(f"{verb} per table (distinct rows / row updates / entries replaced / "
-                f"entries removed):")
+    logger.info(f"{verb} per table (rows / entries replaced / entries removed):")
     for t in TABLES:
         r = totals[t]
-        logger.info(f"  {t:<24} {len(r.row_ids):>6} / {r.rows:>6} / {r.replaced:>6} / "
-                    f"{r.removed:>6}")
+        logger.info(f"  {t:<24} {r.rows:>7} / {r.replaced:>7} / {r.removed:>7}")
+    logger.info(f"Finished in {time.monotonic() - run_started:.1f}s")
     logger.info(f"Outcome CSV written to: {out_path}")
     logger.info(f"Log written to: {log_file}")
     logger.info("Committed." if args.execute
