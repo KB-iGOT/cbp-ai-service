@@ -1669,6 +1669,7 @@
   <div class="view-cbp-plan" #dialogContent>
     <div class="popup-container">
       <div class="section-container" id="pdf-content" #pdfContent>
+        {% if show_summary %}
         <header class="bg-white header-border">
           <div class="header-flex justify-between" style="width:100%">
             <div class="flex items-center space-x-4" style="width:50%">
@@ -1696,10 +1697,12 @@
             <p class="text-gray-600" style="font-size: 34px;">Comprehensive Role-Based Competency Analysis</p>
           </div>
         </header>
+        {% endif %}
         <div class="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100">
           <!-- Header -->
 
 
+          {% if show_summary %}
           <div class="max-w-7xl mx-auto px-6 py-8" style="margin-top:10px;">
             <!-- KPI Dashboard -->
             <div class="competency-container mt-2 text-center">
@@ -1831,13 +1834,16 @@
               </div>
             </div>
           </div>
+          {% endif %}
 
 
           <!-- Designation Reports -->
           <div class="space-y-8 mt-4">
+            {% if show_summary %}
             <h2 class="text-2xl font-bold text-gray-900 mb-6 heading text-center detailed-competency"
               style="font-size: 24px;;">Detailed Competency Framework by
               Designation</h2>
+            {% endif %}
 
             {% for designation in designations %}
             <div class="bg-white rounded-xl  overflow-hidden section-shadow">
@@ -2022,6 +2028,7 @@
         <!-- Footer -->
 
       </div>
+      {% if show_footer %}
       <footer class="org-footer">
         <div class="max-w-7xl mx-auto px-6 flex flex-col md:flex-row items-center justify-between">
           <div class="flex items-center space-x-4 mb-4 mt-4 md:mb-0 footer-container">
@@ -2043,6 +2050,7 @@
           </div>
         </div>
       </footer>
+      {% endif %}
     </div>
 
   </div>
