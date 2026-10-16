@@ -11,7 +11,8 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from jinja2 import Environment, FileSystemLoader
 
-from ...utils.common import convert_html_to_pdf
+from ...utils.common import convert_html_chunks_to_pdf
+from ...core.configs import settings
 from ...schemas.cbp_plan import CBPPlanSaveResponse
 from ...models.user import User
 from ...schemas.report import CourseCardData, DesignationData
@@ -104,26 +105,41 @@ class ReportService:
             current_year=datetime.now().year
         )
     
-    def render_cbp_template(
-        self, 
-        cbp_records: List[RoleMappingResponse], 
+    def render_cbp_template_chunks(
+        self,
+        cbp_records: List[RoleMappingResponse],
         center_department_name: str,
         template_type: ReportType = ReportType.CBP,
         language: str = "en"
-    ) -> str:
-        """Generate HTML for CBP/ACBP report"""
+    ) -> List[str]:
+        """Generate HTML for CBP/ACBP report, split into chunks of designations.
+
+        Large plans are printed as several smaller documents and merged (see
+        convert_html_chunks_to_pdf). Stats cover all designations; the header and summary
+        render only in the first chunk and the footer only in the last.
+        """
         designation_data = [DesignationData(record).to_dict() for record in cbp_records]
-        
+
         stats = self._calculate_competency_stats(designation_data)
         stats["center_department_name"] = center_department_name
-        
+
         template = self.template_env.get_template(template_type.value)
-        return template.render(
-            designations=designation_data,
-            stats=stats,
-            current_year=datetime.now().year,
-            language=language
-        )
+        chunk_size = settings.REPORT_PDF_DESIGNATIONS_PER_CHUNK
+        chunks = [
+            designation_data[i:i + chunk_size]
+            for i in range(0, len(designation_data), chunk_size)
+        ] or [[]]
+        return [
+            template.render(
+                designations=chunk,
+                stats=stats,
+                current_year=datetime.now().year,
+                language=language,
+                show_summary=index == 0,
+                show_footer=index == len(chunks) - 1
+            )
+            for index, chunk in enumerate(chunks)
+        ]
     
     async def translate_role_mapping(
         self,
@@ -235,12 +251,12 @@ async def render_template_async(render_func, *args, **kwargs) -> str:
 
 
 async def generate_pdf_response(
-    html_content: str,
+    html_chunks: List[str],
     filename_prefix: str,
     identifier: str
 ) -> StreamingResponse:
-    """Generate PDF and create streaming response"""
-    pdf_bytes = await convert_html_to_pdf(html_content)
+    """Generate PDF from one or more HTML chunks and create streaming response"""
+    pdf_bytes = await convert_html_chunks_to_pdf(html_chunks)
     pdf_stream = io.BytesIO(pdf_bytes)
     
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -299,7 +315,7 @@ async def download_course_recommendation_report(
         
         # Generate and return PDF
         return await generate_pdf_response(
-            html_content,
+            [html_content],
             "Course_Report",
             str(role_mapping_id)
         )
@@ -359,17 +375,17 @@ async def download_plan_report(
         center_department_name = get_center_department_name(role_mapping[0], department_id)
         
         # Generate HTML
-        html_content = await render_template_async(
-            report_service.render_cbp_template,
+        html_chunks = await render_template_async(
+            report_service.render_cbp_template_chunks,
             role_mapping,
             center_department_name,
             report_type,
             language
         )
-        
+
         # Generate and return PDF
         return await generate_pdf_response(
-            html_content,
+            html_chunks,
             f"{report_name}_Report",
             state_center_id
         )
