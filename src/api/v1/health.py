@@ -1,4 +1,4 @@
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, status
 from fastapi.responses import JSONResponse
@@ -24,7 +24,7 @@ async def health():
         "status": STATUS_HEALTHY,
         # "environment": settings.ENVIRONMENT.value,
         "version": settings.APP_VERSION,
-        "timestamp": datetime.now(UTC).isoformat(timespec="seconds"),
+        "timestamp": datetime.now(timezone.utc).isoformat(timespec="seconds"),
     }
 
     return JSONResponse(status_code=http_status, content=response)

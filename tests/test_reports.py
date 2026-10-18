@@ -1,5 +1,6 @@
 """Tests for chunked CBP/ACBP report rendering and the report download handlers
 in src/api/v1/reports.py. Database access and PDF conversion are mocked."""
+import asyncio
 import uuid
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
@@ -182,78 +183,78 @@ def test_default_chunk_size_keeps_fifty_designations_together():
 
 # --- generate_pdf_response ------------------------------------------------------------------
 
-async def test_generate_pdf_response_converts_all_chunks_into_one_attachment(convert):
-    response = await reports.generate_pdf_response(["<html>1</html>", "<html>2</html>"], "ACBP_Report", "SC1")
+def test_generate_pdf_response_converts_all_chunks_into_one_attachment(convert):
+    response = asyncio.run(reports.generate_pdf_response(["<html>1</html>", "<html>2</html>"], "ACBP_Report", "SC1"))
 
     convert.assert_awaited_once_with(["<html>1</html>", "<html>2</html>"])
     assert response.media_type == "application/pdf"
     disposition = response.headers["content-disposition"]
     assert disposition.startswith("attachment; filename=ACBP_Report_SC1_")
     assert disposition.endswith(".pdf")
-    assert await read_body(response) == FAKE_PDF
+    assert asyncio.run(read_body(response)) == FAKE_PDF
 
 
 # --- download_plan_report -----------------------------------------------------------------
 
 @pytest.mark.usefixtures("chunk_size", "english_only")
-async def test_download_plan_report_renders_chunks_and_returns_pdf(monkeypatch, convert):
+def test_download_plan_report_renders_chunks_and_returns_pdf(monkeypatch, convert):
     fetch = AsyncMock(return_value=make_designations(5, with_course=True))
     monkeypatch.setattr(reports.crud_role_mapping, "get_all_completed_mapping", fetch)
     user = current_user()
 
-    response = await reports.download_plan_report(
+    response = asyncio.run(reports.download_plan_report(
         state_center_id="SC1", report_type=ReportType.ACBP, report_name="ACBP",
         department_id="DEPT1", load_cbp_plans=True, db=None, current_user=user,
-    )
+    ))
 
     fetch.assert_awaited_once_with(None, "SC1", user.user_id, "DEPT1", load_cbp_plans=True)
     chunks = convert.await_args.args[0]
     assert len(chunks) == 3
     assert "Housing Department - Capacity Building Plan" in chunks[0]
     assert response.headers["content-disposition"].startswith("attachment; filename=ACBP_Report_SC1_")
-    assert await read_body(response) == FAKE_PDF
+    assert asyncio.run(read_body(response)) == FAKE_PDF
 
 
 @pytest.mark.usefixtures("english_only")
-async def test_download_plan_report_uses_state_name_without_department(monkeypatch, convert):
+def test_download_plan_report_uses_state_name_without_department(monkeypatch, convert):
     monkeypatch.setattr(
         reports.crud_role_mapping, "get_all_completed_mapping", AsyncMock(return_value=make_designations(1))
     )
 
-    await reports.download_plan_report(
+    asyncio.run(reports.download_plan_report(
         state_center_id="SC1", report_type=ReportType.CBP, report_name="CBP", db=None, current_user=current_user(),
-    )
+    ))
 
     assert "Central Ministry - Capacity Building Plan" in convert.await_args.args[0][0]
 
 
 @pytest.mark.usefixtures("english_only")
-async def test_download_plan_report_rejects_unsupported_language(convert):
+def test_download_plan_report_rejects_unsupported_language(convert):
     with pytest.raises(HTTPException) as error:
-        await reports.download_plan_report(
+        asyncio.run(reports.download_plan_report(
             state_center_id="SC1", report_type=ReportType.CBP, report_name="CBP",
             language="xx", db=None, current_user=current_user(),
-        )
+        ))
 
     assert error.value.status_code == 400
     convert.assert_not_awaited()
 
 
 @pytest.mark.usefixtures("english_only")
-async def test_download_plan_report_returns_404_when_no_role_mappings(monkeypatch, convert):
+def test_download_plan_report_returns_404_when_no_role_mappings(monkeypatch, convert):
     monkeypatch.setattr(reports.crud_role_mapping, "get_all_completed_mapping", AsyncMock(return_value=[]))
 
     with pytest.raises(HTTPException) as error:
-        await reports.download_plan_report(
+        asyncio.run(reports.download_plan_report(
             state_center_id="SC1", report_type=ReportType.CBP, report_name="CBP", db=None, current_user=current_user(),
-        )
+        ))
 
     assert error.value.status_code == 404
     convert.assert_not_awaited()
 
 
 @pytest.mark.usefixtures("english_only")
-async def test_download_plan_report_passes_pdf_errors_through(monkeypatch):
+def test_download_plan_report_passes_pdf_errors_through(monkeypatch):
     monkeypatch.setattr(
         reports.crud_role_mapping, "get_all_completed_mapping", AsyncMock(return_value=make_designations(1))
     )
@@ -261,23 +262,23 @@ async def test_download_plan_report_passes_pdf_errors_through(monkeypatch):
     monkeypatch.setattr(reports, "convert_html_chunks_to_pdf", AsyncMock(side_effect=pdf_error))
 
     with pytest.raises(HTTPException) as error:
-        await reports.download_plan_report(
+        asyncio.run(reports.download_plan_report(
             state_center_id="SC1", report_type=ReportType.ACBP, report_name="ACBP", db=None, current_user=current_user(),
-        )
+        ))
 
     assert error.value is pdf_error
 
 
 @pytest.mark.usefixtures("english_only")
-async def test_download_plan_report_wraps_unexpected_errors_as_500(monkeypatch):
+def test_download_plan_report_wraps_unexpected_errors_as_500(monkeypatch):
     monkeypatch.setattr(
         reports.crud_role_mapping, "get_all_completed_mapping", AsyncMock(side_effect=RuntimeError("db down"))
     )
 
     with pytest.raises(HTTPException) as error:
-        await reports.download_plan_report(
+        asyncio.run(reports.download_plan_report(
             state_center_id="SC1", report_type=ReportType.ACBP, report_name="ACBP", db=None, current_user=current_user(),
-        )
+        ))
 
     assert error.value.status_code == 500
     assert error.value.detail == "Error generating PDF report for acbp plan"
@@ -290,14 +291,14 @@ async def test_download_plan_report_wraps_unexpected_errors_as_500(monkeypatch):
         (reports.download_acbp_plan, ReportType.ACBP, "ACBP", True),
     ],
 )
-async def test_download_endpoints_delegate_with_their_report_type(
+def test_download_endpoints_delegate_with_their_report_type(
     monkeypatch, endpoint, report_type, report_name, load_cbp_plans
 ):
     handler = AsyncMock(return_value="response")
     monkeypatch.setattr(reports, "download_plan_report", handler)
     user = current_user()
 
-    result = await endpoint(state_center_id="SC1", department_id="DEPT1", language="en", db=None, current_user=user)
+    result = asyncio.run(endpoint(state_center_id="SC1", department_id="DEPT1", language="en", db=None, current_user=user))
 
     assert result == "response"
     handler.assert_awaited_once_with(
@@ -308,13 +309,13 @@ async def test_download_endpoints_delegate_with_their_report_type(
 
 # --- download_course_recommendation_report --------------------------------------------------
 
-async def test_course_recommendation_report_is_converted_as_a_single_chunk(monkeypatch, convert):
+def test_course_recommendation_report_is_converted_as_a_single_chunk(monkeypatch, convert):
     plan = SimpleNamespace(selected_courses=make_designation(1, with_course=True).cbp_plans[0].selected_courses)
     monkeypatch.setattr(reports.crud_cbp_plan, "get_by_role_mapping", AsyncMock(return_value=plan))
     monkeypatch.setattr(reports.crud_role_mapping, "get_by_id", AsyncMock(return_value=make_designation(1)))
     role_mapping_id = uuid.uuid4()
 
-    response = await reports.download_course_recommendation_report(role_mapping_id, db=None, current_user=current_user())
+    response = asyncio.run(reports.download_course_recommendation_report(role_mapping_id, db=None, current_user=current_user()))
 
     chunks = convert.await_args.args[0]
     assert len(chunks) == 1
@@ -322,20 +323,20 @@ async def test_course_recommendation_report_is_converted_as_a_single_chunk(monke
     assert response.headers["content-disposition"].startswith(f"attachment; filename=Course_Report_{role_mapping_id}_")
 
 
-async def test_course_recommendation_report_returns_404_without_a_plan(monkeypatch, convert):
+def test_course_recommendation_report_returns_404_without_a_plan(monkeypatch, convert):
     monkeypatch.setattr(reports.crud_cbp_plan, "get_by_role_mapping", AsyncMock(return_value=None))
 
     with pytest.raises(HTTPException) as error:
-        await reports.download_course_recommendation_report(uuid.uuid4(), db=None, current_user=current_user())
+        asyncio.run(reports.download_course_recommendation_report(uuid.uuid4(), db=None, current_user=current_user()))
 
     assert error.value.status_code == 404
     convert.assert_not_awaited()
 
 
-async def test_course_recommendation_report_wraps_unexpected_errors_as_500(monkeypatch):
+def test_course_recommendation_report_wraps_unexpected_errors_as_500(monkeypatch):
     monkeypatch.setattr(reports.crud_cbp_plan, "get_by_role_mapping", AsyncMock(side_effect=RuntimeError("db down")))
 
     with pytest.raises(HTTPException) as error:
-        await reports.download_course_recommendation_report(uuid.uuid4(), db=None, current_user=current_user())
+        asyncio.run(reports.download_course_recommendation_report(uuid.uuid4(), db=None, current_user=current_user()))
 
     assert error.value.status_code == 500

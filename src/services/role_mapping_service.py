@@ -94,7 +94,7 @@ class RoleMappingService:
                 "source": "[ACBP, Work Allocation Order, KCM, AI Suggested]"
             },
             ]
-            logger.info(f"Role Mapping is using prompt :: {'STATE_PROMPT' if organization_data["department_id"] else "CENTER_PROMPT"}")
+            logger.info(f"Role Mapping is using prompt :: {'STATE_PROMPT' if organization_data['department_id'] else 'CENTER_PROMPT'}")
             PROMPT = ROLE_MAPPING_PROMPT_V5_STATE if organization_data["department_id"] else ROLE_MAPPING_PROMPT_V2
             output_json_format = state_json_output if organization_data["department_id"] else center_json_output
             base_prompt = PROMPT.format(

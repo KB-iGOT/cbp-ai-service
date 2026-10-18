@@ -107,11 +107,11 @@ def use_fake_playwright(browser, launch_error=None):
     return chromium, patcher
 
 
-async def test_single_chunk_returns_printed_pdf_without_merging():
+def test_single_chunk_returns_printed_pdf_without_merging():
     browser = FakeBrowser()
     chromium, patcher = use_fake_playwright(browser)
     with patcher, patch.object(common, "merge_pdfs") as merge:
-        pdf = await common.convert_html_chunks_to_pdf([chunk_html(0)])
+        pdf = asyncio.run(common.convert_html_chunks_to_pdf([chunk_html(0)]))
 
     merge.assert_not_called()
     assert page_widths(pdf) == [100]
@@ -122,43 +122,43 @@ async def test_single_chunk_returns_printed_pdf_without_merging():
     assert browser.close_calls == 1
 
 
-async def test_multiple_chunks_are_merged_in_input_order():
+def test_multiple_chunks_are_merged_in_input_order():
     browser = FakeBrowser()
     _, patcher = use_fake_playwright(browser)
     with patcher:
-        pdf = await common.convert_html_chunks_to_pdf([chunk_html(i) for i in range(6)])
+        pdf = asyncio.run(common.convert_html_chunks_to_pdf([chunk_html(i) for i in range(6)]))
 
     assert page_widths(pdf) == [100, 101, 102, 103, 104, 105]
     assert all(page.closed for page in browser.pages)
     assert browser.close_calls == 1
 
 
-async def test_concurrent_pages_are_limited_by_setting(monkeypatch):
+def test_concurrent_pages_are_limited_by_setting(monkeypatch):
     monkeypatch.setattr(settings, "REPORT_PDF_MAX_CONCURRENT_PAGES", 2)
     browser = FakeBrowser()
     _, patcher = use_fake_playwright(browser)
     with patcher:
-        await common.convert_html_chunks_to_pdf([chunk_html(i) for i in range(7)])
+        asyncio.run(common.convert_html_chunks_to_pdf([chunk_html(i) for i in range(7)]))
 
     assert browser.max_open_pages == 2
     assert len(browser.pages) == 7
 
 
-async def test_chunks_are_printed_in_parallel_up_to_the_limit(monkeypatch):
+def test_chunks_are_printed_in_parallel_up_to_the_limit(monkeypatch):
     monkeypatch.setattr(settings, "REPORT_PDF_MAX_CONCURRENT_PAGES", 4)
     browser = FakeBrowser()
     _, patcher = use_fake_playwright(browser)
     with patcher:
-        await common.convert_html_chunks_to_pdf([chunk_html(i) for i in range(8)])
+        asyncio.run(common.convert_html_chunks_to_pdf([chunk_html(i) for i in range(8)]))
 
     assert browser.max_open_pages == 4
 
 
-async def test_print_failure_raises_http_500_and_closes_every_page():
+def test_print_failure_raises_http_500_and_closes_every_page():
     browser = FakeBrowser(failing_chunks={2})
     _, patcher = use_fake_playwright(browser)
     with patcher, pytest.raises(HTTPException) as error:
-        await common.convert_html_chunks_to_pdf([chunk_html(i) for i in range(4)])
+        asyncio.run(common.convert_html_chunks_to_pdf([chunk_html(i) for i in range(4)]))
 
     assert error.value.status_code == 500
     assert error.value.detail == "Error generating PDF with Playwright"
@@ -166,21 +166,21 @@ async def test_print_failure_raises_http_500_and_closes_every_page():
     assert browser.close_calls == 1
 
 
-async def test_launch_failure_raises_http_500_without_closing_a_browser():
+def test_launch_failure_raises_http_500_without_closing_a_browser():
     browser = FakeBrowser()
     _, patcher = use_fake_playwright(browser, launch_error=RuntimeError("chromium missing"))
     with patcher, pytest.raises(HTTPException) as error:
-        await common.convert_html_chunks_to_pdf([chunk_html(0)])
+        asyncio.run(common.convert_html_chunks_to_pdf([chunk_html(0)]))
 
     assert error.value.status_code == 500
     assert browser.close_calls == 0
 
 
-async def test_browser_close_error_during_cleanup_keeps_the_original_error():
+def test_browser_close_error_during_cleanup_keeps_the_original_error():
     browser = FakeBrowser(failing_chunks={0}, close_error=RuntimeError("close failed"))
     _, patcher = use_fake_playwright(browser)
     with patcher, pytest.raises(HTTPException) as error:
-        await common.convert_html_chunks_to_pdf([chunk_html(0)])
+        asyncio.run(common.convert_html_chunks_to_pdf([chunk_html(0)]))
 
     assert error.value.status_code == 500
     assert browser.close_calls == 1
@@ -209,10 +209,10 @@ def chromium_available():
 
 
 @pytest.mark.usefixtures("chromium_available")
-async def test_real_chromium_prints_and_merges_chunks():
+def test_real_chromium_prints_and_merges_chunks():
     chunks = [f"<html><body><h1>Chunk {i}</h1></body></html>" for i in range(3)]
 
-    pdf = await common.convert_html_chunks_to_pdf(chunks)
+    pdf = asyncio.run(common.convert_html_chunks_to_pdf(chunks))
 
     reader = PdfReader(io.BytesIO(pdf))
     assert len(reader.pages) == 3
