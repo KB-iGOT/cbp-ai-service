@@ -26,3 +26,22 @@ dependencies = [
     "bs4>=0.0.2",
     "openpyxl>=3.1.5",
 ]
+
+[dependency-groups]
+test = [
+    "pytest>=9.1.1",
+    "pytest-asyncio>=1.4.0",
+    "pytest-cov>=7.1.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+addopts = "--cov --cov-report=xml:coverage.xml --cov-report=term"
+
+[tool.coverage.run]
+source_pkgs = ["src"]
+# Sonar matches coverage entries to files by path relative to the project root
+relative_files = true
