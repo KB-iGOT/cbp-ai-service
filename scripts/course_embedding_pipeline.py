@@ -200,7 +200,7 @@ async def search_courses(offset: int = 0, limit: int = BATCH_SIZE, retries: int 
         try:
             async with httpx.AsyncClient(timeout=60.0) as http_client:
                 response = await http_client.post(
-                    f"{KB_BASE_URL}/api/content/v1/search",
+                    f"{KB_BASE_URL}/api/composite/v4/search",
                     json=payload,
                     headers={
                         "Content-Type": "application/json",

@@ -39,13 +39,13 @@ async def search_courses(identifiers: List[str]) -> List[Dict[str, Any]]:
                 "organisation", "competencies_v6", "language", "duration"
             ],
             "sortBy": {"createdOn": "Desc"},
-            "limit": 100
+            "limit": len(identifiers)  # Set a reasonable limit to fetch all courses if needed
         }
     }
 
     async with httpx.AsyncClient() as client:
         response = await client.post(
-            f"{settings.KB_BASE_URL}/api/content/v1/search",
+            f"{settings.KB_BASE_URL}/api/composite/v4/search",
             json=payload,
             headers={
                 "Content-Type": "application/json",

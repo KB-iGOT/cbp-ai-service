@@ -142,14 +142,14 @@ async def get_course_suggestions(
                 },
                 "fields": ["name", "identifier", "description", "keywords", "organisation", "competencies_v6", "language", 'duration'],
                 "sortBy": {"createdOn": "Desc"},
-                "limit": 1000 # Set a reasonable limit to fetch all courses if needed
+                "limit": len(suggestion.course_identifiers) # Set a reasonable limit to fetch all courses if needed
             }
         }
         
         # Use an async HTTP client to make the request
         async with httpx.AsyncClient() as client:
             response = await client.post(
-                f"{settings.KB_BASE_URL}/api/content/v1/search",
+                f"{settings.KB_BASE_URL}/api/composite/v4/search",
                 json=payload,
                 headers={
                     "Content-Type": "application/json",
