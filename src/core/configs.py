@@ -77,6 +77,11 @@ class Settings(BaseSettings):
     CSV_MAX_FILE_SIZE: int = 10 * 1024 * 1024  # 10MB in bytes
     ALLOWED_FILE_TYPES: list = [".pdf"]
 
+    # Report PDF generation: Chromium's print time grows superlinearly with document size,
+    # so CBP/ACBP reports are printed in chunks of designations (in parallel) and merged.
+    REPORT_PDF_DESIGNATIONS_PER_CHUNK: int = 50
+    REPORT_PDF_MAX_CONCURRENT_PAGES: int = 4
+
     # Document storage settings
     DOCUMENT_STORAGE_TYPE: DocumentStorageOption = DocumentStorageOption.LOCAL
     DOCUMENT_STORAGE_ROOT: str = Field(
