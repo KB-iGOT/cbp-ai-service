@@ -21,7 +21,7 @@ Required environment variables:
     KB_AUTH_TOKEN              KB API bearer token (include the "Bearer " prefix)
 
 Optional environment variables (can be overridden by --identifier-batch-size):
-    IDENTIFIER_BATCH_SIZE      Identifiers sent per API search call (default: 100)
+    IDENTIFIER_BATCH_SIZE      Identifiers sent per API search call (default: 10)
 
 Example:
     export DATABASE_URL="postgresql://user:pass@host:5432/dbname"
@@ -73,7 +73,7 @@ def _parse_args():
     )
     parser.add_argument(
         "--identifier-batch-size", type=int, default=None,
-        help="Identifiers sent per API search call (overrides IDENTIFIER_BATCH_SIZE env var; default: 100)"
+        help="Identifiers sent per API search call (overrides IDENTIFIER_BATCH_SIZE env var; default: 10)"
     )
     return parser.parse_args()
 
@@ -100,7 +100,7 @@ DATABASE_URL = _asyncpg_dsn(_require_env("DATABASE_URL"))
 KB_BASE_URL = _require_env("KB_BASE_URL")
 KB_AUTH_TOKEN = _require_env("KB_AUTH_TOKEN")
 
-IDENTIFIER_BATCH_SIZE = _args.identifier_batch_size or int(os.environ.get("IDENTIFIER_BATCH_SIZE", 100))
+IDENTIFIER_BATCH_SIZE = _args.identifier_batch_size or int(os.environ.get("IDENTIFIER_BATCH_SIZE", 10))
 
 
 def chunked(values: List[str], size: int) -> List[List[str]]:
@@ -146,7 +146,7 @@ async def search_retired_batch(
     }
 
     response = await http_client.post(
-        f"{KB_BASE_URL}/api/content/v1/search",
+        f"{KB_BASE_URL}/api/composite/v4/search",
         json=payload,
         headers=headers,
     )
