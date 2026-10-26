@@ -27,8 +27,12 @@ Performance and DB load (sized for 60k+ affected rows and thousands of content_i
   - Rows are re-read, rewritten and updated in batches of --batch-size, each batch on --execute in
     its own short transaction locking only its own rows (SELECT ... FOR UPDATE), with --pause
     seconds between batches to spread WAL / replication / autovacuum load.
-  - lock_timeout is set for the session: if the app holds a lock on a row, the batch fails fast
-    instead of queueing (and making app queries queue behind it).
+  - Every write transaction starts with SET LOCAL lock_timeout: if the app holds a lock on a row,
+    the batch fails fast instead of queueing (and making app queries queue behind it). It is
+    transaction-scoped on purpose -- behind PgBouncer in transaction mode a session-level SET
+    would stay on the shared server connection and leak into the app's queries. For the same
+    reason nothing is passed as a startup parameter (PgBouncer rejects unknown ones) and asyncpg's
+    named prepared-statement cache is turned off.
   - If a batch fails the run stops; committed batches stay committed and a re-run is safe
     (removed content_ids are simply no longer found).
 
@@ -84,6 +88,11 @@ APPROVAL_STATUSES = {"draft", "pending", "approved", "rejected", "failed"}
 DEFAULT_BATCH_SIZE = 500
 DEFAULT_PAUSE_SECONDS = 0.1
 LOCK_TIMEOUT = "5s"
+
+
+async def _begin_write(conn) -> None:
+    """First statement of every write transaction (see module docstring)."""
+    await conn.execute(f"SET LOCAL lock_timeout = '{LOCK_TIMEOUT}'")
 TARGET_IDS = "__TARGET_IDS__"  # replaced in scan SQL by the constant id array
 CONTENT_ID_RE = re.compile(r"^do_\w+$")
 
@@ -312,6 +321,7 @@ async def process_table(conn, spec: TableSpec, targets: Set[str],
         try:
             if execute:
                 async with conn.transaction():
+                    await _begin_write(conn)
                     await apply_batch(batch)
             else:
                 await apply_batch(batch)
@@ -335,6 +345,7 @@ async def delete_from_course_metadata(conn, targets: Set[str],
     where = f"FROM public.{METADATA_TABLE} WHERE identifier = ANY({_ids_literal(targets)})"
     if execute:
         async with conn.transaction():
+            await _begin_write(conn)
             rows = await conn.fetch(f"DELETE {where} RETURNING identifier, name")
     else:
         rows = await conn.fetch(f"SELECT identifier, name {where}")
@@ -492,11 +503,9 @@ async def main() -> None:
     run_started = time.monotonic()
 
     if targets:
-        conn = await asyncpg.connect(
-            _database_dsn(),
-            # Named in pg_stat_activity; fail fast rather than queue behind app locks.
-            server_settings={"application_name": SCRIPT_NAME, "lock_timeout": LOCK_TIMEOUT},
-        )
+        # No startup parameters and no named prepared statements, so it works the same directly
+        # against Postgres and behind PgBouncer (see module docstring).
+        conn = await asyncpg.connect(_database_dsn(), statement_cache_size=0)
         try:
             # Exchange JSON as Python objects; keep non-ASCII (e.g. Hindi course names) as-is
             # rather than \u-escaping it, since json columns store the text verbatim.
