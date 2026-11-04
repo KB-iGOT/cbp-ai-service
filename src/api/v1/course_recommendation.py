@@ -509,6 +509,8 @@ async def process_recommendation_task(
             else:
                 org_info = str(_org_raw) if _org_raw else ""
             c["competencies"] = getattr(meta, "competencies_v6", None)
+            # Stored/returned only; intentionally not added to the LLM prompt below.
+            c["course_type"] = getattr(meta, "course_type", None)
             is_own_org = "YES" if (ministry_state_name and org_info and ministry_state_name.lower() in org_info.lower()) else "NO"
             if is_own_org == "NO" and department_name and org_info and department_name.lower() in org_info.lower():
                 is_own_org = "YES"
@@ -560,6 +562,7 @@ async def process_recommendation_task(
                 course["course"] = meta.name
                 course["competencies"] = meta.competencies_v6
                 course["duration"] = meta.duration
+                course["course_type"] = meta.course_type
                 _org = meta.organisation
                 course["organisation"] = (
                     ", ".join(str(o) for o in _org if o) if isinstance(_org, list) else (_org or None)

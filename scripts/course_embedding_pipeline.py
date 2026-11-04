@@ -5,6 +5,18 @@ Fetches course data from the KB content search API, generates description /
 keywords / combined embeddings via Gemini, and upserts them into the
 `course_metadata_weightage` table in Postgres (pgvector).
 
+After the KB courses, marketplace content is fetched from the CIOS search API
+(/api/cios/v1/search/content) and stored in the same table. Only items with
+isActive == true are embedded; items returned as inactive are removed. Mapping:
+    contentId                                      -> identifier
+    searchTags                                     -> keywords
+    summary                                        -> instructions
+    courseProvider[].name, else
+      contentPartner.contentPartnerName            -> organisation (and "Source" in combined text)
+    courseType                                     -> course_type (NULL for KB courses)
+    lastUpdatedOn                                  -> version_key (change detection)
+    name / description / difficultyLevel / duration / competencies_v6 map as-is
+
 Usage:
     python course_embedding_pipeline.py [--batch-size N] [--concurrency N]
 
@@ -221,6 +233,74 @@ async def search_courses(offset: int = 0, limit: int = BATCH_SIZE, retries: int 
                 raise
 
 
+async def search_marketplace_content(page_number: int = 0, page_size: int = BATCH_SIZE, retries: int = 3) -> Tuple[List[Dict[str, Any]], int]:
+    """Fetch one page of marketplace content from the CIOS API with retry on failure."""
+    payload = {
+        "filterCriteriaMap": {"isActive": True},
+        "requestedFields": [],
+        "pageNumber": page_number,
+        "pageSize": page_size,
+        "orderBy": "createdOn",
+        "orderDirection": "DESC",
+        "facets": [],
+        "searchString": ""
+    }
+
+    for attempt in range(1, retries + 1):
+        try:
+            async with httpx.AsyncClient(timeout=60.0) as http_client:
+                response = await http_client.post(
+                    f"{KB_BASE_URL}/api/cios/v1/search/content",
+                    json=payload,
+                    headers={
+                        "Content-Type": "application/json",
+                        "Authorization": f"{KB_AUTH_TOKEN}"
+                    }
+                )
+                response.raise_for_status()
+                data = response.json()
+                result = data.get("result", data)
+                content = result.get("data") or result.get("content") or []
+                count = result.get("totalCount") or result.get("count") or 0
+                return content, int(count)
+        except Exception as e:
+            print(f"  Marketplace API fetch attempt {attempt}/{retries} failed at page {page_number}: {type(e).__name__}: {e}")
+            if attempt < retries:
+                await asyncio.sleep(2 ** attempt)
+            else:
+                raise
+
+
+def normalize_marketplace_content(item: Dict[str, Any]) -> Dict[str, Any]:
+    """Map a CIOS marketplace item onto the KB course shape used by process_single_course."""
+    providers = [
+        (p.get("name") or "").strip()
+        for p in (item.get("courseProvider") or []) if isinstance(p, dict)
+    ]
+    providers = [p for p in providers if p]
+    if not providers:
+        partner_name = ((item.get("contentPartner") or {}).get("contentPartnerName") or "").strip()
+        providers = [partner_name] if partner_name else []
+
+    keywords = [t.strip() for t in (item.get("searchTags") or []) if isinstance(t, str) and t.strip()]
+    duration = item.get("duration")
+
+    return {
+        "identifier": item.get("contentId"),
+        "name": item.get("name") or "",
+        "keywords": keywords,
+        "competencies_v6": item.get("competencies_v6"),
+        "instructions": item.get("summary"),
+        "description": item.get("description"),
+        "difficultyLevel": item.get("difficultyLevel"),
+        "duration": str(duration) if duration is not None else None,
+        "organisation": providers,
+        "source": ", ".join(providers),
+        "versionKey": item.get("lastUpdatedOn"),
+        "courseType": item.get("courseType"),
+    }
+
+
 async def generate_embedding(text):
     """Generates an embedding for a single text asynchronously."""
     try:
@@ -254,6 +334,7 @@ async def process_single_course(data: Dict[str, Any]) -> Dict[str, Any] | None:
     duration = data.get("duration")
     organisation = data.get("organisation")
     version_key = str(data.get("versionKey", "")) if data.get("versionKey") else None
+    course_type = data.get("courseType")
 
     description_text = build_description_text(data)
     keywords_text = build_keywords_text(data)
@@ -291,6 +372,7 @@ async def process_single_course(data: Dict[str, Any]) -> Dict[str, Any] | None:
         "keywords_embedding": kw_emb.values,
         "combined_embedding": comb_emb.values,
         "version_key": version_key,
+        "course_type": course_type,
     }
 
 
@@ -318,9 +400,9 @@ async def insert_batch_to_db(pool: asyncpg.Pool, records: List[Dict[str, Any]], 
                         instructions, description, language, difficulty_level,
                         duration, organisation, token_count,
                         description_embedding, keywords_embedding, combined_embedding,
-                        version_key
+                        version_key, course_type
                     ) VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7, $8, $9, $10, $11, $12,
-                              $13::vector, $14::vector, $15::vector, $16);
+                              $13::vector, $14::vector, $15::vector, $16, $17);
                     """,
                     record["course_id"], identifier, record["name"],
                     record["keywords_pg"], record["competencies_v6"],
@@ -331,7 +413,7 @@ async def insert_batch_to_db(pool: asyncpg.Pool, records: List[Dict[str, Any]], 
                     str(record["description_embedding"]),
                     str(record["keywords_embedding"]),
                     str(record["combined_embedding"]),
-                    record["version_key"]
+                    record["version_key"], record["course_type"]
                 )
                 if is_update:
                     updated += 1
@@ -371,8 +453,14 @@ async def create_table_and_extension(pool: asyncpg.Pool):
                 version_key text COLLATE pg_catalog."default",
                 description_tsv tsvector GENERATED ALWAYS AS (
                     to_tsvector('english'::regconfig, COALESCE(description, ''::text))
-                ) STORED
+                ) STORED,
+                course_type text COLLATE pg_catalog."default"
             );
+        """)
+        # Tables created before marketplace support lack course_type.
+        await conn.execute("""
+            ALTER TABLE public.course_metadata_weightage
+            ADD COLUMN IF NOT EXISTS course_type text;
         """)
     print("Table course_metadata_weightage is ready.")
 
@@ -441,6 +529,91 @@ async def create_hnsw_indexes(pool: asyncpg.Pool):
             USING hnsw (combined_embedding vector_cosine_ops);
         """)
     print("HNSW cosine indexes on description_embedding, keywords_embedding, combined_embedding are ready.")
+
+
+async def delete_identifiers(pool: asyncpg.Pool, identifiers: List[str]) -> int:
+    """Delete rows by identifier. Returns the number of rows removed."""
+    if not identifiers:
+        return 0
+    async with pool.acquire() as conn:
+        result = await conn.execute(
+            "DELETE FROM course_metadata_weightage WHERE identifier = ANY($1::text[]);",
+            identifiers
+        )
+    return int(result.split()[-1])
+
+
+async def process_marketplace_content(pool: asyncpg.Pool, existing: Dict[str, str], semaphore: asyncio.Semaphore) -> Tuple[int, int, int, int]:
+    """Fetch marketplace (CIOS) content page by page, embed active items, insert into DB.
+    Returns (inserted, updated, skipped, deleted)."""
+    page = 0
+    fetched = 0
+    total_inserted = 0
+    total_updated = 0
+    total_skipped = 0
+    total_deleted = 0
+
+    async def process_with_semaphore(course):
+        async with semaphore:
+            return await process_single_course(course)
+
+    while True:
+        print(f"\n===== Fetching marketplace page {page} (size {BATCH_SIZE}) =====")
+        items, total_count = await search_marketplace_content(page_number=page, page_size=BATCH_SIZE)
+
+        if not items:
+            print("No more marketplace content to process.")
+            break
+
+        fetched += len(items)
+        print(f"Fetched {len(items)} marketplace items (total available: {total_count}).")
+
+        # Only live (isActive == true) content is kept; drop any inactive ones already stored.
+        inactive = [i["contentId"] for i in items if i.get("isActive") is not True and i.get("contentId")]
+        if inactive:
+            deleted = await delete_identifiers(pool, inactive)
+            total_deleted += deleted
+            for ident in inactive:
+                existing.pop(ident, None)
+            print(f"Inactive: {len(inactive)} item(s), {deleted} removed from DB.")
+
+        courses_to_process = []
+        for item in items:
+            if item.get("isActive") is not True or not item.get("contentId"):
+                continue
+            course = normalize_marketplace_content(item)
+            ident = course["identifier"]
+            api_version = str(course["versionKey"]) if course["versionKey"] else None
+            if ident in existing and existing[ident] == api_version:
+                total_skipped += 1
+            else:
+                courses_to_process.append(course)
+
+        if courses_to_process:
+            tasks = [process_with_semaphore(course) for course in courses_to_process]
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+
+            records = []
+            for r in results:
+                if isinstance(r, Exception):
+                    print(f"  Marketplace processing error: {type(r).__name__}: {r}")
+                elif r is not None:
+                    records.append(r)
+            print(f"Embeddings generated: {len(records)}/{len(courses_to_process)}")
+
+            if records:
+                ins, upd = await insert_batch_to_db(pool, records, existing)
+                total_inserted += ins
+                total_updated += upd
+                for r in records:
+                    existing[r["identifier"]] = r["version_key"]
+                print(f"Batch done: {ins} inserted, {upd} updated.")
+
+        page += 1
+        if fetched >= total_count:
+            break
+
+    return total_inserted, total_updated, total_skipped, total_deleted
 
 
 async def main():
@@ -515,6 +688,11 @@ async def main():
                 break
 
         print(f"\n===== Done. Inserted: {total_inserted} | Updated: {total_updated} | Skipped (up-to-date): {total_skipped} =====")
+
+        print("\n===== Processing marketplace content =====")
+        m_ins, m_upd, m_skip, m_del = await process_marketplace_content(pool, existing, semaphore)
+        print(f"\n===== Marketplace done. Inserted: {m_ins} | Updated: {m_upd} | "
+              f"Skipped (up-to-date): {m_skip} | Deleted (inactive): {m_del} =====")
 
         print("\nCreating text search indexes (GIN)...")
         await create_text_search_indexes(pool)
