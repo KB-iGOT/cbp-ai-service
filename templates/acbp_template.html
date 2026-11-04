@@ -238,6 +238,8 @@
         /* Ensure colors print */
         .provider-badge,
         .ai-green,
+        .marketplace-badge,
+        .course-type-badge,
         .course-pill {
           -webkit-print-color-adjust: exact;
           print-color-adjust: exact;
@@ -1490,6 +1492,35 @@
         font-weight: 600;
       }
 
+      .marketplace-badges {
+        display: flex;
+        gap: 6px;
+        margin-top: 4px;
+      }
+
+      .marketplace-badge,
+      .course-type-badge {
+        padding: 4px 8px;
+        border-radius: 4px;
+        font-size: 11px;
+        font-weight: 600;
+      }
+
+      .marketplace-badge {
+        background: #E8EAF6;
+        color: #1B4CA1;
+      }
+
+      .course-type-badge {
+        background: #FDE8E8;
+        color: #C62828;
+      }
+
+      .course-type-badge.course-type-free {
+        background: #0080001C;
+        color: #006400;
+      }
+
       .provider-badge {
         font-size: 11px;
         margin-top: 4px;
@@ -1882,6 +1913,12 @@
                           AI Recommended - iGOT
                           {% endif %}
                         </div>
+                        {% if course.course_type %}
+                        <div class="marketplace-badges">
+                          <div class="marketplace-badge">Marketplace</div>
+                          <div class="course-type-badge{% if course.course_type | lower == 'free' %} course-type-free{% endif %}">{{ course.course_type }}</div>
+                        </div>
+                        {% endif %}
                         {% if course.provider %}
                         <div class="provider-badge">
                           Provider - {{ course.provider }}
