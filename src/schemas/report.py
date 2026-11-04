@@ -68,6 +68,8 @@ class CourseCardData:
         self.title = course.get("course") or course.get("name")
         self.relevancy = course.get("relevancy", 0)
         self.is_public = course.get("is_public", False)
+        # Set only for marketplace (CIOS) content, e.g. "Paid"; None for iGOT KB courses
+        self.course_type = course.get("course_type")
         self.provider = self._extract_provider(course)
         
         # Group competencies
@@ -91,6 +93,7 @@ class CourseCardData:
             "provider": self.provider,
             "relevancy": self.relevancy,
             "is_public": self.is_public,
+            "course_type": self.course_type,
             "functional": self.functional,
             "domain": self.domain,
             "behavioral": self.behavioral,
