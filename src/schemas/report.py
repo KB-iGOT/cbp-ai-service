@@ -85,6 +85,9 @@ class CourseCardData:
         org = course.get("organisation")
         if org and isinstance(org, list) and len(org) > 0:
             return org[0]
+        # AI recommendations store organisation as a comma-joined string
+        if org and isinstance(org, str):
+            return org
         return course.get("platform", '')
 
     def to_dict(self) -> Dict[str, Any]:
