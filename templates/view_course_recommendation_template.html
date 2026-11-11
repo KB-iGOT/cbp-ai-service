@@ -96,6 +96,8 @@
       line-height: 1;
       /* 🔥 CRITICAL */
       height: 30px;
+      box-sizing: border-box;
+      flex-shrink: 0;
       white-space: nowrap;
     }
 
@@ -116,8 +118,15 @@
       font-weight: 600;
     }
 
+    .course-badges {
+      display: flex;
+      flex-direction: column;
+      max-width: 65%;
+    }
+
     .marketplace-badges {
       display: flex;
+      justify-content: flex-end;
       gap: 6px;
       margin-top: 4px;
     }
@@ -179,6 +188,7 @@
     .behavioural-pill,
     .functional-pill,
     .domain-pill {
+      margin: 0;
       padding: 3px 8px;
       font-size: 11px;
       border-radius: 14px;
@@ -337,7 +347,7 @@
           <div class="course-header">
             <div class="course-pill"><img
                 src="https://portal.igotkarmayogi.gov.in/training-pla-ai/assets/icons/course.svg"> Course</div>
-            <div>
+            <div class="course-badges">
               <div class="ai-green">
                 {% if course.is_public %}
                 AI Recommended - Public
