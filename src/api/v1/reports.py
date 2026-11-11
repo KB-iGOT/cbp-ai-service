@@ -272,9 +272,9 @@ async def generate_pdf_response(
 
 
 def get_center_department_name(role_mapping, department_id: Optional[str] = None) -> str:
-    """Extract center/department name from role mapping"""
+    """Extract center/department name from role mapping, as "Ministry / Department" when a department is set"""
     if department_id and role_mapping.department_name:
-        return role_mapping.department_name
+        return f"{role_mapping.state_center_name} / {role_mapping.department_name}"
     return role_mapping.state_center_name
 
 
