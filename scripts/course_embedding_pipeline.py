@@ -17,8 +17,19 @@ isActive == true are embedded; items returned as inactive are removed. Mapping:
     lastUpdatedOn                                  -> version_key (change detection)
     name / description / difficultyLevel / duration / competencies_v6 map as-is
 
+Both sources run by default; use --skip to process only one of them. GIN and
+HNSW indexes are (re)created at the end in every case.
+
 Usage:
     python course_embedding_pipeline.py [--batch-size N] [--concurrency N]
+                                        [--skip {kb,marketplace}]
+
+Options:
+    --batch-size N            Courses fetched per API page (overrides BATCH_SIZE)
+    --concurrency N           Max concurrent embedding tasks (overrides CONCURRENCY)
+    --skip kb                 Skip KB courses; embed marketplace content only
+    --skip marketplace        Skip marketplace content; embed KB courses only
+                              (omit --skip to embed both)
 
 Configuration is read from the environment; a .env file in the current directory
 or the repo root is loaded automatically (real environment variables take
@@ -46,6 +57,8 @@ Example:
     export KB_AUTH_TOKEN="Bearer eyJhbGciOi..."
     export GOOGLE_API_KEY="AQ...."
     python course_embedding_pipeline.py --batch-size 50 --concurrency 10
+    python course_embedding_pipeline.py --skip kb            # marketplace only
+    python course_embedding_pipeline.py --skip marketplace   # KB only
 """
 
 import os
@@ -102,6 +115,11 @@ def _parse_args():
         "--concurrency", type=int, default=None,
         help="Max concurrent embedding tasks (overrides CONCURRENCY env var; default: 20)"
     )
+    parser.add_argument(
+        "--skip", choices=("kb", "marketplace"), default=None,
+        help="Skip one source: 'kb' (embed marketplace only) or 'marketplace' (embed KB only). "
+             "Omit to embed both."
+    )
     return parser.parse_args()
 
 
@@ -136,6 +154,8 @@ EMBEDDING_MODEL = os.environ.get("GOOGLE_EMBEDDING_MODEL", "gemini-embedding-2")
 EMBEDDING_DIMENSION = int(os.environ.get("EMBEDDING_OUTPUT_DIMENSIONALITY", 1536))
 BATCH_SIZE = _args.batch_size or int(os.environ.get("BATCH_SIZE", 20))  # Courses per batch
 CONCURRENCY = _args.concurrency or int(os.environ.get("CONCURRENCY", 20))  # Max concurrent embedding tasks
+SKIP_KB = _args.skip == "kb"
+SKIP_MARKETPLACE = _args.skip == "marketplace"
 
 
 # --- Helper Functions ---
@@ -638,7 +658,10 @@ async def main():
             async with semaphore:
                 return await process_single_course(course)
 
-        while True:
+        if SKIP_KB:
+            print("\n===== Skipping KB courses (--skip kb) =====")
+
+        while not SKIP_KB:
             print(f"\n===== Fetching batch at offset {offset} (limit {BATCH_SIZE}) =====")
             course_data, total_count = await search_courses(offset=offset, limit=BATCH_SIZE)
 
@@ -687,12 +710,16 @@ async def main():
             if offset >= total_count:
                 break
 
-        print(f"\n===== Done. Inserted: {total_inserted} | Updated: {total_updated} | Skipped (up-to-date): {total_skipped} =====")
+        if not SKIP_KB:
+            print(f"\n===== Done. Inserted: {total_inserted} | Updated: {total_updated} | Skipped (up-to-date): {total_skipped} =====")
 
-        print("\n===== Processing marketplace content =====")
-        m_ins, m_upd, m_skip, m_del = await process_marketplace_content(pool, existing, semaphore)
-        print(f"\n===== Marketplace done. Inserted: {m_ins} | Updated: {m_upd} | "
-              f"Skipped (up-to-date): {m_skip} | Deleted (inactive): {m_del} =====")
+        if SKIP_MARKETPLACE:
+            print("\n===== Skipping marketplace content (--skip marketplace) =====")
+        else:
+            print("\n===== Processing marketplace content =====")
+            m_ins, m_upd, m_skip, m_del = await process_marketplace_content(pool, existing, semaphore)
+            print(f"\n===== Marketplace done. Inserted: {m_ins} | Updated: {m_upd} | "
+                  f"Skipped (up-to-date): {m_skip} | Deleted (inactive): {m_del} =====")
 
         print("\nCreating text search indexes (GIN)...")
         await create_text_search_indexes(pool)
