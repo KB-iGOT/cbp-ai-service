@@ -1,0 +1,2444 @@
+[
+  {
+    "competency_id": "BEH-001",
+    "type": "Behavioural",
+    "theme": "Self-awareness",
+    "theme_description": "Conscious recognition of one's thoughts, emotions, and behaviours, driven by a clear sense of purpose and values. It involves a confident understanding of one's strengths and weaknesses, fostering the ability to align actions with goals and a commitment to ongoing self-learning and personal growth.",
+    "sub_theme": "Self-analysis",
+    "sub_theme_description": "Ability to critically examine and evaluate their own thoughts, behaviours, emotions, strengths, and weaknesses for introspection and self-reflection.",
+    "proficiency_levels": [
+      {
+        "level": "Operational",
+        "label": "Recognises own thoughts, emotions, strengths, and weaknesses to align behaviour with professional expectations"
+      },
+      {
+        "level": "Tactical",
+        "label": "Analyses behaviour and adjusts conduct to enhance work performance, interpersonal coordination, and accountability"
+      },
+      {
+        "level": "Strategic",
+        "label": "Exhibits self-awareness and enables structured reflective practices that improve team effectiveness and service outcomes."
+      }
+    ]
+  },
+  {
+    "competency_id": "BEH-002",
+    "type": "Behavioural",
+    "theme": "Self-awareness",
+    "theme_description": "Conscious recognition of one's thoughts, emotions, and behaviours, driven by a clear sense of purpose and values. It involves a confident understanding of one's strengths and weaknesses, fostering the ability to align actions with goals and a commitment to ongoing self-learning and personal growth.",
+    "sub_theme": "Self-confidence",
+    "sub_theme_description": "Ability to believe in one’s own abilities, judgment, and skills and have positive and realistic self-perception and assurance to tackle challenges. Take calculated risks and persist in the face of setbacks.",
+    "proficiency_levels": [
+      {
+        "level": "Operational",
+        "label": "Builds confidence through independent task completion"
+      },
+      {
+        "level": "Tactical",
+        "label": "Shows confidence through ownership and ideas"
+      },
+      {
+        "level": "Strategic",
+        "label": "Leads with confidence, judgment, and integrity"
+      }
+    ]
+  },
+  {
+    "competency_id": "BEH-003",
+    "type": "Behavioural",
+    "theme": "Self-awareness",
+    "theme_description": "Conscious recognition of one's thoughts, emotions, and behaviours, driven by a clear sense of purpose and values. It involves a confident understanding of one's strengths and weaknesses, fostering the ability to align actions with goals and a commitment to ongoing self-learning and personal growth.",
+    "sub_theme": "Purposefulness",
+    "sub_theme_description": "Ability to align their actions, decisions, and goals with a clear sense of purpose or a higher meaning for working towards the goal of greater good of citizens.",
+    "proficiency_levels": [
+      {
+        "level": "Operational",
+        "label": "Demonstrates how routine tasks contribute to organisational goals and societal impact"
+      },
+      {
+        "level": "Tactical",
+        "label": "Aligns priorities with long-term goals to advance organisational and citizen outcomes"
+      },
+      {
+        "level": "Strategic",
+        "label": "Aligns departmental policies with long-term societal outcomes, using technology to improve citizen service delivery"
+      }
+    ]
+  },
+  {
+    "competency_id": "BEH-004",
+    "type": "Behavioural",
+    "theme": "Self-awareness",
+    "theme_description": "Conscious recognition of one's thoughts, emotions, and behaviours, driven by a clear sense of purpose and values. It involves a confident understanding of one's strengths and weaknesses, fostering the ability to align actions with goals and a commitment to ongoing self-learning and personal growth.",
+    "sub_theme": "Self-learning",
+    "sub_theme_description": "Exhibits a commitment to addressing the Department’s, Ministry’s, or Organisation’s needs now and, in the future, through focusing on learning by identifying one’s own learning needs, setting a learning plan and choosing the appropriate learning resources. Focuses on learning how new and innovative ideas and emerging technologies can be adopted to contribute towards the successful completion of tasks.",
+    "proficiency_levels": [
+      {
+        "level": "Operational",
+        "label": "Actively develops own capability to perform current responsibilities effectively"
+      },
+      {
+        "level": "Tactical",
+        "label": "Strengthens own expertise while enabling structured team learning to improve delivery standards"
+      },
+      {
+        "level": "Strategic",
+        "label": "Leads personal and institutional learning to build future-ready and high-performing governance systems"
+      }
+    ]
+  },
+  {
+    "competency_id": "BEH-005",
+    "type": "Behavioural",
+    "theme": "Personal Effectiveness",
+    "theme_description": "Recognises one's emotional triggers and controls emotional reactions for retaining professionalism while working under pressure and heightened stress. Shows perseverance, self-control, and professional toughness when facing challenges and recovering from setbacks by adapting attitude and behaviour to meet a particular circumstance or in response to shifting working conditions and dynamics. Shows adaptability in fulfilling a given responsibility, navigating through uncertain situations with limited knowledge or resources.",
+    "sub_theme": "Stress Management",
+    "sub_theme_description": "Identifies one’s emotional triggers, regulates emotional responses through self-control, and maintains the dignity of the office and the position.",
+    "proficiency_levels": [
+      {
+        "level": "Operational",
+        "label": "Manages personal emotions, and applies basic strategies to stay composed and deliver results despite workplace stressors"
+      },
+      {
+        "level": "Tactical",
+        "label": "Mentors team members in applying stress management techniques, fosters supportive peer environments, and proactively redistributes workloads to balance pressure and maintain service continuity"
+      },
+      {
+        "level": "Strategic",
+        "label": "Builds and sustains systemic stress resilience within the organisation"
+      }
+    ]
+  },
+  {
+    "competency_id": "BEH-006",
+    "type": "Behavioural",
+    "theme": "Personal Effectiveness",
+    "theme_description": "Recognises one's emotional triggers and controls emotional reactions for retaining professionalism while working under pressure and heightened stress. Shows perseverance, self-control, and professional toughness when facing challenges and recovering from setbacks by adapting attitude and behaviour to meet a particular circumstance or in response to shifting working conditions and dynamics. Shows adaptability in fulfilling a given responsibility, navigating through uncertain situations with limited knowledge or resources.",
+    "sub_theme": "Resilience",
+    "sub_theme_description": "Exhibits competence, confidence, coping skills, and self-control through awareness and mindfulness of the shared purpose of good governance and maintaining positive relations. Demonstrating professional perseverance by modifying the approach while working under increased pressure.",
+    "proficiency_levels": [
+      {
+        "level": "Operational",
+        "label": "Practices foundational emotional regulation, seeks support when needed, follows rules under stress, and adjusts actions"
+      },
+      {
+        "level": "Tactical",
+        "label": "Manages personal and team challenges with composure, adapts plans, maintains morale, and encourages others to align with purpose during uncertainty"
+      },
+      {
+        "level": "Strategic",
+        "label": "Leads with integrity to uphold and maintain strategic focus despite challenging circumstances"
+      }
+    ]
+  },
+  {
+    "competency_id": "BEH-007",
+    "type": "Behavioural",
+    "theme": "Personal Effectiveness",
+    "theme_description": "Recognises one's emotional triggers and controls emotional reactions for retaining professionalism while working under pressure and heightened stress. Shows perseverance, self-control, and professional toughness when facing challenges and recovering from setbacks by adapting attitude and behaviour to meet a particular circumstance or in response to shifting working conditions and dynamics. Shows adaptability in fulfilling a given responsibility, navigating through uncertain situations with limited knowledge or resources.",
+    "sub_theme": "Navigating Ambiguity",
+    "sub_theme_description": "Ability to effectively operate in situations characterised by uncertainty, complexity, and a lack of clear information or direction by adapting quickly to changing circumstances, be they new policy directives, unexpected challenges, or shifts in political priorities.",
+    "proficiency_levels": [
+      {
+        "level": "Operational",
+        "label": "Recognises and adapts to ambiguity to deliver assigned tasks without disruption"
+      },
+      {
+        "level": "Tactical",
+        "label": "Enables team alignment and progress amid evolving priorities"
+      },
+      {
+        "level": "Strategic",
+        "label": "Leads through uncertainty to achieve long-term goals"
+      }
+    ]
+  },
+  {
+    "competency_id": "BEH-008",
+    "type": "Behavioural",
+    "theme": "Solution Orientation",
+    "theme_description": "Displays a sense of carefulness and practicality in employing both creative and reflective problem-solving methods. Conducts thorough root-cause analyses and collaborates with experts and stakeholders to generate a range of hypotheses based on historical precedents, data, and reports, with a goal to anticipate potential issues and suggest practical and alternative solutions that are based on insights gained from a comprehensive analysis of all relevant available information.",
+    "sub_theme": "Analytical Thinking",
+    "sub_theme_description": "Demonstrates ability to extract key information from data, reports, precedence through thorough examination, scrutiny, and analysis using logic to address issues and problems.",
+    "proficiency_levels": [
+      {
+        "level": "Operational",
+        "label": "Gathers, organises, and interprets information to break down issues and plan tasks systematically"
+      },
+      {
+        "level": "Tactical",
+        "label": "Identifies root causes, analyses patterns, and collaborates to develop practical solutions"
+      },
+      {
+        "level": "Strategic",
+        "label": "Synthesises complex data to design strategies, resolve risks, and guide long-term decision making"
+      }
+    ]
+  },
+  {
+    "competency_id": "BEH-009",
+    "type": "Behavioural",
+    "theme": "Solution Orientation",
+    "theme_description": "Displays a sense of carefulness and practicality in employing both creative and reflective problem-solving methods. Conducts thorough root-cause analyses and collaborates with experts and stakeholders to generate a range of hypotheses based on historical precedents, data, and reports, with a goal to anticipate potential issues and suggest practical and alternative solutions that are based on insights gained from a comprehensive analysis of all relevant available information.",
+    "sub_theme": "Attention to Detail",
+    "sub_theme_description": "Displays the quality of thoroughly, meticulously, and accurately examining all aspects of a problem or task, such as document creation to data analysis, budget management, and project implementation by employing a keen eye for detail for their screening and scrutiny using functional expertise and domain credibility.",
+    "proficiency_levels": [
+      {
+        "level": "Operational",
+        "label": "Reviews documents carefully, follows protocols, and checks accuracy to ensure error-free work"
+      },
+      {
+        "level": "Tactical",
+        "label": "Ensures accuracy by reviewing work, guiding teams, and resolving recurring errors"
+      },
+      {
+        "level": "Strategic",
+        "label": "Ensures accuracy by embedding quality systems, mentoring teams, and addressing errors proactively"
+      }
+    ]
+  },
+  {
+    "competency_id": "BEH-010",
+    "type": "Behavioural",
+    "theme": "Solution Orientation",
+    "theme_description": "Displays a sense of carefulness and practicality in employing both creative and reflective problem-solving methods. Conducts thorough root-cause analyses and collaborates with experts and stakeholders to generate a range of hypotheses based on historical precedents, data, and reports, with a goal to anticipate potential issues and suggest practical and alternative solutions that are based on insights gained from a comprehensive analysis of all relevant available information.",
+    "sub_theme": "Systems Thinking",
+    "sub_theme_description": "Recognize one's area of responsibility as a critical component of the larger system of the Government machinery and understand its interrelatedness and interoperability with other areas. This involves perceiving and comprehending complex problems and systems, such as processes and policies, as a whole and in parts simultaneously. It also involves devising strategies that would impact the dynamics of the whole by synthesizing complex problems, creating feedback loops, and comprehending causality.",
+    "proficiency_levels": [
+      {
+        "level": "Operational",
+        "label": "Recognises how individual roles, processes, and decisions fit within the broader government system"
+      },
+      {
+        "level": "Tactical",
+        "label": "Analyses system’s behaviours to identify root causes and designs solutions"
+      },
+      {
+        "level": "Strategic",
+        "label": "Anticipates systemic risks and shapes reforms that strengthen long-term institutional resilience"
+      }
+    ]
+  },
+  {
+    "competency_id": "BEH-011",
+    "type": "Behavioural",
+    "theme": "Communication",
+    "theme_description": "Exhibits the ability to speak, read, and interpret official communications such as English/Hindi/State-specific in respect to their context, message, and intent. Displays positive non-verbal cues, actively practices attentive listening, endeavours to understand the viewpoints of others, and responds respectfully and humbly. Presents information with conviction, fluency, rationality, and persuasion while using communication techniques tailored to the audience.",
+    "sub_theme": "Active Listening",
+    "sub_theme_description": "Demonstrates the capacity to pay close attention to what is being said and to interpret the spirit and intent of the speaker from other cues such as body language and facial expressions.",
+    "proficiency_levels": [
+      {
+        "level": "Operational",
+        "label": "Demonstrates active listening to recognise cues and ensure respectful and attentive communication"
+      },
+      {
+        "level": "Tactical",
+        "label": "Applies active listening techniques to promote clear, empathetic, and collaborative communication within the team"
+      },
+      {
+        "level": "Strategic",
+        "label": "Promotes active listening to manage complex discussions and strengthen respectful communication within the M/D/O"
+      }
+    ]
+  },
+  {
+    "competency_id": "BEH-012",
+    "type": "Behavioural",
+    "theme": "Communication",
+    "theme_description": "Exhibits the ability to speak, read, and interpret official communications such as English/Hindi/State-specific in respect to their context, message, and intent. Displays positive non-verbal cues, actively practices attentive listening, endeavours to understand the viewpoints of others, and responds respectfully and humbly. Presents information with conviction, fluency, rationality, and persuasion while using communication techniques tailored to the audience.",
+    "sub_theme": "Reading and Comprehension",
+    "sub_theme_description": "Exhibits elevated reading skills, possesses a firm linguistic command, and knowledge. Demonstrates the ability to absorb information, understand it, and integrate it with existing knowledge.",
+    "proficiency_levels": [
+      {
+        "level": "Operational",
+        "label": "Demonstrate reading comprehension and linguistic command to interpret and apply information"
+      },
+      {
+        "level": "Tactical",
+        "label": "Interprets and synthesises official communications into actionable insights for effective implementation"
+      },
+      {
+        "level": "Strategic",
+        "label": "Analyses complex communications to guide strategic decisions"
+      }
+    ]
+  },
+  {
+    "competency_id": "BEH-013",
+    "type": "Behavioural",
+    "theme": "Communication",
+    "theme_description": "Exhibits the ability to speak, read, and interpret official communications such as English/Hindi/State-specific in respect to their context, message, and intent. Displays positive non-verbal cues, actively practices attentive listening, endeavours to understand the viewpoints of others, and responds respectfully and humbly. Presents information with conviction, fluency, rationality, and persuasion while using communication techniques tailored to the audience.",
+    "sub_theme": "Verbal and non-verbal fluency",
+    "sub_theme_description": "Demonstrates ability to articulate thoughts and express/present ideas clearly and effectively using oral, non-verbal communication skills, aiming to inform, instruct, or persuade the audience/ stakeholders, and augments credibility of the position and the office.",
+    "proficiency_levels": [
+      {
+        "level": "Operational",
+        "label": "Understands and communicates ideas clearly and listens attentively to support accurate understanding and respectful interaction in the office"
+      },
+      {
+        "level": "Tactical",
+        "label": "Adapts communication style to inform, guide, and influence others while maintaining credibility and mutual respect."
+      },
+      {
+        "level": "Strategic",
+        "label": "Uses fluent and persuasive communication (verbal and non-verbal) to represent the office effectively and strengthen institutional credibility"
+      }
+    ]
+  },
+  {
+    "competency_id": "BEH-014",
+    "type": "Behavioural",
+    "theme": "Communication",
+    "theme_description": "Exhibits the ability to speak, read, and interpret official communications such as English/Hindi/State-specific in respect to their context, message, and intent. Displays positive non-verbal cues, actively practices attentive listening, endeavours to understand the viewpoints of others, and responds respectfully and humbly. Presents information with conviction, fluency, rationality, and persuasion while using communication techniques tailored to the audience.",
+    "sub_theme": "Presentation Skills",
+    "sub_theme_description": "Displays the ability to create documents and presentations that highlight the key points, details, accomplishments, and difficulties associated with the topic at hand.",
+    "proficiency_levels": [
+      {
+        "level": "Operational",
+        "label": "Structures and presents clear information using simple language and basic visual aids to support understanding"
+      },
+      {
+        "level": "Tactical",
+        "label": "Designs and delivers audience focused presentations that facilitate dialogue and support informed decision making"
+      },
+      {
+        "level": "Strategic",
+        "label": "Communicates complex programme and policy messages with clarity and coherence, shaping understanding and alignment across stakeholders"
+      }
+    ]
+  },
+  {
+    "competency_id": "BEH-015",
+    "type": "Behavioural",
+    "theme": "Outcome Orientation",
+    "theme_description": "Demonstrates an intense motivation to set goals and be responsible for their achievement while striving for quality excellence. Possesses the capacity to identify problems and gaps during service delivery and to proactively analyse and assess different options to ensure the best result. Drives systemic changes to increase effectiveness and efficiency in line with future needs.",
+    "sub_theme": "Goal Setting",
+    "sub_theme_description": "Displays an underlying desire to be thorough and accurate when determining clear, challenging, & SMART (specific, measurable, achievable, relevant & time-bound) objectives or targets to guide actions as per set procedures, rules & guidelines.",
+    "proficiency_levels": [
+      {
+        "level": "Operational",
+        "label": "Understands the purpose of goal setting in public service and drafts basic SMART goals for own team under guidance"
+      },
+      {
+        "level": "Tactical",
+        "label": "Cascades goals across teams or sections, integrates dependencies, and uses data-driven reviews to correct course and deliver measurable outcomes"
+      },
+      {
+        "level": "Strategic",
+        "label": "Standardises M/D/O goal setting practices linked to outcomes, accountability, and service improvement"
+      }
+    ]
+  },
+  {
+    "competency_id": "BEH-016",
+    "type": "Behavioural",
+    "theme": "Outcome Orientation",
+    "theme_description": "Demonstrates an intense motivation to set goals and be responsible for their achievement while striving for quality excellence. Possesses the capacity to identify problems and gaps during service delivery and to proactively analyse and assess different options to ensure the best result. Drives systemic changes to increase effectiveness and efficiency in line with future needs.",
+    "sub_theme": "Accountability",
+    "sub_theme_description": "Demonstrates the ability to take responsibility and make team accountable for measurable, high quality, timely, and cost-effective delivery. Accepts responsibility for mistakes and takes initiatives for correcting them.",
+    "proficiency_levels": [
+      {
+        "level": "Operational",
+        "label": "Takes ownership of tasks, follows procedures, and delivers quality work to support team goals"
+      },
+      {
+        "level": "Tactical",
+        "label": "Coordinates team efforts, monitors performance, and implements processes to ensure timely and efficient public service delivery"
+      },
+      {
+        "level": "Strategic",
+        "label": "Leads strategic initiatives and fosters a culture of accountability"
+      }
+    ]
+  },
+  {
+    "competency_id": "BEH-017",
+    "type": "Behavioural",
+    "theme": "Outcome Orientation",
+    "theme_description": "Demonstrates an intense motivation to set goals and be responsible for their achievement while striving for quality excellence. Possesses the capacity to identify problems and gaps during service delivery and to proactively analyse and assess different options to ensure the best result. Drives systemic changes to increase effectiveness and efficiency in line with future needs.",
+    "sub_theme": "Initiative and Drive",
+    "sub_theme_description": "Displays a profound drive to conduct oneself meticulously, following processes, norms, and other guidelines as one makes improvements by voluntarily and consciously putting forth the effort required by a task or activity despite difficulties, hardships, failures, or obstacles.",
+    "proficiency_levels": [
+      {
+        "level": "Operational",
+        "label": "Takes ownership of assigned work and suggests basic improvements to complete tasks more efficiently"
+      },
+      {
+        "level": "Tactical",
+        "label": "Identifies improvement areas, coordinates solutions, and maintains persistence to ensure results"
+      },
+      {
+        "level": "Strategic",
+        "label": "Leads proactive efforts to improve systems, enable teams to take initiative, and institutionalise a culture of ownership and efficiency"
+      }
+    ]
+  },
+  {
+    "competency_id": "BEH-018",
+    "type": "Behavioural",
+    "theme": "Outcome Orientation",
+    "theme_description": "Demonstrates an intense motivation to set goals and be responsible for their achievement while striving for quality excellence. Possesses the capacity to identify problems and gaps during service delivery and to proactively analyse and assess different options to ensure the best result. Drives systemic changes to increase effectiveness and efficiency in line with future needs.",
+    "sub_theme": "Commitment to Quality",
+    "sub_theme_description": "Facilitates building a culture of delivering high-quality outputs through consistent focus on creating new benchmarks in quality and maintaining them for both internal and external stakeholders.",
+    "proficiency_levels": [
+      {
+        "level": "Operational",
+        "label": "Delivers reliable outputs by following SOPs and applying basic quality checks"
+      },
+      {
+        "level": "Tactical",
+        "label": "Strengthens the teams quality systems by identifying root causes of errors and embedding structured quality assurance practices"
+      },
+      {
+        "level": "Strategic",
+        "label": "Institutionalises systemic quality controls and transparency mechanisms to drive continuous improvement"
+      }
+    ]
+  },
+  {
+    "competency_id": "BEH-019",
+    "type": "Behavioural",
+    "theme": "Collaboration",
+    "theme_description": "Working in tandem with others as an integral unit, establishing partnerships and cooperative working relationships toward realizing Division / Department / Ministry goals. Proactively sharing relevant and useful knowledge, experience, or expertise with peers/team to strengthen knowledge base. It also refers to leveraging diverse strengths and contribution of every officer/staff for timely and high-quality delivery.",
+    "sub_theme": "Relationship Management",
+    "sub_theme_description": "Actively establishes connections, nurtures relationships, and capitalizes on opportunities to identify intelligence and insights into existing or potential challenges. Additionally, builds partnerships and public-private collaborations to leverage expertise in the national and global ecosystem, enhancing efficiency and promoting social inclusion for pro-people governance.",
+    "proficiency_levels": [
+      {
+        "level": "Operational",
+        "label": "Collaborates with colleagues and beneficiaries with empathy and respect to build trust and improve service delivery"
+      },
+      {
+        "level": "Tactical",
+        "label": "Coordinates cross-functional teams and builds partnerships to improve citizen-centric delivery"
+      },
+      {
+        "level": "Strategic",
+        "label": "Strengthens multi-sectoral collaborations by aligning partnerships with departmental priorities and long-term objectives"
+      }
+    ]
+  },
+  {
+    "competency_id": "BEH-020",
+    "type": "Behavioural",
+    "theme": "Collaboration",
+    "theme_description": "Working in tandem with others as an integral unit, establishing partnerships and cooperative working relationships toward realizing Division / Department / Ministry goals. Proactively sharing relevant and useful knowledge, experience, or expertise with peers/team to strengthen knowledge base. It also refers to leveraging diverse strengths and contribution of every officer/staff for timely and high-quality delivery.",
+    "sub_theme": "Diversity and Inclusion",
+    "sub_theme_description": "Create an inclusive work environment that values and embraces diverse perspectives, backgrounds, and experiences by actively promoting diversity, equity, and inclusion (DEI) within the Ministry/Department/Organization and integrating it into various aspects of working.",
+    "proficiency_levels": [
+      {
+        "level": "Operational",
+        "label": "Demonstrates foundational understanding of diversity and inclusion principles and applies them in daily interactions"
+      },
+      {
+        "level": "Tactical",
+        "label": "Facilitates inclusive collaboration by analysing patterns, adapting team practices, and enabling diverse participation"
+      },
+      {
+        "level": "Strategic",
+        "label": "Champions and institutionalises inclusive practices to strengthen M/D/O collaboration and outcomes"
+      }
+    ]
+  },
+  {
+    "competency_id": "BEH-021",
+    "type": "Behavioural",
+    "theme": "Collaboration",
+    "theme_description": "Working in tandem with others as an integral unit, establishing partnerships and cooperative working relationships toward realizing Division / Department / Ministry goals. Proactively sharing relevant and useful knowledge, experience, or expertise with peers/team to strengthen knowledge base. It also refers to leveraging diverse strengths and contribution of every officer/staff for timely and high-quality delivery.",
+    "sub_theme": "Knowledge Sharing",
+    "sub_theme_description": "Exchanges explicit and implicit knowledge with stakeholders at the inter-, intra-, divisional, departmental, and ministerial levels in order to improve output that leverages multiple viewpoints.",
+    "proficiency_levels": [
+      {
+        "level": "Operational",
+        "label": "Applies basic knowledge sharing practices by collecting, organising, and sharing credible information"
+      },
+      {
+        "level": "Tactical",
+        "label": "Analyses knowledge needs and work patterns to improve coordination, efficiency, and implementation quality within teams"
+      },
+      {
+        "level": "Strategic",
+        "label": "Evaluates organisational knowledge gaps and strengthens knowledge-sharing practices to support continuous learning and improved performance"
+      }
+    ]
+  },
+  {
+    "competency_id": "BEH-022",
+    "type": "Behavioural",
+    "theme": "Service Orientation",
+    "theme_description": "Demonstrates the ability to focus one's efforts on discovering and meeting the needs of stakeholders by establishing a rapport, putting oneself into the mindset of the stakeholder and facilitating the delivery of services that meet their underlying and unexpressed needs. Demonstrates the ability to provide excellent service delivery while developing and maintaining strong relationships with citizens and balancing the government's key strategic priorities.",
+    "sub_theme": "Empathy",
+    "sub_theme_description": "Ability to understand and connect with the emotions, perspectives, and feelings of others and take actions to support them through challenging situations.",
+    "proficiency_levels": [
+      {
+        "level": "Operational",
+        "label": "Recognises emotions and perspectives of others and responds to citizens with sensitivity and respect"
+      },
+      {
+        "level": "Tactical",
+        "label": "Applies empathy to strengthen collaboration, resolve concerns, and improve public service delivery outcomes"
+      },
+      {
+        "level": "Strategic",
+        "label": "Models empathy to inspire teams, navigate challenges, and strengthen public service delivery"
+      }
+    ]
+  },
+  {
+    "competency_id": "BEH-023",
+    "type": "Behavioural",
+    "theme": "Service Orientation",
+    "theme_description": "Demonstrates the ability to focus one's efforts on discovering and meeting the needs of stakeholders by establishing a rapport, putting oneself into the mindset of the stakeholder and facilitating the delivery of services that meet their underlying and unexpressed needs. Demonstrates the ability to provide excellent service delivery while developing and maintaining strong relationships with citizens and balancing the government's key strategic priorities.",
+    "sub_theme": "Responsiveness",
+    "sub_theme_description": "Demonstrate the ability to respond respectfully and effectively and ensure the highest level of care and satisfaction of citizens.",
+    "proficiency_levels": [
+      {
+        "level": "Operational",
+        "label": "Demonstrates respectful, timely, and empathetic responses"
+      },
+      {
+        "level": "Tactical",
+        "label": "Applies systemic improvements and coordination to address citizen needs seamlessly"
+      },
+      {
+        "level": "Strategic",
+        "label": "Contributes to citizen-centric responsiveness by reinforcing service oriented practices in day-to-day implementation"
+      }
+    ]
+  },
+  {
+    "competency_id": "BEH-024",
+    "type": "Behavioural",
+    "theme": "Service Orientation",
+    "theme_description": "Demonstrates the ability to focus one's efforts on discovering and meeting the needs of stakeholders by establishing a rapport, putting oneself into the mindset of the stakeholder and facilitating the delivery of services that meet their underlying and unexpressed needs. Demonstrates the ability to provide excellent service delivery while developing and maintaining strong relationships with citizens and balancing the government's key strategic priorities.",
+    "sub_theme": "Service Excellence wrt Citizens",
+    "sub_theme_description": "Demonstrating professional perseverance by focusing one’s efforts on meeting the set goals of the government as well as needs of the citizen while maintaining quality of delivery.",
+    "proficiency_levels": [
+      {
+        "level": "Operational",
+        "label": "Responds to citizen queries and requests promptly and respectfully"
+      },
+      {
+        "level": "Tactical",
+        "label": "Anticipates citizen needs, adapts delivery approaches, and contributes to improving service systems"
+      },
+      {
+        "level": "Strategic",
+        "label": "Advocates for citizen-centric governance by driving systemic improvements and fostering a people-first culture"
+      }
+    ]
+  },
+  {
+    "competency_id": "BEH-026",
+    "type": "Behavioural",
+    "theme": "Operational Excellence",
+    "theme_description": "Establishes plans, defines milestones, and allots resources for regularly producing high-quality, cost-effective results that are in accordance with the department's or ministry's overall objectives. Focuses on tasks that will increase effectiveness, efficiency, and production through planning, intentional effort, and control. Determines goals, assigns tasks, and establishes priorities based on skill levels and the availability of resources.",
+    "sub_theme": "Resource Management",
+    "sub_theme_description": "Demonstrate the ability to effectively and efficiently allocate, utilise, and optimise various resources to achieve strategic goals and objective.",
+    "proficiency_levels": [
+      {
+        "level": "Operational",
+        "label": "Demonstrates foundational understanding of efficient resource use to support smooth and timely public service delivery"
+      },
+      {
+        "level": "Tactical",
+        "label": "Plans, prioritises, and optimises resources to improve productivity, efficiency, and service impact"
+      },
+      {
+        "level": "Strategic",
+        "label": "Shapes and reforms resource allocation systems to maximise public value and long-term institutional sustainability"
+      }
+    ]
+  },
+  {
+    "competency_id": "BEH-027",
+    "type": "Behavioural",
+    "theme": "Operational Excellence",
+    "theme_description": "Establishes plans, defines milestones, and allots resources for regularly producing high-quality, cost-effective results that are in accordance with the department's or ministry's overall objectives. Focuses on tasks that will increase effectiveness, efficiency, and production through planning, intentional effort, and control. Determines goals, assigns tasks, and establishes priorities based on skill levels and the availability of resources.",
+    "sub_theme": "Process Excellence",
+    "sub_theme_description": "Analyse and implement government processes and procedures to ensure alignment to the department's strategic objectives and ensure value to both internal and external stakeholders.",
+    "proficiency_levels": [
+      {
+        "level": "Operational",
+        "label": "Follows workflows and utilises digital tools to organise, document, and complete tasks efficiently"
+      },
+      {
+        "level": "Tactical",
+        "label": "Analyses process issues across teams, and refines tools and workflows to reduce delays and improve execution"
+      },
+      {
+        "level": "Strategic",
+        "label": "Strengthens M/D/O process redesigns, institutionalises new systems, and mentors teams to embed continuous process improvement"
+      }
+    ]
+  },
+  {
+    "competency_id": "BEH-028",
+    "type": "Behavioural",
+    "theme": "Operational Excellence",
+    "theme_description": "Establishes plans, defines milestones, and allots resources for regularly producing high-quality, cost-effective results that are in accordance with the department's or ministry's overall objectives. Focuses on tasks that will increase effectiveness, efficiency, and production through planning, intentional effort, and control. Determines goals, assigns tasks, and establishes priorities based on skill levels and the availability of resources.",
+    "sub_theme": "Continuous Improvement",
+    "sub_theme_description": "Demonstrate the ability to deliver high-quality services through improvement of existing processes, systems, and practices within the sections, divisions, or departments.",
+    "proficiency_levels": [
+      {
+        "level": "Operational",
+        "label": "Follows procedures to identify and report basic workflow inefficiencies"
+      },
+      {
+        "level": "Tactical",
+        "label": "Redesigns and monitors departmental processes to improve efficiency and accountability"
+      },
+      {
+        "level": "Strategic",
+        "label": "Drives and embeds system-wide process reforms to sustain efficiency and citizen-centric performance standards"
+      }
+    ]
+  },
+  {
+    "competency_id": "BEH-029",
+    "type": "Behavioural",
+    "theme": "Creativity & Innovation",
+    "theme_description": "Champions ‘out of the box’ thinking, and supports experimentation of new ideas, utilizing technological advancements with the aim of transforming operations to enhance governance efficiency. Synthesizes insights and concepts from diverse disciplines to drive the decision-making process, promote wider acceptance, and encourage cooperation to ensure successful implementation.",
+    "sub_theme": "Lateral Thinking",
+    "sub_theme_description": "Demonstrates awareness of key emerging trends on a national and global scale. Utilises cross-functional knowledge to develop innovative strategies and approaches to solving real-world problems for the Ministry / Department. Enabling problem solving through consideration of broader perspectives and looking beyond standard reasoning & conventional ideas.",
+    "proficiency_levels": [
+      {
+        "level": "Operational",
+        "label": "Identifies simple alternatives, explores existing practices, and applies guided adjustments to adapt to unexpected changes"
+      },
+      {
+        "level": "Tactical",
+        "label": "Applies flexible thinking to adapt ideas, test innovations, and reframe problems for better outcomes"
+      },
+      {
+        "level": "Strategic",
+        "label": "Drives innovation by embedding flexibility in strategies and builds a culture of adaptability in government"
+      }
+    ]
+  },
+  {
+    "competency_id": "BEH-030",
+    "type": "Behavioural",
+    "theme": "Creativity & Innovation",
+    "theme_description": "Champions ‘out of the box’ thinking, and supports experimentation of new ideas, utilizing technological advancements with the aim of transforming operations to enhance governance efficiency. Synthesizes insights and concepts from diverse disciplines to drive the decision-making process, promote wider acceptance, and encourage cooperation to ensure successful implementation.",
+    "sub_theme": "Transformation Orientation",
+    "sub_theme_description": "Ability to drive cultural, attitudinal, and operational transformation within a Department or Ministry is demonstrated by fostering innovative thinking that utilises emerging technological and digital advances, while also mitigating potential risks and capitalising on opportunities to enhance governance efficiency.",
+    "proficiency_levels": [
+      {
+        "level": "Operational",
+        "label": "Adopts new digital practices, uses departmental tools, and suggests small improvements to routine work"
+      },
+      {
+        "level": "Tactical",
+        "label": "Designs and tests structured innovations to improve departmental systems and citizen outcomes"
+      },
+      {
+        "level": "Strategic",
+        "label": "Drives and sustains large-scale governance transformation"
+      }
+    ]
+  },
+  {
+    "competency_id": "BEH-031",
+    "type": "Behavioural",
+    "theme": "Strategic Leadership",
+    "theme_description": "Ability to foresee future challenges and identify opportunities by discerning the operating environment holistically and being cognizant of emerging dynamics and trends globally, locally, and internally. Creates and communicates a vision of success, coupled with a progressive outlook and aligns strategic goals with operational plans to achieve the vision. Exhibits prudence, credibility and authority for shaping strategic direction to achieve Department/Ministry mandates.",
+    "sub_theme": "Global Mindset",
+    "sub_theme_description": "Demonstrates the ability to enhance Departmental processes aligned to global standards by staying well-versed with the evolving dynamics at the global level, including those related to geo-politics, economics, society, and technology. Understands and keeps up-to-date on international policies and trends that affect the organisation and shape stakeholders' views.",
+    "proficiency_levels": [
+      {
+        "level": "Operational",
+        "label": "Understands and uses global reports and examples to inform departmental processes"
+      },
+      {
+        "level": "Tactical",
+        "label": "Analyses global trends and integrates insights into departmental policies and programmes"
+      },
+      {
+        "level": "Strategic",
+        "label": "Brings global foresight into strategic decision making and planning"
+      }
+    ]
+  },
+  {
+    "competency_id": "BEH-032",
+    "type": "Behavioural",
+    "theme": "Strategic Leadership",
+    "theme_description": "Ability to foresee future challenges and identify opportunities by discerning the operating environment holistically and being cognizant of emerging dynamics and trends globally, locally, and internally. Creates and communicates a vision of success, coupled with a progressive outlook and aligns strategic goals with operational plans to achieve the vision. Exhibits prudence, credibility and authority for shaping strategic direction to achieve Department/Ministry mandates.",
+    "sub_theme": "Forward Thinking",
+    "sub_theme_description": "Demonstrates the ability to comprehend the internal and external environmental dynamics and their effect on both the short-term goals and long-term mandates of the Department/ Ministry/ Organization. This entails achieving a strategic balance with multiple stakeholders on sensitive issues while maintaining a clear focus on the mandate of the future for pro-people governance.",
+    "proficiency_levels": [
+      {
+        "level": "Operational",
+        "label": "Understands how internal and external factors influence M/D/O goals"
+      },
+      {
+        "level": "Tactical",
+        "label": "Aligns strategies, decisions, and stakeholder interests with M/D/O objectives"
+      },
+      {
+        "level": "Strategic",
+        "label": "Shapes long-term plans and adapts them to changing needs"
+      }
+    ]
+  },
+  {
+    "competency_id": "BEH-033",
+    "type": "Behavioural",
+    "theme": "Strategic Leadership",
+    "theme_description": "Ability to foresee future challenges and identify opportunities by discerning the operating environment holistically and being cognizant of emerging dynamics and trends globally, locally, and internally. Creates and communicates a vision of success, coupled with a progressive outlook and aligns strategic goals with operational plans to achieve the vision. Exhibits prudence, credibility and authority for shaping strategic direction to achieve Department/Ministry mandates.",
+    "sub_theme": "Executive Presence",
+    "sub_theme_description": "Exhibits a blend of professional charismatic persona that exudes calmness, composure, confidence, effective communication, and commanding presence in the room while engaging in inter-Ministerial, National and Global forums, intending to promote Government Programmes, Schemes and Strategies.",
+    "proficiency_levels": [
+      {
+        "level": "Operational",
+        "label": "Delivers clear and protocol-compliant messages with composure in official engagements"
+      },
+      {
+        "level": "Tactical",
+        "label": "Exhibits confident and credible presence in stakeholder forums to strengthen trust and influence"
+      },
+      {
+        "level": "Strategic",
+        "label": "Shapes and steers strategic authority in national and global forums to influence perception and advance Government priorities"
+      }
+    ]
+  },
+  {
+    "competency_id": "BEH-034",
+    "type": "Behavioural",
+    "theme": "Strategic Leadership",
+    "theme_description": "Ability to foresee future challenges and identify opportunities by discerning the operating environment holistically and being cognizant of emerging dynamics and trends globally, locally, and internally. Creates and communicates a vision of success, coupled with a progressive outlook and aligns strategic goals with operational plans to achieve the vision. Exhibits prudence, credibility and authority for shaping strategic direction to achieve Department/Ministry mandates.",
+    "sub_theme": "Sustainable Mindset",
+    "sub_theme_description": "Adopting a mindset of implementing rigorous and comprehensive human, financial, and environmental resource accountability systems to ensure that resources are managed effectively and with integrity, and that these are carefully considered in the development and implementation of all policies and programs.",
+    "proficiency_levels": [
+      {
+        "level": "Operational",
+        "label": "Demonstrates responsible use of financial, environmental, and human resources in daily work"
+      },
+      {
+        "level": "Tactical",
+        "label": "Integrates sustainability principles into program planning and implementation"
+      },
+      {
+        "level": "Strategic",
+        "label": "Leads sustainability reforms at a systemic and policy level"
+      }
+    ]
+  },
+  {
+    "competency_id": "BEH-035",
+    "type": "Behavioural",
+    "theme": "Collaborative Leadership",
+    "theme_description": "Effectively builds alliances, facilitates negotiations, and aligns diverse stakeholder interests to drive collective decision-making. Applies diplomatic deliberation, conflict resolution, and consensus-building techniques to achieve impactful outcomes in alignment with national priorities.",
+    "sub_theme": "Influencing and Negotiation",
+    "sub_theme_description": "Demonstrates a high level of proficiency in shaping the perspectives of stakeholders, leading them towards acceptance of proposed approaches that benefit citizens. Engages in strategic discussions, navigates differing opinions, and achieves consensus through persuasive communication and problem-solving.",
+    "proficiency_levels": [
+      {
+        "level": "Operational",
+        "label": "Engages stakeholders through clear communication to build trust, address concerns, and support consensus in interactions"
+      },
+      {
+        "level": "Tactical",
+        "label": "Navigates differing interests through structured dialogue and negotiation to enable effective implementation"
+      },
+      {
+        "level": "Strategic",
+        "label": "Shapes outcomes in complex environments by influencing diverse stakeholders, managing conflict, and building coalitions"
+      }
+    ]
+  },
+  {
+    "competency_id": "BEH-036",
+    "type": "Behavioural",
+    "theme": "Collaborative Leadership",
+    "theme_description": "Effectively builds alliances, facilitates negotiations, and aligns diverse stakeholder interests to drive collective decision-making. Applies diplomatic deliberation, conflict resolution, and consensus-building techniques to achieve impactful outcomes in alignment with national priorities.",
+    "sub_theme": "Conflict Management",
+    "sub_theme_description": "Demonstrates the ability to anticipate, recognise, and resolve conflicts arising from differing opinions, objectives, or interests among individuals, teams, or external stakeholders. Applies structured assessment, negotiation, and mediation tools to de-escalate disputes, build consensus, and protect relationships, decisions, and delivery. Ensures that resolution processes are transparent, compliant, and procedurally fair, reinforcing organisational trust and accountability.",
+    "proficiency_levels": [
+      {
+        "level": "Operational",
+        "label": "Recognises early signs of conflict and manages them within teams and stakeholders"
+      },
+      {
+        "level": "Tactical",
+        "label": "Facilitates structured negotiation and formal resolution processes"
+      },
+      {
+        "level": "Strategic",
+        "label": "Strengthens system level conflict management for complex and sensitive disputes"
+      }
+    ]
+  },
+  {
+    "competency_id": "BEH-037",
+    "type": "Behavioural",
+    "theme": "Team Leadership",
+    "theme_description": "Fosters a positive work environment by actively engaging with the team, enabling their growth, and enhancing their proficiency. This involves identifying and creating opportunities to enhance officers' skills and competencies through timely feedback, guidance, and mentoring. Additionally, promoting a culture of trust, openness, appreciation, recognition, parity, and leading by example.",
+    "sub_theme": "Mentoring",
+    "sub_theme_description": "Demonstrates the capability to foster team development by creating a supportive environment and dedicating efforts to patiently train, provide opportunities, instil discipline and commitment, and offer timely monitoring and guidance to enhance their functional efficiency and professional agility",
+    "proficiency_levels": [
+      {
+        "level": "Operational",
+        "label": "Provides guidance and feedback to support individual growth, skill building, and daily performance"
+      },
+      {
+        "level": "Tactical",
+        "label": "Structures mentoring support to develop capability across the team through tailored guidance and learning opportunities"
+      },
+      {
+        "level": "Strategic",
+        "label": "Strengthens mentoring practices across teams by embedding consistency, sharing effective approaches, and supporting long-term capability development"
+      }
+    ]
+  },
+  {
+    "competency_id": "BEH-038",
+    "type": "Behavioural",
+    "theme": "Team Leadership",
+    "theme_description": "Fosters a positive work environment by actively engaging with the team, enabling their growth, and enhancing their proficiency. This involves identifying and creating opportunities to enhance officers' skills and competencies through timely feedback, guidance, and mentoring. Additionally, promoting a culture of trust, openness, appreciation, recognition, parity, and leading by example.",
+    "sub_theme": "Sharing Constructive Feedback",
+    "sub_theme_description": "Provides timely feedback in a helpful, supportive, and constructive manner to others in a way that promotes their personal and professional growth while maintaining a positive and respectful working relationship.",
+    "proficiency_levels": [
+      {
+        "level": "Operational",
+        "label": "Understands the value of constructive feedback and communicates it respectfully"
+      },
+      {
+        "level": "Tactical",
+        "label": "Provides constructive feedback to support individual development and strengthen team performance"
+      },
+      {
+        "level": "Strategic",
+        "label": "Embeds feedback-driven culture strategically to enable growth, strengthen trust, and build a high-performing team"
+      }
+    ]
+  },
+  {
+    "competency_id": "BEH-039",
+    "type": "Behavioural",
+    "theme": "Team Leadership",
+    "theme_description": "Fosters a positive work environment by actively engaging with the team, enabling their growth, and enhancing their proficiency. This involves identifying and creating opportunities to enhance officers' skills and competencies through timely feedback, guidance, and mentoring. Additionally, promoting a culture of trust, openness, appreciation, recognition, parity, and leading by example.",
+    "sub_theme": "Inspiring Others",
+    "sub_theme_description": "Demonstrates the characteristics and traits of Karmayogis, including fulfilling commitments on every task, recognising, appreciating, and encouraging each team member, stakeholder, and partner, and staying true to the principles of good governance, and encourages others in inculcating them. Displaying a high level of emotional intelligence and being alert, careful, organized, and diligent for setting the right example for the team.",
+    "proficiency_levels": [
+      {
+        "level": "Operational",
+        "label": "Understands Karmayogi values and demonstrates reliable, ethical, and encouraging behaviour in team interactions"
+      },
+      {
+        "level": "Tactical",
+        "label": "Motivates and supports the team by demonstrating emotional intelligence and providing guidance"
+      },
+      {
+        "level": "Strategic",
+        "label": "Institutionalises inspirational and citizen-centric leadership by modelling and embedding Karmayogi values"
+      }
+    ]
+  },
+  {
+    "competency_id": "BEH-040",
+    "type": "Behavioural",
+    "theme": "Decision Making",
+    "theme_description": "Possess the ability to analyse facts, reports, policies, precedents, constraints, risks, and conflicting points of view in a comprehensive and logical manner to gain a holistic perspective and arrive at a timely decision. It involves weighing the pros and cons of various options to arrive at the best possible decision that would lead to the welfare of citizens and contribute towards the attainment of Aatma Nirbhar & Viksit Bharat.",
+    "sub_theme": "Logical Reasoning",
+    "sub_theme_description": "Objectively analyse, evaluate, and interpret information and arguments in a logical and systematic manner in order to arrive at conclusions.",
+    "proficiency_levels": [
+      {
+        "level": "Operational",
+        "label": "Gathers and organises reliable information from credible sources to support decisions"
+      },
+      {
+        "level": "Tactical",
+        "label": "Applies structured tools to analyse options, prioritise solutions, and reach consensus-based decisions"
+      },
+      {
+        "level": "Strategic",
+        "label": "Anchors strategic decision making in national priorities"
+      }
+    ]
+  },
+  {
+    "competency_id": "BEH-041",
+    "type": "Behavioural",
+    "theme": "Decision Making",
+    "theme_description": "Possess the ability to analyse facts, reports, policies, precedents, constraints, risks, and conflicting points of view in a comprehensive and logical manner to gain a holistic perspective and arrive at a timely decision. It involves weighing the pros and cons of various options to arrive at the best possible decision that would lead to the welfare of citizens and contribute towards the attainment of Aatma Nirbhar & Viksit Bharat.",
+    "sub_theme": "Sound Judgement",
+    "sub_theme_description": "Ability to make well-informed, rational, and balanced decisions based on a thorough analysis of available information, careful consideration of potential consequences, and alignment with ethical principles and M/D/O goals",
+    "proficiency_levels": [
+      {
+        "level": "Operational",
+        "label": "Gathers facts and understands rules to make clear and responsible decisions"
+      },
+      {
+        "level": "Tactical",
+        "label": "Analyses risks and trade offs to make timely and balanced judgments in complex situations"
+      },
+      {
+        "level": "Strategic",
+        "label": "Guides strategic decisions by navigating complexity with clarity, ethics, and foresight"
+      }
+    ]
+  },
+  {
+    "competency_id": "BEH-042",
+    "type": "Behavioural",
+    "theme": "Operational Excellence",
+    "theme_description": "Establishes plans, defines milestones, and allots resources for regularly producing high-quality, cost-effective results that are in accordance with the department's or ministry's overall objectives. Focuses on tasks that will increase effectiveness, efficiency, and production through planning, intentional effort, and control. Determines goals, assigns tasks, and establishes priorities based on skill levels and the availability of resources.",
+    "sub_theme": "Planning and Prioritisation",
+    "sub_theme_description": "Demonstrates the ability to effectively manage tasks and reorder priorities in order to make the most use of available resources.",
+    "proficiency_levels": [
+      {
+        "level": "Operational",
+        "label": "Organises tasks and follows established priorities of the team or the M/D/O"
+      },
+      {
+        "level": "Tactical",
+        "label": "Manages multiple demands with fairness and efficiency"
+      },
+      {
+        "level": "Strategic",
+        "label": "Leads strategic prioritisation and institutionalises effective planning practices"
+      }
+    ]
+  },
+  {
+    "competency_id": "BEH-043",
+    "type": "Behavioural",
+    "theme": "Establishment and HR",
+    "theme_description": "Demonstrates expertise in managing various processes and procedures related to establishment and human resource management, including manpower planning for efficient and optimal staffing, as well as managing service and personnel matters such as holding DPCs, managing promotions, pay fixation, allowances, transfers, postings, deputations, resignations, retirement, pension papers, employee grievances, reservations for various cadres, grades, and groups of services, and preventing sexual harassment within the Department or Ministry. Recognizes the accountability to provide prompt, accurate, and concise responses to employee queries by referring comprehensively to various FRSR, related rules, acts, policies, executive orders, etc., to satisfy government employees and mitigate factors that could lead to grievances or administrative tribunal cases.",
+    "sub_theme": "Handling Matters of Prevention of Sexual Harassment (PoSH) Policy",
+    "sub_theme_description": "Demonstrates understanding and knowledge of the clauses, processes, and procedures outlined in The Sexual Harassment of Women at Workplace (Prevention, Prohibition and Redressal) Act, 2013. Takes appropriate measures to address any violation of the policy for promoting a respectful and inclusive work environment. Ensure Internal Complaints Committee formulation.",
+    "proficiency_levels": [
+      {
+        "level": "Operational",
+        "label": "Demonstrates awareness of PoSH provisions and maintains compliant, respectful workplace conduct"
+      },
+      {
+        "level": "Tactical",
+        "label": "Applies PoSH procedures sensitively and ensures fair, confidential handling of concerns"
+      },
+      {
+        "level": "Strategic",
+        "label": "Strengthens M/D/O PoSH implementation, ensuring legal compliance and sustained culture change"
+      }
+    ]
+  },
+  {
+    "competency_id": "FUN-042",
+    "type": "Functional",
+    "theme": "Citizen Centricity",
+    "theme_description": "Ensures citizens’ welfare and satisfaction by improving the standards of accountable and transparent governance, implementing result-oriented administration through innovative interventions based on design thinking, and enhancing citizen-centric decision-making. Implements Open Government policies and practices, which include collaborating and forming partnerships with informed citizens, leveraging social capital, and promoting participative public service delivery by ensuring freedom and ease of access to information. Establish an efficient framework that ensures the timely and transparent delivery of services by various government departments through awareness of various social, political, economic and technological developments that may impact citizens.",
+    "sub_theme": "Design thinking",
+    "sub_theme_description": "Demonstrates ability to decode intertwined administrative systems, understand dynamic and multifaceted situations, based on a solid foundation of study of need & demand of target population. Approaches problems with an empathic, “beginner’s mind”, openness, & optimism for creative and human-centered solutions. Follows a systematic and conscious approach to public service delivery that involves being open and impartial to the perspectives, grievances, and recommendations of service users and stakeholders, especially those from diverse social groups.",
+    "proficiency_levels": [
+      {
+        "level": "Operational",
+        "label": "Understands citizen needs and service touchpoints using basic design thinking tools"
+      },
+      {
+        "level": "Tactical",
+        "label": "Analyses citizen needs and administrative systems to design and refine inclusive service solutions"
+      },
+      {
+        "level": "Strategic",
+        "label": "Leads system-wide adoption of design thinking to reform policies and scale citizen-centric service models"
+      }
+    ]
+  },
+  {
+    "competency_id": "FUN-043",
+    "type": "Functional",
+    "theme": "Citizen Centricity",
+    "theme_description": "Ensures citizens’ welfare and satisfaction by improving the standards of accountable and transparent governance, implementing result-oriented administration through innovative interventions based on design thinking, and enhancing citizen-centric decision-making. Implements Open Government policies and practices, which include collaborating and forming partnerships with informed citizens, leveraging social capital, and promoting participative public service delivery by ensuring freedom and ease of access to information. Establish an efficient framework that ensures the timely and transparent delivery of services by various government departments through awareness of various social, political, economic and technological developments that may impact citizens.",
+    "sub_theme": "Citizen Partnering and Collaboration",
+    "sub_theme_description": "Demonstrates proficiency in mediating and engaging with various segments and groups of society to establish a common ground on issues and actions that benefit the entire community. Display “Good Governance” by aiming to enhance effectiveness, efficiency, and accountability through a consensus-based approach that emphasizes equity, inclusivity, and active participation, resulting in increased public satisfaction at lower costs.",
+    "proficiency_levels": [
+      {
+        "level": "Operational",
+        "label": "Applies foundational citizen engagement processes to ensure responsive, inclusive, and timely service delivery"
+      },
+      {
+        "level": "Tactical",
+        "label": "Implements structured citizen engagement processes to strengthen responsive and accountable service delivery"
+      },
+      {
+        "level": "Strategic",
+        "label": "Institutionalises citizen engagement systems to drive responsive, inclusive, and equitable public service delivery"
+      }
+    ]
+  },
+  {
+    "competency_id": "FUN-044",
+    "type": "Functional",
+    "theme": "Citizen Centricity",
+    "theme_description": "Ensures citizens’ welfare and satisfaction by improving the standards of accountable and transparent governance, implementing result-oriented administration through innovative interventions based on design thinking, and enhancing citizen-centric decision-making. Implements Open Government policies and practices, which include collaborating and forming partnerships with informed citizens, leveraging social capital, and promoting participative public service delivery by ensuring freedom and ease of access to information. Establish an efficient framework that ensures the timely and transparent delivery of services by various government departments through awareness of various social, political, economic and technological developments that may impact citizens.",
+    "sub_theme": "PEST (Political, Economic, Social, Technological) Consciousness",
+    "sub_theme_description": "Maintains awareness of the national political leadership's vision for the country, as well as its strategic communications and collaborations with various national and global entities revolving around the economic, social or technological domains, in relation to the Department/Ministry/Organisation.",
+    "proficiency_levels": [
+      {
+        "level": "Operational",
+        "label": "Recognises relevant PEST signals and uses them to anchor frontline service delivery"
+      },
+      {
+        "level": "Tactical",
+        "label": "Analyses PEST signals to adapt programmes, processes, and service delivery for improved citizen outcomes"
+      },
+      {
+        "level": "Strategic",
+        "label": "Embeds PEST analysis in policymaking to protect citizen services and drive adaptive, future-ready governance"
+      }
+    ]
+  },
+  {
+    "competency_id": "FUN-046",
+    "type": "Functional",
+    "theme": "Policy Architecture",
+    "theme_description": "Demonstrates the capacity to detect gaps and improvement needs in existing policies in order to translate policy concepts into policy formulation for addressing existing and emerging needs of the citizens. Conducts thorough study and analysis of best practices at State, National, or Global levels, takes advantage of modern innovation and the most recent advancements in the social, economic, technological, and legal spheres while creating & implementing policies. Focuses on monitoring the application of policy and evaluating its impact and efficacy using a variety of instruments for responsible, open, and sustainable governance.",
+    "sub_theme": "Policy Design/Amendment",
+    "sub_theme_description": "Demonstrates the ability to draft or amend government policies for delivering citizen-centric civil service basis feasibility analysis and risk assessment of various policy alternatives.",
+    "proficiency_levels": [
+      {
+        "level": "Operational",
+        "label": "Supports drafting and amendment of policies in line with prescribed regulations"
+      },
+      {
+        "level": "Tactical",
+        "label": "Designs and refines policy proposals using data, feasibility analysis, and stakeholder consultation"
+      },
+      {
+        "level": "Strategic",
+        "label": "Drives policy design by aligning national priorities into integrated, future-ready policy frameworks"
+      }
+    ]
+  },
+  {
+    "competency_id": "FUN-047",
+    "type": "Functional",
+    "theme": "Policy Architecture",
+    "theme_description": "Demonstrates the capacity to detect gaps and improvement needs in existing policies in order to translate policy concepts into policy formulation for addressing existing and emerging needs of the citizens. Conducts thorough study and analysis of best practices at State, National, or Global levels, takes advantage of modern innovation and the most recent advancements in the social, economic, technological, and legal spheres while creating & implementing policies. Focuses on monitoring the application of policy and evaluating its impact and efficacy using a variety of instruments for responsible, open, and sustainable governance.",
+    "sub_theme": "Policy Implementation",
+    "sub_theme_description": "Establishes and implements appropriate procedures to facilitate the implementation of central policies within the context of good governance, such as government programmes, schemes, missions, initiatives, etc.",
+    "proficiency_levels": [
+      {
+        "level": "Operational",
+        "label": "Reviews policies, compiles information, and prepares notes and trackers to support policy implementation"
+      },
+      {
+        "level": "Tactical",
+        "label": "Aligns teams and tools to policy objectives, monitors progress, and resolves field level implementation issues"
+      },
+      {
+        "level": "Strategic",
+        "label": "Designs implementation frameworks and oversees M/D/O delivery systems"
+      }
+    ]
+  },
+  {
+    "competency_id": "FUN-048",
+    "type": "Functional",
+    "theme": "Policy Architecture",
+    "theme_description": "Demonstrates the capacity to detect gaps and improvement needs in existing policies in order to translate policy concepts into policy formulation for addressing existing and emerging needs of the citizens. Conducts thorough study and analysis of best practices at State, National, or Global levels, takes advantage of modern innovation and the most recent advancements in the social, economic, technological, and legal spheres while creating & implementing policies. Focuses on monitoring the application of policy and evaluating its impact and efficacy using a variety of instruments for responsible, open, and sustainable governance.",
+    "sub_theme": "Policy Monitoring & Impact Assessment",
+    "sub_theme_description": "Creates and implements an effective and practical monitoring & evaluation framework for assessing the impact of policy implementation for maximising the impact and benefits for target stakeholders.",
+    "proficiency_levels": [
+      {
+        "level": "Operational",
+        "label": "Applies monitoring frameworks and data tools to support structured policy assessment"
+      },
+      {
+        "level": "Tactical",
+        "label": "Monitors and assesses policies, analyses outcomes, and recommends actionable improvements"
+      },
+      {
+        "level": "Strategic",
+        "label": "Leads strategic monitoring and impact systems to drive evidence-based policy reform and systemic improvement"
+      }
+    ]
+  },
+  {
+    "competency_id": "FUN-050",
+    "type": "Functional",
+    "theme": "Cabinet Note Preparation",
+    "theme_description": "Demonstrates comprehension of the significance of Cabinet Notes in policymaking, where the Cabinet and its committees make vital decisions that are crucial for efficient governance. This includes the ability to prepare Cabinet Notes that address various national and international matters affecting different areas of governance and present them to the Cabinet for consideration and decision-making. Therefore, a deep understanding of the AoB Rules, 1961 & ToB Rules, 1961 is essential, along with exceptional skills in preparing comprehensive Cabinet Notes that provide pertinent details and the right perspective.",
+    "sub_theme": "Cabinet Note Writing",
+    "sub_theme_description": "Ensures adherence to the procedures for preparing and submitting papers to be considered by the Cabinet, Cabinet Committees, and Committee of Secretaries (CoS) Notes, including the use of the prescribed format, inclusion of all necessary elements, and appropriate presentation of the Cabinet Note. Capable of grading the Notes and taking into account any special circumstances while being aware of common deficiencies.",
+    "proficiency_levels": [
+      {
+        "level": "Operational",
+        "label": "Prepares drafts of Cabinet and CoS Notes using prescribed standard frameworks to ensure procedural compliance"
+      },
+      {
+        "level": "Tactical",
+        "label": "Finalises Cabinet and CoS Notes by ensuring clarity, compliance, integration of inputs, and alignment with national priorities"
+      },
+      {
+        "level": "Strategic",
+        "label": "Leads Cabinet and CoS Notes by embedding quality assurance, digital transformation, citizen focused outcomes, and emerging data practices to enhance accountability and institutional learning"
+      }
+    ]
+  },
+  {
+    "competency_id": "FUN-052",
+    "type": "Functional",
+    "theme": "Government Program Formulation",
+    "theme_description": "Demonstrates knowledge and ability to identify, define, plan, develop, deliver & monitor government programs, schemes to realise the agreed benefits for the citizens within the prescribed timeframe. Oversees and coordinates a group of related projects within a government program to achieve specific benefits and maintain control. Demonstrates the ability in Program Selection, Program Planning, Program/ Project Transitions, Program Implementation, Strategic Program Management, Program Progress Monitoring and Review, Program Analysis, Program Financing, Program/Project Change Management, Benefits Management, Stakeholder Relationships and Collaboration.",
+    "sub_theme": "Scheme/Program Design",
+    "sub_theme_description": "Demonstrates the ability to design central government schemes and draft contours of programs (constituent projects), preparation of necessary contract documents for procurement of Materials, Equipment, and Services, indigenous & imported, in line with the policies and schemes for development of the intended stakeholders.",
+    "proficiency_levels": [
+      {
+        "level": "Operational",
+        "label": "Support structured scheme and procurement formulation"
+      },
+      {
+        "level": "Tactical",
+        "label": "Designs scheme frameworks and project contours aligned with policy and financial requirements"
+      },
+      {
+        "level": "Strategic",
+        "label": "Leads the strategic architecture of central government schemes to ensure scalable and policy-aligned program design"
+      }
+    ]
+  },
+  {
+    "competency_id": "FUN-053",
+    "type": "Functional",
+    "theme": "Government Program Formulation",
+    "theme_description": "Demonstrates knowledge and ability to identify, define, plan, develop, deliver & monitor government programs, schemes to realise the agreed benefits for the citizens within the prescribed timeframe. Oversees and coordinates a group of related projects within a government program to achieve specific benefits and maintain control. Demonstrates the ability in Program Selection, Program Planning, Program/ Project Transitions, Program Implementation, Strategic Program Management, Program Progress Monitoring and Review, Program Analysis, Program Financing, Program/Project Change Management, Benefits Management, Stakeholder Relationships and Collaboration.",
+    "sub_theme": "Feasibility and Risk Assessment",
+    "sub_theme_description": "Prepares and analyses feasibility study reports (FR), Detailed Project Reports (DPR), Environmental Impact Assessment (EIA) & Environmental Management Plan (EMP) Reports to identify potential risks (Governance Risks, Statutory Risks, Contractual Risks, Operational Risks, Financial Risks, Socio-economic Risks, Geopolitical Risks) and proposes suitable solutions for their mitigation.",
+    "proficiency_levels": [
+      {
+        "level": "Operational",
+        "label": "Understands the fundamentals of feasibility and risk assessment"
+      },
+      {
+        "level": "Tactical",
+        "label": "Analyses feasibility reports and assesses risks to recommend mitigation measures"
+      },
+      {
+        "level": "Strategic",
+        "label": "Leads structured feasibility and risk frameworks to strengthen program design"
+      }
+    ]
+  },
+  {
+    "competency_id": "FUN-054",
+    "type": "Functional",
+    "theme": "Government Program Formulation",
+    "theme_description": "Demonstrates knowledge and ability to identify, define, plan, develop, deliver & monitor government programs, schemes to realise the agreed benefits for the citizens within the prescribed timeframe. Oversees and coordinates a group of related projects within a government program to achieve specific benefits and maintain control. Demonstrates the ability in Program Selection, Program Planning, Program/ Project Transitions, Program Implementation, Strategic Program Management, Program Progress Monitoring and Review, Program Analysis, Program Financing, Program/Project Change Management, Benefits Management, Stakeholder Relationships and Collaboration.",
+    "sub_theme": "Implementation and Outreach",
+    "sub_theme_description": "Emphasises the use of appropriate methods for executing government programs to ensure the achievement of intended outcomes and impact on the target audience.",
+    "proficiency_levels": [
+      {
+        "level": "Operational",
+        "label": "Executes scheme activities and outreach tasks, ensuring beneficiaries can understand and access programmes"
+      },
+      {
+        "level": "Tactical",
+        "label": "Plans and coordinates programme implementation and outreach using monitoring data"
+      },
+      {
+        "level": "Strategic",
+        "label": "Designs implementation and outreach systems to deliver measurable citizen outcomes at scale"
+      }
+    ]
+  },
+  {
+    "competency_id": "FUN-055",
+    "type": "Functional",
+    "theme": "Project Management",
+    "theme_description": "Demonstrates ability to plan phases/stages and identify key activities, dependencies, and milestones for driving projects. Utilises & creates various standard frameworks/mechanisms to determine project mode, vendor selection & engagement, implementation, communication, knowledge transition, and risk mitigation. Evaluates progress against KPIs and ensures adherence to relevant guidelines & policies etc., for ensuring optimisation of resource utilisation, and driving realisation of intended benefit for the intended audience.",
+    "sub_theme": "Project Planning",
+    "sub_theme_description": "Define various aspects of project including creating proposal, defining objectives, deliverables, timelines, intended benefits, mode of project (PPP, BOOT etc.), costing, funding schedule, technology, and process for selecting consultants, procurement, advisors, stakeholder management framework, reporting, monitoring, assessment, knowledge management mechanism etc.",
+    "proficiency_levels": [
+      {
+        "level": "Operational",
+        "label": "Supports project planning by gathering and organising information under guidance"
+      },
+      {
+        "level": "Tactical",
+        "label": "Designs and manages detailed project plans for effective execution"
+      },
+      {
+        "level": "Strategic",
+        "label": "Leads strategic project planning by guiding teams and ensuring long-term organisational impact"
+      }
+    ]
+  },
+  {
+    "competency_id": "FUN-056",
+    "type": "Functional",
+    "theme": "Project Management",
+    "theme_description": "Demonstrates ability to plan phases/stages and identify key activities, dependencies, and milestones for driving projects. Utilises & creates various standard frameworks/mechanisms to determine project mode, vendor selection & engagement, implementation, communication, knowledge transition, and risk mitigation. Evaluates progress against KPIs and ensures adherence to relevant guidelines & policies etc., for ensuring optimisation of resource utilisation, and driving realisation of intended benefit for the intended audience.",
+    "sub_theme": "Project Implementation",
+    "sub_theme_description": "Driving implementation of projects by leveraging partnerships with public community/ private sector etc and ensuring adherence to the schedule, procedural Codes & Manuals relevant to the sector/project and any related policies, guidelines, and standards.",
+    "proficiency_levels": [
+      {
+        "level": "Operational",
+        "label": "Understands the project plan, and executes tasks in compliance with timelines, SOPs, and quality standards"
+      },
+      {
+        "level": "Tactical",
+        "label": "Leads and monitors project implementation, while managing risks and resources to ensure coordination delivery"
+      },
+      {
+        "level": "Strategic",
+        "label": "Aligns and optimises project implementation by shaping governance mechanisms and driving sector-wide convergence"
+      }
+    ]
+  },
+  {
+    "competency_id": "FUN-058",
+    "type": "Functional",
+    "theme": "Project Management",
+    "theme_description": "Demonstrates ability to plan phases/stages and identify key activities, dependencies, and milestones for driving projects. Utilises & creates various standard frameworks/mechanisms to determine project mode, vendor selection & engagement, implementation, communication, knowledge transition, and risk mitigation. Evaluates progress against KPIs and ensures adherence to relevant guidelines & policies etc., for ensuring optimisation of resource utilisation, and driving realisation of intended benefit for the intended audience.",
+    "sub_theme": "Project KPIs Monitoring",
+    "sub_theme_description": "Selects and implements the effective project monitoring tools suiting contract /project requirements. Establishes Key Performance Indicators (like Safety KPIs, Schedule KPIs, Cost KPIs, Procurement/ Contract KPI, Quality KPIs) and sets up reporting, monitoring, assessment mechanisms, dashboards, etc. until project completion, final validation, litigation, and financial close-outs. Ensures continuous monitoring of alignment with the baseline requirement of project design/ scope with respect to execution, and identifies the deviation. Applies technology for capturing real time information/data, performing data analytics.",
+    "proficiency_levels": [
+      {
+        "level": "Operational",
+        "label": "Collects, organises, and verifies project data against predefined KPIs to ensure accurate and timely reporting"
+      },
+      {
+        "level": "Tactical",
+        "label": "Defines and monitors project KPIs to ensure outcome-focused execution across the project lifecycle"
+      },
+      {
+        "level": "Strategic",
+        "label": "Leads KPI monitoring of projects to ensure accountability and outcome-focused execution"
+      }
+    ]
+  },
+  {
+    "competency_id": "FUN-060",
+    "type": "Functional",
+    "theme": "Public Procurement (GFR)",
+    "theme_description": "Demonstrates the ability to procure goods, services, or works using GeM (Government eMarketplace, National Public Procurement Portal) and other electronic portals, directly or through empanelled agencies, whether by way of purchase, lease, licence, or another method based on fundamental principles of transparency, fairness, competition, economy, efficiency, and accountability with respect to procurement. Ensures judicious use of public funds or any other source of funds (such as grants, loans, donations, or private investment), in accordance with GFR 2017, DFPR 1978 (DFPR Rule 21, 21(a), 21(b)), Manual of Procurement 2022 and their amendments, AOB, TOB, ToR.",
+    "sub_theme": "Procurement of Services/Goods/Works",
+    "sub_theme_description": "Demonstrates practical knowledge in regulatory and procedural compliance, procurement planning and execution and vendor management and risk management, by following the Rules & Regulations, Policies & Principles, and procedures in accordance with the \"Manual on Procurement of Goods 2017\" \"Manual for Procurement of Services, 2022\", General Financial Rules (GFR) 2017 and its amendments, and the DFPR (Indents, Contracts and Purchases for public service) guidelines.",
+    "proficiency_levels": [
+      {
+        "level": "Operational",
+        "label": "Understands foundational procurement processes and demonstrates working knowledge of e-procurement platforms in public purchasing"
+      },
+      {
+        "level": "Tactical",
+        "label": "Manages full procurement cycles using structured planning, evaluation, and compliance methods for efficient public service delivery"
+      },
+      {
+        "level": "Strategic",
+        "label": "Leads strategic procurement reform using regulatory frameworks, planning tools, and monitoring systems to institutionalise ethical procurement ecosystems."
+      }
+    ]
+  },
+  {
+    "competency_id": "FUN-061",
+    "type": "Functional",
+    "theme": "Public Procurement (GFR)",
+    "theme_description": "Demonstrates the ability to procure goods, services, or works using GeM (Government eMarketplace, National Public Procurement Portal) and other electronic portals, directly or through empanelled agencies, whether by way of purchase, lease, licence, or another method based on fundamental principles of transparency, fairness, competition, economy, efficiency, and accountability with respect to procurement. Ensures judicious use of public funds or any other source of funds (such as grants, loans, donations, or private investment), in accordance with GFR 2017, DFPR 1978 (DFPR Rule 21, 21(a), 21(b)), Manual of Procurement 2022 and their amendments, AOB, TOB, ToR.",
+    "sub_theme": "Contract Management",
+    "sub_theme_description": "Oversee and execute contractual agreements, characterised by practical expertise in various facets of the contracting process. Has the ability to conduct contract scoping, formulate well-defined Terms & Conditions, consider attached commercial nuances and legal aspects, and implement practices for risk mitigation in pursuit of the Public Good. Leverages domain knowledge to evaluate technical proficiency, skillfully negotiate contracts, and select the most suitable vendor, guided by principles such as transparency, fairness, competition, economy, efficiency, and accountability.",
+    "proficiency_levels": [
+      {
+        "level": "Operational",
+        "label": "Executes basic contracting tasks using standard templates and procedures to support compliant and transparent contract development"
+      },
+      {
+        "level": "Tactical",
+        "label": "Manages contractual processes through collaborative drafting, risk mitigation, and performance monitoring to ensure accountability and compliance"
+      },
+      {
+        "level": "Strategic",
+        "label": "Oversees contract scoping, negotiation oversight, and dispute resolution to ensure accountable execution and protection of public interest"
+      }
+    ]
+  },
+  {
+    "competency_id": "FUN-062",
+    "type": "Functional",
+    "theme": "Public Procurement (GFR)",
+    "theme_description": "Demonstrates the ability to procure goods, services, or works using GeM (Government eMarketplace, National Public Procurement Portal) and other electronic portals, directly or through empanelled agencies, whether by way of purchase, lease, licence, or another method based on fundamental principles of transparency, fairness, competition, economy, efficiency, and accountability with respect to procurement. Ensures judicious use of public funds or any other source of funds (such as grants, loans, donations, or private investment), in accordance with GFR 2017, DFPR 1978 (DFPR Rule 21, 21(a), 21(b)), Manual of Procurement 2022 and their amendments, AOB, TOB, ToR.",
+    "sub_theme": "Vendor/Consultant Management",
+    "sub_theme_description": "Demonstrates the ability to identify, evaluate, and manage vendors and consultants using established government systems (such as the Government e-Marketplace, GFR 2017, DFPR 1978, and the Manuals for Procurement of Works and Consultancy 2022). Ensures that procurement decisions reflect transparency, competition, economy, efficiency, and accountability, and that agreements are properly executed before commencement of services.",
+    "proficiency_levels": [
+      {
+        "level": "Operational",
+        "label": "Applies procurement rules and digital systems to support compliant and timely vendor selection"
+      },
+      {
+        "level": "Tactical",
+        "label": "Manages procurement cycles to ensure transparent, competitive, economical, and efficient vendor selection"
+      },
+      {
+        "level": "Strategic",
+        "label": "Institutionalises procurement governance systems that embed transparency, competition, economy, efficiency, and accountability across the M/D/O"
+      }
+    ]
+  },
+  {
+    "competency_id": "FUN-063",
+    "type": "Functional",
+    "theme": "Material Management",
+    "theme_description": "Demonstrates ability to maintain accurate records of goods and materials in the Ministry / Department / Organisation. Ensures proper custody of delivered items, conducts physical verification of assets, and identifies surplus and obsolete materials. Determines appropriate categories and modes of disposal for goods, such as auction or e-auction, in compliance with GFR, DFPR 1978, and Manual for Procurement of Goods 2017, to minimise losses due to various reasons.",
+    "sub_theme": "Maintenance and Disposal of Materials",
+    "sub_theme_description": "Oversees and conducts accurate physical verification of materials, valuation of material, analysis of losses etc., and accordingly take required actions for disposal of assets, as per laid down processes/ guidelines in GFR 2017, Manual of Procurement of Goods, 2017, DFPR etc.",
+    "proficiency_levels": [
+      {
+        "level": "Operational",
+        "label": "Applies procedures to maintain records, verify materials, and support compliant disposal"
+      },
+      {
+        "level": "Tactical",
+        "label": "Implements and monitors inventory and disposal processes to ensure operational readiness and financial compliance"
+      },
+      {
+        "level": "Strategic",
+        "label": "Strengthens M/D/O-wide systems for transparent, risk-controlled, and compliant material management and disposal"
+      }
+    ]
+  },
+  {
+    "competency_id": "FUN-064",
+    "type": "Functional",
+    "theme": "Material Management",
+    "theme_description": "Demonstrates ability to maintain accurate records of goods and materials in the Ministry / Department / Organisation. Ensures proper custody of delivered items, conducts physical verification of assets, and identifies surplus and obsolete materials. Determines appropriate categories and modes of disposal for goods, such as auction or e-auction, in compliance with GFR, DFPR 1978, and Manual for Procurement of Goods 2017, to minimise losses due to various reasons.",
+    "sub_theme": "Inventory Management",
+    "sub_theme_description": "Manages receipt, storage, issue, verification, and disposal of goods and materials in government offices as per approved financial and procurement rules. Ensures traceability, accountability, and safety of items through accurate registers, timely reconciliation, and adherence to General Financial Rules (GFR 2017), Delegation of Financial Powers Rules (DFPR 1978), Manual for Procurement of Goods (2017), and related departmental instructions.",
+    "proficiency_levels": [
+      {
+        "level": "Operational",
+        "label": "Maintains accurate and traceable storage records"
+      },
+      {
+        "level": "Tactical",
+        "label": "Operates multiple storage systems and enforces compliance"
+      },
+      {
+        "level": "Strategic",
+        "label": "Institutionalises inventory governance and assurance"
+      }
+    ]
+  },
+  {
+    "competency_id": "FUN-066",
+    "type": "Functional",
+    "theme": "Monitoring & Evaluation",
+    "theme_description": "Demonstrates the ability to develop monitoring and evaluation framework for tracking implementation of central government policies, schemes, and projects for the Department, Ministry or Organisation. Identifies right set of data, information, and relevant parameters to evaluate. Undertakes qualitative and quantitative assessments to determine the progress of a government policy, schemes and project towards pre-specified goals and objectives, and to highlight any alarming gap that may hamper the slated outcomes & outputs. Facilitates in making informed decisions and adjustments to improve policy effectiveness, ensuring policies lead to desired outcomes and benefits. Identify successes, challenges, and lessons learned to enhance future policymaking and implementation processes for the Government of India.",
+    "sub_theme": "Evaluation of Outcomes/Outputs",
+    "sub_theme_description": "Conducts assessment based on the data to identify strengths and shortfalls in intended outcomes and formulates remedial actions to correct deficiencies in delivery of schemes and government programs.",
+    "proficiency_levels": [
+      {
+        "level": "Operational",
+        "label": "Understands scheme indicators and performance data and flags strengths and shortfalls for review"
+      },
+      {
+        "level": "Tactical",
+        "label": "Conducts outcome and output assessments and recommends remedial actions to improve scheme delivery"
+      },
+      {
+        "level": "Strategic",
+        "label": "Institutionalises outcome and output assessments and ensures evidence drives policy, funding, and scheme redesign"
+      }
+    ]
+  },
+  {
+    "competency_id": "FUN-067",
+    "type": "Functional",
+    "theme": "Financial Management",
+    "theme_description": "Formulates budget and expenditure plans aligned to the objectives and budget allocation of the Ministry / Department / Organisation, in accordance with the rules and guidelines of the Ministry of Finance, while also forecasting future expenditures. Manages and monitors the Division/Department's budget, accounts & expenditure, while promoting financial prudence within the Department to enhance overall efficiency. Develops proficiency in handling PFMS (Public Financial Management System).",
+    "sub_theme": "Budget Formulation and Implementation",
+    "sub_theme_description": "Demonstrates the ability to forecast and prepare budget for Division / Department / Ministry / Organisation, for specified period, aligned to the guidelines and standards formulated by Ministry of Finance",
+    "proficiency_levels": [
+      {
+        "level": "Operational",
+        "label": "Prepares simple budgets and tracks expenses using PFMS to follow financial rules"
+      },
+      {
+        "level": "Tactical",
+        "label": "Develops multi-year forecasts, reallocates budgets based on changing priorities, and ensures efficient resource use"
+      },
+      {
+        "level": "Strategic",
+        "label": "Leads strategic financial planning by aligning budgets with national goals and innovative practices for long term fiscal sustainability"
+      }
+    ]
+  },
+  {
+    "competency_id": "FUN-068",
+    "type": "Functional",
+    "theme": "Financial Management",
+    "theme_description": "Formulates budget and expenditure plans aligned to the objectives and budget allocation of the Ministry / Department / Organisation, in accordance with the rules and guidelines of the Ministry of Finance, while also forecasting future expenditures. Manages and monitors the Division/Department's budget, accounts & expenditure, while promoting financial prudence within the Department to enhance overall efficiency. Develops proficiency in handling PFMS (Public Financial Management System).",
+    "sub_theme": "Expenditure Management",
+    "sub_theme_description": "Demonstrates the ability to adopt internal control mechanisms for efficient & effective financial operations as well as identify potential threats & opportunities for the Ministry / Department/ Organisation.",
+    "proficiency_levels": [
+      {
+        "level": "Operational",
+        "label": "Manages financial operations accurately and follows rules to support informed expenditure-related decisions"
+      },
+      {
+        "level": "Tactical",
+        "label": "Monitors and optimises expenditure, ensuring timely, accountable use of public funds"
+      },
+      {
+        "level": "Strategic",
+        "label": "Shapes expenditure strategy to ensure efficient and transparent financial management"
+      }
+    ]
+  },
+  {
+    "competency_id": "FUN-069",
+    "type": "Functional",
+    "theme": "Financial Management",
+    "theme_description": "Formulates budget and expenditure plans aligned to the objectives and budget allocation of the Ministry / Department / Organisation, in accordance with the rules and guidelines of the Ministry of Finance, while also forecasting future expenditures. Manages and monitors the Division/Department's budget, accounts & expenditure, while promoting financial prudence within the Department to enhance overall efficiency. Develops proficiency in handling PFMS (Public Financial Management System).",
+    "sub_theme": "Government Accounts",
+    "sub_theme_description": "Prepares and presents accounts as per Government Accounting Rules, 1990; Accounting Rules for Treasuries; and Account Code Volume III, and classifies transactions in Government Accounts. Ensures that budget heads adhere to the classification rules and other guidelines of GFR 2017 and its relevant amendments.",
+    "proficiency_levels": [
+      {
+        "level": "Operational",
+        "label": "Applies accounting rules to correctly classify, post and reconcile routine transactions"
+      },
+      {
+        "level": "Tactical",
+        "label": "Manages reconciliations, controls classification risks and supports budget discipline"
+      },
+      {
+        "level": "Strategic",
+        "label": "Leads annual account closure, institutionalises controls and advises on fiscal risk"
+      }
+    ]
+  },
+  {
+    "competency_id": "FUN-070",
+    "type": "Functional",
+    "theme": "Financial Management",
+    "theme_description": "Formulates budget and expenditure plans aligned to the objectives and budget allocation of the Ministry / Department / Organisation, in accordance with the rules and guidelines of the Ministry of Finance, while also forecasting future expenditures. Manages and monitors the Division/Department's budget, accounts & expenditure, while promoting financial prudence within the Department to enhance overall efficiency. Develops proficiency in handling PFMS (Public Financial Management System).",
+    "sub_theme": "PFMS Portal Management",
+    "sub_theme_description": "Utilises the Public Financial Management System (PFMS) to ensure transparent and accountable financial management within the Ministry/Department/Organisation. This includes enrolling and managing implementing agencies and recipients, mapping schemes, and maintaining accurate beneficiary records. Generates, interprets, and analyses PFMS reports, including operational, performance, fund flow, and daily transaction summaries, to track utilisation and identify discrepancies. Performs accounting functions, reconciles PFMS records with physical accounts, and maintains a complete audit trail for compliance with Ministry of Finance rules. Monitors expenses, programs, and grants to ensure funds are released, utilised, and reported in line with approved allocations and financial guidelines. Strength in this competency supports accurate forecasting, informed decision-making, and enhanced efficiency in public financial management.",
+    "proficiency_levels": [
+      {
+        "level": "Operational",
+        "label": "Accurately carries out basic PFMS operations"
+      },
+      {
+        "level": "Tactical",
+        "label": "Manages PFMS operations for assigned schemes, ensuring compliance and validating reports"
+      },
+      {
+        "level": "Strategic",
+        "label": "Leads strategic PFMS governance and forecasting to optimise fund utilisation and ensure financial compliance"
+      }
+    ]
+  },
+  {
+    "competency_id": "FUN-073",
+    "type": "Functional",
+    "theme": "Digital Fluency",
+    "theme_description": "Understands, identifies, implements, and utilises digital tools for accurate, speedy, and effective delivery for superior visualisation and decision-making at different levels of the organisation. Leverages digital technologies and platforms to collaborate effectively and efficiently with multiple stakeholders.",
+    "sub_theme": "Digital Service Design",
+    "sub_theme_description": "Develops and executes services with a citizen-centric approach, leveraging efficient and effective touchpoints, involving end-users in iterative development, assessment, and utilising digital technologies for periodic enhancements based on feedback and learning. Proactively manages change by mitigating risks associated with digital technology, navigating barriers in digital transformation, and ensuring sustainability within the government",
+    "proficiency_levels": [
+      {
+        "level": "Operational",
+        "label": "Understands digital service design concepts and applies approved tools and processes to support service delivery and digital initiatives."
+      },
+      {
+        "level": "Tactical",
+        "label": "Manages digital service implementation by coordinating teams, optimising processes, and using data to improve service outcomes."
+      },
+      {
+        "level": "Strategic",
+        "label": "Drives organisation-wide digital transformation by setting strategy, building capability, and embedding citizen-centric, inclusive digital services."
+      }
+    ]
+  },
+  {
+    "competency_id": "FUN-074",
+    "type": "Functional",
+    "theme": "Data Analytics",
+    "theme_description": "Collects, compiles, and assesses data, information, and knowledge resources in appropriate formats to enable interpretation and analysis for evidence-based decision-making. Scrutinises data and reports with a keen eye for detail, evaluates their accuracy, relevance, trends, and anomalies, extracts insights, and contextualises and critically analyses key points to develop data-driven strategic proposals and decisions while being mindful of prescribed rules & processes of data-handling within the government.",
+    "sub_theme": "Data Management",
+    "sub_theme_description": "Demonstrates the ability to collect and organize data, ensure data quality through data cleansing, protect data, store it, and transform it into usable and appropriate formats for warehousing, analyzing, and decision-making purposes.",
+    "proficiency_levels": [
+      {
+        "level": "Operational",
+        "label": "Collects, validates, organises, and presents data accurately using basic digital tools in line with organisational guidelines"
+      },
+      {
+        "level": "Tactical",
+        "label": "Designs and implements standardised data systems, analyses large datasets using advanced tools, and builds team capacity for insight-driven data use"
+      },
+      {
+        "level": "Strategic",
+        "label": "Institutionalises data governance and advanced analytics to drive data-led policymaking, national priorities, and accountable, future-ready public systems"
+      }
+    ]
+  },
+  {
+    "competency_id": "FUN-076",
+    "type": "Functional",
+    "theme": "Data Analytics",
+    "theme_description": "Collects, compiles, and assesses data, information, and knowledge resources in appropriate formats to enable interpretation and analysis for evidence-based decision-making. Scrutinises data and reports with a keen eye for detail, evaluates their accuracy, relevance, trends, and anomalies, extracts insights, and contextualises and critically analyses key points to develop data-driven strategic proposals and decisions while being mindful of prescribed rules & processes of data-handling within the government.",
+    "sub_theme": "Data-led Decision Making",
+    "sub_theme_description": "Utilises data analytics to extract insights, present compelling perspectives, and make strategic decisions for the efficient disposal of business, improved citizen experience, and streamlining operations to fulfill the Department's mandate.",
+    "proficiency_levels": [
+      {
+        "level": "Operational",
+        "label": "Collects and applies basic data insights to support routine decisions and communicate evidence-based observations within the M/D/O"
+      },
+      {
+        "level": "Tactical",
+        "label": "Analyses and interprets cross-departmental data to inform team-level decisions and recommend evidence-based improvements"
+      },
+      {
+        "level": "Strategic",
+        "label": "Leads and innovates data-driven strategies to shape policies and drive systemic reforms"
+      }
+    ]
+  },
+  {
+    "competency_id": "FUN-077",
+    "type": "Functional",
+    "theme": "Data Analytics",
+    "theme_description": "Collects, compiles, and assesses data, information, and knowledge resources in appropriate formats to enable interpretation and analysis for evidence-based decision-making. Scrutinises data and reports with a keen eye for detail, evaluates their accuracy, relevance, trends, and anomalies, extracts insights, and contextualises and critically analyses key points to develop data-driven strategic proposals and decisions while being mindful of prescribed rules & processes of data-handling within the government.",
+    "sub_theme": "Data Use and Governance",
+    "sub_theme_description": "Utilises data based on prescribed rules, processes, and role delegations. Drives implementation of rules, policies, and procedures around data management to ensure its accuracy, consistency, security, and legality through a focus on data protection, data privacy, data quality management, and regulatory compliance.",
+    "proficiency_levels": [
+      {
+        "level": "Operational",
+        "label": "Utilises foundational data handling skills to support secure, ethical, and accurate use of data in governance and service delivery"
+      },
+      {
+        "level": "Tactical",
+        "label": "Implements data governance policies, standards, and procedures to ensure secure, high-quality, and compliant data management"
+      },
+      {
+        "level": "Strategic",
+        "label": "Leads strategic data governance by institutionalising ethical data practices and enabling its scalable, responsible use across the M/D/O"
+      }
+    ]
+  },
+  {
+    "competency_id": "FUN-079",
+    "type": "Functional",
+    "theme": "Establishment and HR",
+    "theme_description": "Demonstrates expertise in managing various processes and procedures related to establishment and human resource management, including manpower planning for efficient and optimal staffing, as well as managing service and personnel matters such as holding DPCs, managing promotions, pay fixation, allowances, transfers, postings, deputations, resignations, retirement, pension papers, employee grievances, reservations for various cadres, grades, and groups of services, and preventing sexual harassment within the Department or Ministry. Recognizes the accountability to provide prompt, accurate, and concise responses to employee queries by referring comprehensively to various FRSR, related rules, acts, policies, executive orders, etc., to satisfy government employees and mitigate factors that could lead to grievances or administrative tribunal cases.",
+    "sub_theme": "Handling Establishment Matters",
+    "sub_theme_description": "Demonstrates excellence in handling establishment matters through understanding extent and applicability of relevant rules, regulations, policies, for various establishment matters like holding DPCs (Departmental Promotion Committee), promotions, pay – fixation, transfer, posting, deputation, resignation, retirement, pension papers, employee grievances etc. to mitigate any potential grievance/complaints rising due to dissatisfaction of employees/staff. Involves setting new benchmarks and incentivizing the exceptional performance of employees. Conducts timely assessment of current and future manpower needs, such as officers, supporting staff, and MTS, in the Ministry/Department. Manages employee grievances, providing prompt, clear, concise, and fact/rule-based responses to minimize administrative tribunal cases.",
+    "proficiency_levels": [
+      {
+        "level": "Operational",
+        "label": "Understands and follows prescribed establishment rules and procedures to support routine service, pay, and grievance-related matters accurately"
+      },
+      {
+        "level": "Tactical",
+        "label": "Interprets and applies service rules to independently manage establishment cases, staffing analyses, and grievance redressal with accuracy and compliance."
+      },
+      {
+        "level": "Strategic",
+        "label": "Leads strategic establishment and HR governance by resolving complex cases, strengthening systems, and institutionalising compliant, transparent, and inclusive practices."
+      }
+    ]
+  },
+  {
+    "competency_id": "FUN-081",
+    "type": "Functional",
+    "theme": "Establishment and HR",
+    "theme_description": "Demonstrates expertise in managing various processes and procedures related to establishment and human resource management, including manpower planning for efficient and optimal staffing, as well as managing service and personnel matters such as holding DPCs, managing promotions, pay fixation, allowances, transfers, postings, deputations, resignations, retirement, pension papers, employee grievances, reservations for various cadres, grades, and groups of services, and preventing sexual harassment within the Department or Ministry. Recognizes the accountability to provide prompt, accurate, and concise responses to employee queries by referring comprehensively to various FRSR, related rules, acts, policies, executive orders, etc., to satisfy government employees and mitigate factors that could lead to grievances or administrative tribunal cases.",
+    "sub_theme": "Handling Fundamental Rules/Supplementary Rules",
+    "sub_theme_description": "Demonstrates understanding of the extent and application of Fundamental Rules and Supplementary Rules, including their definitions, relevance, and relation to other rules, guiding principles, general conditions of service, joining procedures, transfers, pay, allowances, delegations, pension, and associated O.M.s.",
+    "proficiency_levels": [
+      {
+        "level": "Operational",
+        "label": "Understands foundational knowledge of FRs/SRs to process routine service matters accurately"
+      },
+      {
+        "level": "Tactical",
+        "label": "Interprets and applies FRs/SRs, resolving cases while guiding teams with reasoned advice"
+      },
+      {
+        "level": "Strategic",
+        "label": "Establishes the M/D/Os position on FRs/SRs and mitigates compliance risk across the M/D/O"
+      }
+    ]
+  },
+  {
+    "competency_id": "FUN-084",
+    "type": "Functional",
+    "theme": "Office Management",
+    "theme_description": "Administration and enforcement of compliance in accordance with the most recent \"Central Secretariat Manual of Office Procedures\" (CSMOP) to ensure that the Section, Division, or Department operates effectively and efficiently. Understands the issues and analyses precedents, facts, ruling position, etc., and records remarks and proposes actions for enabling the competent authority to review and make decisions for timely disposal. Concisely drafts written correspondence such as O.M., memos, notices, reports, letters, e-mails, etc., to be issued on approval of the competent authority. Articulates all kinds of communications towards administration, policy administration, implementation, advisory, reporting, proposal writing and any other documentation towards handling departmental matters with a focus on good governance.",
+    "sub_theme": "E-Office",
+    "sub_theme_description": "Utilises the digital workplace designed to enable simplified, responsive, effective, and transparent working of all government offices, promotes collaboration, and facilitates effective knowledge sharing in the ecosystem.",
+    "proficiency_levels": [
+      {
+        "level": "Operational",
+        "label": "Uses basic e-Office features to perform daily administrative tasks digitally"
+      },
+      {
+        "level": "Tactical",
+        "label": "Manages digital file workflows and ensures procedural integrity across the M/D/O by applying e-Office tools effectively"
+      },
+      {
+        "level": "Strategic",
+        "label": "Leads system level digital workflow improvements and institutionalises e-Office best practices across teams"
+      }
+    ]
+  },
+  {
+    "competency_id": "FUN-085",
+    "type": "Functional",
+    "theme": "Office Management",
+    "theme_description": "Administration and enforcement of compliance in accordance with the most recent \"Central Secretariat Manual of Office Procedures\" (CSMOP) to ensure that the Section, Division, or Department operates effectively and efficiently. Understands the issues and analyses precedents, facts, ruling position, etc., and records remarks and proposes actions for enabling the competent authority to review and make decisions for timely disposal. Concisely drafts written correspondence such as O.M., memos, notices, reports, letters, e-mails, etc., to be issued on approval of the competent authority. Articulates all kinds of communications towards administration, policy administration, implementation, advisory, reporting, proposal writing and any other documentation towards handling departmental matters with a focus on good governance.",
+    "sub_theme": "File/Dak Management",
+    "sub_theme_description": "Demonstrates practical knowledge and ability in receiving, recording, organising, and monitoring official correspondence and files (physical and electronic) by defining classification, numbering, indexing, retention, and disposal frameworks, and ensures compliance with statutory, institutional, and security protocols. Applies tools and methodologies to track pendency, prioritise urgent dak, reconcile manual and digital registers, and leverage technology for real-time monitoring, audit readiness, and to ensure traceability, accountability, and timely decision-making across the file lifecycle.",
+    "proficiency_levels": [
+      {
+        "level": "Operational",
+        "label": "Understands and applies basic procedures of file and correspondence management under supervision"
+      },
+      {
+        "level": "Tactical",
+        "label": "Manages files and correspondence independently"
+      },
+      {
+        "level": "Strategic",
+        "label": "Designs, monitors, and institutionalises record systems"
+      }
+    ]
+  },
+  {
+    "competency_id": "FUN-086",
+    "type": "Functional",
+    "theme": "Office Management",
+    "theme_description": "Administration and enforcement of compliance in accordance with the most recent \"Central Secretariat Manual of Office Procedures\" (CSMOP) to ensure that the Section, Division, or Department operates effectively and efficiently. Understands the issues and analyses precedents, facts, ruling position, etc., and records remarks and proposes actions for enabling the competent authority to review and make decisions for timely disposal. Concisely drafts written correspondence such as O.M., memos, notices, reports, letters, e-mails, etc., to be issued on approval of the competent authority. Articulates all kinds of communications towards administration, policy administration, implementation, advisory, reporting, proposal writing and any other documentation towards handling departmental matters with a focus on good governance.",
+    "sub_theme": "Office Procedures",
+    "sub_theme_description": "Demonstrates proficiency in office administration, file and record management, and adherence to standard operating procedures to ensure the seamless functioning of government departments. This includes managing official correspondence, workflow coordination, document processing and leveraging digital tools for efficiency, compliance and transparency in governance.",
+    "proficiency_levels": [
+      {
+        "level": "Operational",
+        "label": "Manages office records and workflows using standard procedures and digital tools"
+      },
+      {
+        "level": "Tactical",
+        "label": "Implements and improves office systems by applying SOPs and optimising workflows through digital platforms"
+      },
+      {
+        "level": "Strategic",
+        "label": "Champions scalable office systems by integrating emerging technologies and aligning procedures with national governance mandates"
+      }
+    ]
+  },
+  {
+    "competency_id": "FUN-087",
+    "type": "Functional",
+    "theme": "Office Management",
+    "theme_description": "Administration and enforcement of compliance in accordance with the most recent \"Central Secretariat Manual of Office Procedures\" (CSMOP) to ensure that the Section, Division, or Department operates effectively and efficiently. Understands the issues and analyses precedents, facts, ruling position, etc., and records remarks and proposes actions for enabling the competent authority to review and make decisions for timely disposal. Concisely drafts written correspondence such as O.M., memos, notices, reports, letters, e-mails, etc., to be issued on approval of the competent authority. Articulates all kinds of communications towards administration, policy administration, implementation, advisory, reporting, proposal writing and any other documentation towards handling departmental matters with a focus on good governance.",
+    "sub_theme": "Noting and Drafting of Official Communications",
+    "sub_theme_description": "Demonstrates the ability to concisely summarize the key aspects of a proposal or document under consideration, ensuring accuracy in facts, statistics, and relevant rulings. Conducts thorough fact-checking to support informed decision-making by government officers. Capable of drafting preliminary versions of official communications, incorporating necessary details for clarity and precision, to be finalized upon approval by the concerned officer.",
+    "proficiency_levels": [
+      {
+        "level": "Operational",
+        "label": "Drafts structured notes and communications to support timely decision making"
+      },
+      {
+        "level": "Tactical",
+        "label": "Develops and refines official documents through collaboration"
+      },
+      {
+        "level": "Strategic",
+        "label": "Oversees strategic communications to ensure institutional alignment"
+      }
+    ]
+  },
+  {
+    "competency_id": "FUN-088",
+    "type": "Functional",
+    "theme": "Office Management",
+    "theme_description": "Administration and enforcement of compliance in accordance with the most recent \"Central Secretariat Manual of Office Procedures\" (CSMOP) to ensure that the Section, Division, or Department operates effectively and efficiently. Understands the issues and analyses precedents, facts, ruling position, etc., and records remarks and proposes actions for enabling the competent authority to review and make decisions for timely disposal. Concisely drafts written correspondence such as O.M., memos, notices, reports, letters, e-mails, etc., to be issued on approval of the competent authority. Articulates all kinds of communications towards administration, policy administration, implementation, advisory, reporting, proposal writing and any other documentation towards handling departmental matters with a focus on good governance.",
+    "sub_theme": "Technical Proposal/Report Writing",
+    "sub_theme_description": "Creates reports/proposals clearly stating objective, need, supporting facts, various parameters, observations, conclusions, and recommendations depending on the requirement of the Department, Ministry or Mission, etc.",
+    "proficiency_levels": [
+      {
+        "level": "Operational",
+        "label": "Drafts structured proposals and reports aligned to M/D/O goals using standard formats and templates"
+      },
+      {
+        "level": "Tactical",
+        "label": "Coordinates report/proposal development by guiding teams and validating content"
+      },
+      {
+        "level": "Strategic",
+        "label": "Leads the creation of reports/proposals to influence policy, mobilise partnerships, and institutionalise knowledge sharing"
+      }
+    ]
+  },
+  {
+    "competency_id": "FUN-089",
+    "type": "Functional",
+    "theme": "Handling Parliamentary Matters",
+    "theme_description": "Ensures the smooth conduct of Parliamentary proceedings through preparation, maintenance, and management of systems and processes in the Division / Department related to handling parliamentary affairs. Anticipates key questions, supports in preparation of responses/briefs, and demonstrates agility in supplying information to key stakeholders.",
+    "sub_theme": "Submission of briefs, supply of information",
+    "sub_theme_description": "Demonstrates the ability to prepare responses to parliamentary questions for the Minister through suitable data analysis, coordination, and articulation of responses to parliamentary questions.",
+    "proficiency_levels": [
+      {
+        "level": "Operational",
+        "label": "Collects and organises information to support accurate and timely submission of parliamentary responses"
+      },
+      {
+        "level": "Tactical",
+        "label": "Analyses inputs and coordinates across units to draft clear, accurate, and compliant parliamentary responses"
+      },
+      {
+        "level": "Strategic",
+        "label": "Anticipates parliamentary information requirements and ensures high quality and timely submission of briefs and responses"
+      }
+    ]
+  },
+  {
+    "competency_id": "FUN-090",
+    "type": "Functional",
+    "theme": "Handling Parliamentary Matters",
+    "theme_description": "Ensures the smooth conduct of Parliamentary proceedings through preparation, maintenance, and management of systems and processes in the Division / Department related to handling parliamentary affairs. Anticipates key questions, supports in preparation of responses/briefs, and demonstrates agility in supplying information to key stakeholders.",
+    "sub_theme": "Maintaining Records of Parliamentary Matters",
+    "sub_theme_description": "Demonstrates the ability to ensure maintenance of departmental records of parliamentary proceedings for ready reference, including questions, discussions, notices, etc., in accordance with the established guidelines and standards.",
+    "proficiency_levels": [
+      {
+        "level": "Operational",
+        "label": "Understands parliamentary record requirements and maintains basic documentation and filing"
+      },
+      {
+        "level": "Tactical",
+        "label": "Compiles, verifies, and maintains parliamentary records"
+      },
+      {
+        "level": "Strategic",
+        "label": "Strengthens systems for parliamentary record management to ensure institutional continuity and strategic readiness"
+      }
+    ]
+  },
+  {
+    "competency_id": "FUN-091",
+    "type": "Functional",
+    "theme": "Handling RTI Matters",
+    "theme_description": "Demonstrates thorough knowledge of the RTI Act, 2005, and promptly & appropriately handles RTI responses. Drives proper maintenance of RTI records to ensure procedural compliance as per the established rules. Provides assistance to person(s) seeking information, displaying transparency, good governance, and accountability.",
+    "sub_theme": "RTI Responsiveness",
+    "sub_theme_description": "Understands the request/query/complaint/appeal and drafts responses by retrieving relevant information available in Section/Division and ensures timely disposal of the requests through PIO (Public Information Officer).",
+    "proficiency_levels": [
+      {
+        "level": "Operational",
+        "label": "Applies standard RTI processes and legal requirements to ensure compliant, timely, and transparent handling of information requests"
+      },
+      {
+        "level": "Tactical",
+        "label": "Analyses, organises, and coordinates RTI processes to ensure efficient and legally sound information disclosure across the M/D/O"
+      },
+      {
+        "level": "Strategic",
+        "label": "Leads and strengthens RTI responsiveness in delivering legally sound, timely information to the citizens"
+      }
+    ]
+  },
+  {
+    "competency_id": "FUN-093",
+    "type": "Functional",
+    "theme": "Grievance Redressal",
+    "theme_description": "Demonstrates the ability to address grievances promptly and efficiently while prioritiSing transparency and citizen-centricity. Utilizes the Centralised Public Grievance Redress and Monitoring System (CPGRAMS) to manage grievance redressal, ensuring access of the digital systems to all citizens, tracking their status, and obtaining resolutions in accordance with established guidelines and procedures. Measures the effectiveness and efficiency of the Department/Ministry's administration by analysing data and providing feedback for enhancing processes and procedures.",
+    "sub_theme": "CPGRAMS Portal Management",
+    "sub_theme_description": "Demonstrates the ability to monitor reports & dashboards of grievances received, pending for closure, and resolved cases as per the requirement of Ministries/Departments/Organizations for driving effective resolution for pending grievances.",
+    "proficiency_levels": [
+      {
+        "level": "Operational",
+        "label": "Executes CPGRAMS grievance registration processes accurately to ensure compliant and traceable grievance handling"
+      },
+      {
+        "level": "Tactical",
+        "label": "Improves grievance performance through data-driven monitoring and timely disposal standards"
+      },
+      {
+        "level": "Strategic",
+        "label": "Leads grievance performance by setting clear targets, and driving systemic improvements using CPGRAMS data"
+      }
+    ]
+  },
+  {
+    "competency_id": "FUN-095",
+    "type": "Functional",
+    "theme": "Vigilance Administration",
+    "theme_description": "Demonstrates a thorough understanding and practical application of administrative vigilance and disciplinary procedures, which serve as safeguards to ensure the proper implementation of government processes, policies, and rules, while identifying instances of breach by government employees who may abuse their authority or power of approval for personal gain. Facilitates in building a positive perception and image of the government and its policies, both within the government ecosystem, among citizens, and globally. Adheres to guidelines on implementation of strict anti-corruption measures, vigilant oversight, and a commitment to integrity in public service.",
+    "sub_theme": "Conduct Rules",
+    "sub_theme_description": "Understands the extent, applicability, intent, and content of the Central Civil Services (Conduct) Rules, 1964 (updated) for Government servants with a view to maintain integrity in public services by taking required action to promote its adherence.",
+    "proficiency_levels": [
+      {
+        "level": "Operational",
+        "label": "Follows prescribed conduct rules and compliance practices"
+      },
+      {
+        "level": "Tactical",
+        "label": "Strengthens adherence to conduct rules by identifying gaps, mentoring peers, and documenting violations"
+      },
+      {
+        "level": "Strategic",
+        "label": "Leads vigilance systems by embedding conduct rules into departmental workflows and driving transparency reforms"
+      }
+    ]
+  },
+  {
+    "competency_id": "FUN-096",
+    "type": "Functional",
+    "theme": "Vigilance Administration",
+    "theme_description": "Demonstrates a thorough understanding and practical application of administrative vigilance and disciplinary procedures, which serve as safeguards to ensure the proper implementation of government processes, policies, and rules, while identifying instances of breach by government employees who may abuse their authority or power of approval for personal gain. Facilitates in building a positive perception and image of the government and its policies, both within the government ecosystem, among citizens, and globally. Adheres to guidelines on implementation of strict anti-corruption measures, vigilant oversight, and a commitment to integrity in public service.",
+    "sub_theme": "Provisions on Suspension",
+    "sub_theme_description": "Displays understanding of extent, applicability and intent of the CCS (CCA)(Classification, control & Appeal) Rules, 1965- Central Civil Services, Group 'A', Group ‘B’, ‘C’, ’D’ (classification of service, posts), AIS (Discipline & Appeal) Rules, 1969 for officers from All India Services, Central Civil Services (Classification, Control and Appeal (CCA)) Rules, 1965 (rule 10); Fundamental Rules (FR) 53 & 54 (b), in relation to provisions and circumstances under which a Government servant may be placed under suspension in the Ministry/Department. Ensures timely payment of subsistence allowance in cases of suspension.",
+    "proficiency_levels": [
+      {
+        "level": "Operational",
+        "label": "Understands key suspension rules and assists in suspension documentation and subsistence allowance processing"
+      },
+      {
+        "level": "Tactical",
+        "label": "Manages suspension cases ensuring statutory compliance and accurate allowance administration"
+      },
+      {
+        "level": "Strategic",
+        "label": "Provides guidance and oversight to ensure lawful, proportionate, and defensible suspension administration"
+      }
+    ]
+  },
+  {
+    "competency_id": "FUN-097",
+    "type": "Functional",
+    "theme": "Vigilance Administration",
+    "theme_description": "Demonstrates a thorough understanding and practical application of administrative vigilance and disciplinary procedures, which serve as safeguards to ensure the proper implementation of government processes, policies, and rules, while identifying instances of breach by government employees who may abuse their authority or power of approval for personal gain. Facilitates in building a positive perception and image of the government and its policies, both within the government ecosystem, among citizens, and globally. Adheres to guidelines on implementation of strict anti-corruption measures, vigilant oversight, and a commitment to integrity in public service.",
+    "sub_theme": "Proposal preparation for disciplinary proceedings",
+    "sub_theme_description": "Demonstrates prudence and clarity in comprehending and implementing The Public Servants Enquiries Act and action on complaints forwarded by the Administrative Ministry/Department. Disposal of complaints of non-vigilance nature, Action on anonymous/pseudonymous complaints, procedure for dealing with complaints and engagement of retired officials to conduct Investigation and perform other vigilance functions",
+    "proficiency_levels": [
+      {
+        "level": "Operational",
+        "label": "Gathers and organises initial facts and evidence to support the commencement of disciplinary proceedings"
+      },
+      {
+        "level": "Tactical",
+        "label": "Drafts charge sheets and disciplinary proposals, ensuring admissibility and due process"
+      },
+      {
+        "level": "Strategic",
+        "label": "Oversees the disciplinary processes, evaluates inquiry reports, and ensures a fair, evidence-based, and legally defensible conclusion"
+      }
+    ]
+  },
+  {
+    "competency_id": "FUN-098",
+    "type": "Functional",
+    "theme": "Vigilance Administration",
+    "theme_description": "Demonstrates a thorough understanding and practical application of administrative vigilance and disciplinary procedures, which serve as safeguards to ensure the proper implementation of government processes, policies, and rules, while identifying instances of breach by government employees who may abuse their authority or power of approval for personal gain. Facilitates in building a positive perception and image of the government and its policies, both within the government ecosystem, among citizens, and globally. Adheres to guidelines on implementation of strict anti-corruption measures, vigilant oversight, and a commitment to integrity in public service.",
+    "sub_theme": "Handling Prosecution Cases",
+    "sub_theme_description": "Demonstrates ability and understanding to support investigation processes aptly and promptly, handling procedures for prosecution cases, and imposing minor and major penalties.",
+    "proficiency_levels": [
+      {
+        "level": "Operational",
+        "label": "Understands and applies rules and procedures relevant to investigations and prosecution case support"
+      },
+      {
+        "level": "Tactical",
+        "label": "Implements investigations and disciplinary processes with accuracy, compliance, and timeliness"
+      },
+      {
+        "level": "Strategic",
+        "label": "Strengthens vigilance and disciplinary systems to ensure timely, fair, and accountable case handling"
+      }
+    ]
+  },
+  {
+    "competency_id": "FUN-099",
+    "type": "Functional",
+    "theme": "Vigilance Administration",
+    "theme_description": "Demonstrates a thorough understanding and practical application of administrative vigilance and disciplinary procedures, which serve as safeguards to ensure the proper implementation of government processes, policies, and rules, while identifying instances of breach by government employees who may abuse their authority or power of approval for personal gain. Facilitates in building a positive perception and image of the government and its policies, both within the government ecosystem, among citizens, and globally. Adheres to guidelines on implementation of strict anti-corruption measures, vigilant oversight, and a commitment to integrity in public service.",
+    "sub_theme": "Preventive Vigilance",
+    "sub_theme_description": "Fosters an environment of transparency, integrity, and accountability and identify acts of unethical behavioural, fraud and corruption in the ecosystem. Adopts suitable checks and balances to improve systems / procedures to eliminate corruption / discretion in the processes and procedures. Assists in systemic improvements and setting up of effective systems for curbing any potential avenues for corruption in the Ministry / Department / Organisation.",
+    "proficiency_levels": [
+      {
+        "level": "Operational",
+        "label": "Applies prescribed preventive vigilance checks in routine administrative processes"
+      },
+      {
+        "level": "Tactical",
+        "label": "Analyses processes and strengthens vigilance controls to prevent irregularities"
+      },
+      {
+        "level": "Strategic",
+        "label": "Designs and institutionalises preventive vigilance frameworks to minimise corruption risks across the M/D/O"
+      }
+    ]
+  },
+  {
+    "competency_id": "FUN-100",
+    "type": "Functional",
+    "theme": "Litigation Management",
+    "theme_description": "Provides support during legal proceedings pertaining to the Union of India by demonstrating legal know-how and engaging law officers or approved panel counsels for a range of court cases. Keeps track of and manages information and updates regarding multiple cases on the LIMBS (Legal Information Management and Briefing System: Centralized government legal case platform) portal to ensure timely and necessary actions.",
+    "sub_theme": "Legal Know-How",
+    "sub_theme_description": "Manages various legal tasks such as preparing and analysing paragraph-wise comments on writs, drafting counter replies or petitions, arranging files for consideration, identifying different case and petition types, working with advance notice of grievances, presenting a comprehensive legal position of the government in affidavit form, and briefing government counsel.",
+    "proficiency_levels": [
+      {
+        "level": "Operational",
+        "label": "Captures, organises and maintains legal case data to support routine case management"
+      },
+      {
+        "level": "Tactical",
+        "label": "Analyses legal issues and manages litigation processes to ensure timely and legally sound departmental responses"
+      },
+      {
+        "level": "Strategic",
+        "label": "Leads strategic litigation management and institutionalises legal risk governance across the M/D/O"
+      }
+    ]
+  },
+  {
+    "competency_id": "FUN-101",
+    "type": "Functional",
+    "theme": "Litigation Management",
+    "theme_description": "Provides support during legal proceedings pertaining to the Union of India by demonstrating legal know-how and engaging law officers or approved panel counsels for a range of court cases. Keeps track of and manages information and updates regarding multiple cases on the LIMBS (Legal Information Management and Briefing System: Centralized government legal case platform) portal to ensure timely and necessary actions.",
+    "sub_theme": "Court Case Management",
+    "sub_theme_description": "Oversees execution of legal procedures in accordance with the National Litigation Policy, as well as follows instructions and stay updated on legal matters from various competent authorities such as CAT, AMRD, AMRCD, and PIMS. Demonstrates understanding of pre-litigation procedures and is adept at effectively managing court cases, notices, stay orders, appellate court directions, and pending appeals, as well as ensuring diligent compliance with conditional implementation.",
+    "proficiency_levels": [
+      {
+        "level": "Operational",
+        "label": "Understands court procedures and supports case management"
+      },
+      {
+        "level": "Tactical",
+        "label": "Manages litigation matters and ensures timely compliance and filing"
+      },
+      {
+        "level": "Strategic",
+        "label": "Leads litigation strategy to reduce risk and pendency through systemic improvements"
+      }
+    ]
+  },
+  {
+    "competency_id": "FUN-102",
+    "type": "Functional",
+    "theme": "Litigation Management",
+    "theme_description": "Provides support during legal proceedings pertaining to the Union of India by demonstrating legal know-how and engaging law officers or approved panel counsels for a range of court cases. Keeps track of and manages information and updates regarding multiple cases on the LIMBS (Legal Information Management and Briefing System: Centralized government legal case platform) portal to ensure timely and necessary actions.",
+    "sub_theme": "LIMBS Portal Management",
+    "sub_theme_description": "Leverages LIMBS portal for registering on the platform, working as a local officer or nodal admin, entering new cases and editing existing ones, keeping track of hearing dates, and generating reports from MIS reports, dashboard, and other related details to effectively manage and monitor court cases on the portal.",
+    "proficiency_levels": [
+      {
+        "level": "Operational",
+        "label": "Registers and updates court case information on LIMBS accurately and within prescribed timelines"
+      },
+      {
+        "level": "Tactical",
+        "label": "Monitors LIMBS data quality and case progress to ensure timely updates and reliable litigation tracking"
+      },
+      {
+        "level": "Strategic",
+        "label": "Uses LIMBS analytics to oversee litigation portfolios, manage risk, and strengthen system governance"
+      }
+    ]
+  },
+  {
+    "competency_id": "FUN-103",
+    "type": "Functional",
+    "theme": "Information & Communication Management",
+    "theme_description": "Disseminates information through various media channels on behalf of the government to increase public awareness and advocacy of government policies and schemes, and addresses any misconceptions using a range of media vehicles such as government websites. Facilitates in generating positive media coverage, building relationships with key stakeholders, managing conflicts or criticisms, and improving public understanding of a Ministry/Department/Organisation and its objectives. Utilises social media to communicate official government policies and information to the public, with a focus on creating an informed citizenry through a people-centric communication approach.",
+    "sub_theme": "Dissemination of Information",
+    "sub_theme_description": "Disseminates strategic communications, crisis communication, information and awareness about government policies and schemes to the citizens of the country, making pertinent information publicly, freely, and directly accessible, in understandable and comprehensible form and format.",
+    "proficiency_levels": [
+      {
+        "level": "Operational",
+        "label": "Understands and translates government policies into verified, citizen-friendly communication"
+      },
+      {
+        "level": "Tactical",
+        "label": "Adapts multi-channel communication strategies to enhance clarity, inclusivity, and responsiveness"
+      },
+      {
+        "level": "Strategic",
+        "label": "Leads strategic communication frameworks that align policy messaging with national priorities"
+      }
+    ]
+  },
+  {
+    "competency_id": "FUN-104",
+    "type": "Functional",
+    "theme": "Information & Communication Management",
+    "theme_description": "Disseminates information through various media channels on behalf of the government to increase public awareness and advocacy of government policies and schemes, and addresses any misconceptions using a range of media vehicles such as government websites. Facilitates in generating positive media coverage, building relationships with key stakeholders, managing conflicts or criticisms, and improving public understanding of a Ministry/Department/Organisation and its objectives. Utilises social media to communicate official government policies and information to the public, with a focus on creating an informed citizenry through a people-centric communication approach.",
+    "sub_theme": "Handling Social Media",
+    "sub_theme_description": "Monitors and manages information and narratives on social media platforms, creates and publishes content, engages with and responds to the community of followers/customers, and conducts impact analysis and reporting.",
+    "proficiency_levels": [
+      {
+        "level": "Operational",
+        "label": "Executes compliant and citizen-friendly social media communications"
+      },
+      {
+        "level": "Tactical",
+        "label": "Manages multi-platform communication and moderation to improve citizen understanding and trust"
+      },
+      {
+        "level": "Strategic",
+        "label": "Leads M/D/O-wide social media strategy, governance, and crisis communication to strengthen public trust and service outcomes"
+      }
+    ]
+  },
+  {
+    "competency_id": "FUN-105",
+    "type": "Functional",
+    "theme": "Information & Communication Management",
+    "theme_description": "Disseminates information through various media channels on behalf of the government to increase public awareness and advocacy of government policies and schemes, and addresses any misconceptions using a range of media vehicles such as government websites. Facilitates in generating positive media coverage, building relationships with key stakeholders, managing conflicts or criticisms, and improving public understanding of a Ministry/Department/Organisation and its objectives. Utilises social media to communicate official government policies and information to the public, with a focus on creating an informed citizenry through a people-centric communication approach.",
+    "sub_theme": "Management of Information on Official Websites",
+    "sub_theme_description": "Ensures compliance with the ‘Guidelines for Indian Government Websites’ (GIGW) in maintaining official websites of all Central Government Ministries, Departments, Offices, and CPSEs. This includes keeping data and information up to date and providing user-friendly interfaces and transactions that meet the high expectations of citizens and customers regarding security, the privacy of personal data, and the accuracy of information.",
+    "proficiency_levels": [
+      {
+        "level": "Operational",
+        "label": "Maintains accurate, traceable, and GIGW-compliant content for website sections"
+      },
+      {
+        "level": "Tactical",
+        "label": "Coordinates multi-section website governance, compliance, and quality assurance"
+      },
+      {
+        "level": "Strategic",
+        "label": "Institutionalises M/D/O-web governance, risk management, and citizen-centric digital standards"
+      }
+    ]
+  },
+  {
+    "competency_id": "FUN-106",
+    "type": "Functional",
+    "theme": "Change Management",
+    "theme_description": "Adopts a structured approach for the effective initiation and implementation of multi-level, multi-faceted changes in the government ecosystem, with the aim of achieving a prescribed mandate as part of a Govt. program, scheme, project, or government initiative. Drives preparedness to unlearn and relearn, communicates the need for change to gain stakeholder acceptance and shared commitment, and drives change from the current state to the desired future state.",
+    "sub_theme": "Change Readiness",
+    "sub_theme_description": "Communicates effectively, enabling to comprehend the cause and purpose of proposed change, the vision of the change, and the anticipated impact (such as increased efficiency in processes, transparency, speed, accuracy, etc.) for the beneficiaries (including government employees, staff, citizens, etc.), in order to foster willingness and preparedness to adopt the change.",
+    "proficiency_levels": [
+      {
+        "level": "Operational",
+        "label": "Understands and identifies the stated purpose and rationale of proposed changes"
+      },
+      {
+        "level": "Tactical",
+        "label": "Facilitates team readiness and adoption of change by aligning processes and supporting transition to new ways of working"
+      },
+      {
+        "level": "Strategic",
+        "label": "Institutionalises change by building M/D/O-wide readiness, commitment, and sustained adoption"
+      }
+    ]
+  },
+  {
+    "competency_id": "FUN-107",
+    "type": "Functional",
+    "theme": "Change Management",
+    "theme_description": "Adopts a structured approach for the effective initiation and implementation of multi-level, multi-faceted changes in the government ecosystem, with the aim of achieving a prescribed mandate as part of a Govt. program, scheme, project, or government initiative. Drives preparedness to unlearn and relearn, communicates the need for change to gain stakeholder acceptance and shared commitment, and drives change from the current state to the desired future state.",
+    "sub_theme": "Change Implementation",
+    "sub_theme_description": "Demonstrates the ability to plan, execute, monitor, and institutionalise approved changes by translating policy, programme, or organisational decisions into sustained operational practices that achieve intended outcomes.",
+    "proficiency_levels": [
+      {
+        "level": "Operational",
+        "label": "Follows approved plans and guidance for change implementation in the M/D/O"
+      },
+      {
+        "level": "Tactical",
+        "label": "Translates approved decisions into coordinated execution and adoption across teams"
+      },
+      {
+        "level": "Strategic",
+        "label": "Builds change implementation as a repeatable, governed organisational capability"
+      }
+    ]
+  },
+  {
+    "competency_id": "FUN-108",
+    "type": "Functional",
+    "theme": "Change Management",
+    "theme_description": "Adopts a structured approach for the effective initiation and implementation of multi-level, multi-faceted changes in the government ecosystem, with the aim of achieving a prescribed mandate as part of a Govt. program, scheme, project, or government initiative. Drives preparedness to unlearn and relearn, communicates the need for change to gain stakeholder acceptance and shared commitment, and drives change from the current state to the desired future state.",
+    "sub_theme": "Change Impact Assessment",
+    "sub_theme_description": "Drives willingness and acceptance to change and manages resistance to change at the Ministerial, Departmental, or Organizational level. Identifies practical challenges associated with the said change, stays open to new opportunities, and maintains a proactive and positive mindset toward achieving goals.",
+    "proficiency_levels": [
+      {
+        "level": "Operational",
+        "label": "Understands the immediate impact of the change within their own role or unit"
+      },
+      {
+        "level": "Tactical",
+        "label": "Assesses team-level impact of change and recommends mitigation measures to ensure smooth transition"
+      },
+      {
+        "level": "Strategic",
+        "label": "Leads structured change impact assessment to sustain major reforms"
+      }
+    ]
+  },
+  {
+    "competency_id": "FUN-110",
+    "type": "Functional",
+    "theme": "Administration Matters",
+    "theme_description": "Demonstrates the ability to handle various administrative processes and procedures relating to Allowances & Reimbursement, Leave and Travel related matters. miscellaneous matters (Car, Residence, Personal Staff etc.), Official Language duty and ensures implementation across the Department / Ministry.",
+    "sub_theme": "Handling Allowances & Reimbursement",
+    "sub_theme_description": "Demonstrates understanding and ability to apply the relevant rules, regulations and guidelines for processing of Allowances and Reimbursements related matters in the Ministry, Department or Organisation.",
+    "proficiency_levels": [
+      {
+        "level": "Operational",
+        "label": "Processes routine allowance and reimbursement claims correctly by applying rules"
+      },
+      {
+        "level": "Tactical",
+        "label": "Coordinates and audits allowances and reimbursements processes to improve accuracy, turnaround time, and budget discipline"
+      },
+      {
+        "level": "Strategic",
+        "label": "Leads M/D/O wide policy and assurance systems to deliver transparent and compliant, allowances and reimbursements administration"
+      }
+    ]
+  },
+  {
+    "competency_id": "FUN-111",
+    "type": "Functional",
+    "theme": "Administration Matters",
+    "theme_description": "Demonstrates the ability to handle various administrative processes and procedures relating to Allowances & Reimbursement, Leave and Travel related matters. miscellaneous matters (Car, Residence, Personal Staff etc.), Official Language duty and ensures implementation across the Department / Ministry.",
+    "sub_theme": "Handling Leave and Travel",
+    "sub_theme_description": "Demonstrates understanding and ability to apply the relevant rules, regulations and guidelines for processing of Leave and Travel related matters in the Ministry, Department or Organization.",
+    "proficiency_levels": [
+      {
+        "level": "Operational",
+        "label": "Processes basic leave and travel requests by understanding and applying rules and procedures"
+      },
+      {
+        "level": "Tactical",
+        "label": "Reviews leave and travel requests while coordinating with sections for timely processing"
+      },
+      {
+        "level": "Strategic",
+        "label": "Oversees leave and travel cases and applies the rules to guide teams in making correct and timely decisions"
+      }
+    ]
+  },
+  {
+    "competency_id": "FUN-112",
+    "type": "Functional",
+    "theme": "Administration Matters",
+    "theme_description": "Demonstrates the ability to handle various administrative processes and procedures relating to Allowances & Reimbursement, Leave and Travel related matters. miscellaneous matters (Car, Residence, Personal Staff etc.), Official Language duty and ensures implementation across the Department / Ministry.",
+    "sub_theme": "Handling Miscellaneous Matters (Car, Residence, Personal Staff etc.)",
+    "sub_theme_description": "Demonstrates understanding and ability to apply diverse provisions, methodologies, and protocols for overseeing miscellaneous affairs including Telephone, Car, Residence, Personal Staff etc in the Ministry, Department or Organization.",
+    "proficiency_levels": [
+      {
+        "level": "Operational",
+        "label": "Processes routine telephone, car, residence, and personal staff cases accurately and flags exceptions for audit"
+      },
+      {
+        "level": "Tactical",
+        "label": "Analyses usage and compliance trends, and optimises resources to improve service quality and cost control"
+      },
+      {
+        "level": "Strategic",
+        "label": "Leads policy, digital controls, and compliance systems to deliver transparent and reliable administrative services"
+      }
+    ]
+  },
+  {
+    "competency_id": "FUN-113",
+    "type": "Functional",
+    "theme": "Administration Matters",
+    "theme_description": "Demonstrates the ability to handle various administrative processes and procedures relating to Allowances & Reimbursement, Leave and Travel related matters. miscellaneous matters (Car, Residence, Personal Staff etc.), Official Language duty and ensures implementation across the Department / Ministry.",
+    "sub_theme": "Implementing Official Language",
+    "sub_theme_description": "Carries out all official communication within central and state government offices in accordance with the Official Languages Act, 1963, in Hindi. Promotes the usage of the Official Language in the day-to-day work in the Ministry, Department or Organization.",
+    "proficiency_levels": [
+      {
+        "level": "Operational",
+        "label": "Implements routine bilingual communications and basic compliance with the Official Languages Act, 1963"
+      },
+      {
+        "level": "Tactical",
+        "label": "Plans and monitors official language implementation to improve Hindi usage and ensure compliance"
+      },
+      {
+        "level": "Strategic",
+        "label": "Sets direction, institutionalises compliance, and scales bilingual practices across the organisation"
+      }
+    ]
+  },
+  {
+    "competency_id": "FUN-115",
+    "type": "Functional",
+    "theme": "Digital Fluency",
+    "theme_description": "Understands, identifies, implements, and utilises digital tools for accurate, speedy, and effective delivery for superior visualisation and decision-making at different levels of the organisation. Leverages digital technologies and platforms to collaborate effectively and efficiently with multiple stakeholders.",
+    "sub_theme": "Digital Tools (MS office, Excel, PPT) & Platforms",
+    "sub_theme_description": "Utilises digital tools, systems, platforms, Microsoft Office, and software for promoting e-Governance both inter- and intra-departmentally within the Ministry's ecosystem. Demonstrates vigilance in safeguarding data and sensitive information from potential risks and unauthorised access, including inspection, modification, recording, disruption, or destruction by internal or external individuals/agencies.",
+    "proficiency_levels": [
+      {
+        "level": "Operational",
+        "label": "Engages with digital tools and follows standard protocols to complete tasks efficiently, maintain records, and support digital operations"
+      },
+      {
+        "level": "Tactical",
+        "label": "Drives digital enablement within the M/D/O by aligning tools, processes, and policies to advance e-Governance, collaboration, and data security"
+      },
+      {
+        "level": "Strategic",
+        "label": "Leads digital transformation by setting direction, shaping policy, and building capacity to adopt emerging digital tools and technologies"
+      }
+    ]
+  },
+  {
+    "competency_id": "FUN-116",
+    "type": "Functional",
+    "theme": "Policy Architecture",
+    "theme_description": "Demonstrates the capacity to detect gaps and improvement needs in existing policies in order to translate policy concepts into policy formulation for addressing existing and emerging needs of the citizens. Conducts thorough study and analysis of best practices at State, National, or Global levels, takes advantage of modern innovation and the most recent advancements in the social, economic, technological, and legal spheres while creating & implementing policies. Focuses on monitoring the application of policy and evaluating its impact and efficacy using a variety of instruments for responsible, open, and sustainable governance.",
+    "sub_theme": "Research and Need Analysis - Policy Architecture",
+    "sub_theme_description": "Demonstrates the ability to undertake primary and secondary research on a variety of aspects. Analyses and assesses a range of data points and reports produced by or obtained from a spectrum of sources (including but not limited to the subject of complaints, proposals by stakeholders, a range of appropriate indices, reports by governmental/non-governmental agencies, and gaps indicated in the course of interpretation and/or implementation).",
+    "proficiency_levels": [
+      {
+        "level": "Operational",
+        "label": "Collects and organises data from approved sources and applies basic analytical techniques to identify preliminary patterns aligned with research objectives"
+      },
+      {
+        "level": "Tactical",
+        "label": "Selects appropriate research methods, synthesises evidence, and evaluates findings to identify policy gaps, risks, and improvement opportunities"
+      },
+      {
+        "level": "Strategic",
+        "label": "Designs organisation-wide research strategies, assures research quality, and leverages evidence to shape policy frameworks and governance reforms"
+      }
+    ]
+  },
+  {
+    "competency_id": "FUN-117",
+    "type": "Functional",
+    "theme": "Public Procurement (GFR)",
+    "theme_description": "Demonstrates the ability to procure goods, services, or works using GeM (Government eMarketplace, National Public Procurement Portal) and other electronic portals, directly or through empanelled agencies, whether by way of purchase, lease, licence, or another method based on fundamental principles of transparency, fairness, competition, economy, efficiency, and accountability with respect to procurement. Ensures judicious use of public funds or any other source of funds (such as grants, loans, donations, or private investment), in accordance with GFR 2017, DFPR 1978 (DFPR Rule 21, 21(a), 21(b)), Manual of Procurement 2022 and their amendments, AOB, TOB, ToR.",
+    "sub_theme": "Procurement Management through GeM",
+    "sub_theme_description": "Demonstrates practical knowledge and ability in leveraging GeM (Government eMarketplace) as per Rule 149 of GFR, 2017, for procurement of common use goods and services and uses its tools of e-bidding, reverse e-auction, and demand aggregation, Guideline on Government eMarketplace (GeM) for all procurement needs of the Ministry/Department/Organisation.",
+    "proficiency_levels": [
+      {
+        "level": "Operational",
+        "label": "Understands foundational procurement processes and uses GeM for routine purchases in compliance with rules and guidelines"
+      },
+      {
+        "level": "Tactical",
+        "label": "Develops and executes structured GeM procurement plans to ensure transparency, value for money, and timely service delivery"
+      },
+      {
+        "level": "Strategic",
+        "label": "Shapes institutional procurement strategy and promotes digital-first, ethical, and transparent practices"
+      }
+    ]
+  },
+  {
+    "competency_id": "FUN-118",
+    "type": "Functional",
+    "theme": "Handling RTI Matters",
+    "theme_description": "Demonstrates thorough knowledge of the RTI Act, 2005, and promptly & appropriately handles RTI responses. Drives proper maintenance of RTI records to ensure procedural compliance as per the established rules. Provides assistance to person(s) seeking information, displaying transparency, good governance, and accountability.",
+    "sub_theme": "RTI Record Management",
+    "sub_theme_description": "Maintains departmental records of RTIs for effective and comprehensive public disclosure of information of the Department.",
+    "proficiency_levels": [
+      {
+        "level": "Operational",
+        "label": "Maintains RTI records to ensure accurate, organised, and legally compliant responses to information requests"
+      },
+      {
+        "level": "Tactical",
+        "label": "Manages RTI records and systems while guiding staff to ensure accessibility, compliance, and proactive disclosure of information"
+      },
+      {
+        "level": "Strategic",
+        "label": "Designs RTI record management strategies to strengthen systems, ensure compliance, and enable transparent public disclosure of departmental information"
+      }
+    ]
+  },
+  {
+    "competency_id": "FUN-119",
+    "type": "Functional",
+    "theme": "Data Analytics",
+    "theme_description": "Collects, compiles, and assesses data, information, and knowledge resources in appropriate formats to enable interpretation and analysis for evidence-based decision-making. Scrutinises data and reports with a keen eye for detail, evaluates their accuracy, relevance, trends, and anomalies, extracts insights, and contextualises and critically analyses key points to develop data-driven strategic proposals and decisions while being mindful of prescribed rules & processes of data-handling within the government.",
+    "sub_theme": "Data Analysis and Visualisation",
+    "sub_theme_description": "Represents data through the use of common graphics, such as charts, plots, infographics, and even animations for effective decision making through identification of patterns, trends, and correlations.",
+    "proficiency_levels": [
+      {
+        "level": "Operational",
+        "label": "Understands foundational data analysis and visualisation principles"
+      },
+      {
+        "level": "Tactical",
+        "label": "Applies data analysis and visualisation techniques to develop accurate, interpretable, and relevant outputs for monitoring and decision making"
+      },
+      {
+        "level": "Strategic",
+        "label": "Drives the institutionalisation of data analysis and visualisation practices to generate strategic insights, inform policy, and build technical capacity across the M/D/O"
+      }
+    ]
+  },
+  {
+    "competency_id": "FUN-120",
+    "type": "Functional",
+    "theme": "Digital Fluency",
+    "theme_description": "Understands, identifies, implements, and utilises digital tools for accurate, speedy, and effective delivery for superior visualisation and decision-making at different levels of the organisation. Leverages digital technologies and platforms to collaborate effectively and efficiently with multiple stakeholders.",
+    "sub_theme": "AI/ML Tools",
+    "sub_theme_description": "Applies AI/ML tools to enhance efficiency and effectiveness of government systems while ensuring citizen-centric service delivery. Evaluates data readiness, deploys context-appropriate AI/ML solutions, and mitigates risks, biases, and security threats by following ethical, legal, and organisational protocols. Drives organisational adoption and transformation by mentoring personnel, fostering innovation, and collaborating with ecosystem stakeholders to co-create and scale responsible AI/ML solutions.",
+    "proficiency_levels": [
+      {
+        "level": "Operational",
+        "label": "Understands basic uses, risks, and ethics of AI/ML in governance"
+      },
+      {
+        "level": "Tactical",
+        "label": "Applies AI/ML knowledge to assess data readiness, deploy context-specific solutions, and build team capacity for responsible use within the M/D/O"
+      },
+      {
+        "level": "Strategic",
+        "label": "Guides the adoption AI systems in the M/D/O by ensuring appropriate safeguards, skills, and ethical standards are in place"
+      }
+    ]
+  },
+  {
+    "competency_id": "FUN-121",
+    "type": "Functional",
+    "theme": "Cabinet Note Preparation",
+    "theme_description": "Demonstrates comprehension of the significance of Cabinet Notes in policymaking, where the Cabinet and its committees make vital decisions that are crucial for efficient governance. This includes the ability to prepare Cabinet Notes that address various national and international matters affecting different areas of governance and present them to the Cabinet for consideration and decision-making. Therefore, a deep understanding of the AoB Rules, 1961 & ToB Rules, 1961 is essential, along with exceptional skills in preparing comprehensive Cabinet Notes that provide pertinent details and the right perspective.",
+    "sub_theme": "Rule of Business (AoB/ToB)",
+    "sub_theme_description": "Demonstrates a high level of proficiency in conducting the official business of the Government of India, as specified in the first schedule of the Allocation of Business Rules (AoB), 1961, which define the Ministries, Departments, Secretariats, and offices where the government business is transacted and outline the distribution of subjects among various departments, as specified in the second schedule of the rules. Demonstrates comprehension of the Transaction of Business (ToB) Rules, 1961, which outline the procedures for handling the business of the Government of India, including consultation with other departments and submission of cases to the Prime Minister, Cabinet and its Committees, and the President.",
+    "proficiency_levels": [
+      {
+        "level": "Operational",
+        "label": "Applies AoB and ToB Rules to process routine cases and support Cabinet submissions"
+      },
+      {
+        "level": "Tactical",
+        "label": "Applies AoB/ToB Rules to manage inter-ministerial coordination and ensure procedurally sound Cabinet submissions"
+      },
+      {
+        "level": "Strategic",
+        "label": "Guides AoB/ToB application and strengthens institutional practices for complex Cabinet processes"
+      }
+    ]
+  },
+  {
+    "competency_id": "FUN-122",
+    "type": "Functional",
+    "theme": "Establishment and HR",
+    "theme_description": "Demonstrates expertise in managing various processes and procedures related to establishment and human resource management, including manpower planning for efficient and optimal staffing, as well as managing service and personnel matters such as holding DPCs, managing promotions, pay fixation, allowances, transfers, postings, deputations, resignations, retirement, pension papers, employee grievances, reservations for various cadres, grades, and groups of services, and preventing sexual harassment within the Department or Ministry. Recognizes the accountability to provide prompt, accurate, and concise responses to employee queries by referring comprehensively to various FRSR, related rules, acts, policies, executive orders, etc., to satisfy government employees and mitigate factors that could lead to grievances or administrative tribunal cases.",
+    "sub_theme": "Handling Matters of Reservation",
+    "sub_theme_description": "Demonstrates the ability to administer and implement reservation policies in appointments, promotions, and service matters in accordance with government instructions. This includes preparing and maintaining accurate reservation rosters, applying prescribed relaxations or concessions in age, fees, and qualifications, and ensuring representation for Scheduled Castes (SCs), Scheduled Tribes (STs), Other Backward Classes (OBCs), Persons with Disabilities (PwDs), Ex-servicemen (including re-employment in central services and posts), and Economically Weaker Sections (EWSs). The competency also covers interpreting amendments, circulars, and judicial pronouncements related to reservations, updating procedures accordingly, and ensuring compliance across cadres, services, and posts within the Ministry/Department/Organization. It emphasizes fairness, transparency, and accountability in managing reservations, while addressing shortfalls, backlogs, and audit requirements through timely monitoring and reporting.",
+    "proficiency_levels": [
+      {
+        "level": "Operational",
+        "label": "Applies foundational understanding of reservation rules to routine HR cases under supervision"
+      },
+      {
+        "level": "Tactical",
+        "label": "Manages and monitors reservation compliance across cadres through analysis, coordination, and corrective action"
+      },
+      {
+        "level": "Strategic",
+        "label": "Provides institutional oversight and guidance on reservation governance and compliance"
+      }
+    ]
+  },
+  {
+    "competency_id": "FUN-123",
+    "type": "Functional",
+    "theme": "Establishment and HR",
+    "theme_description": "Demonstrates expertise in managing various processes and procedures related to establishment and human resource management, including manpower planning for efficient and optimal staffing, as well as managing service and personnel matters such as holding DPCs, managing promotions, pay fixation, allowances, transfers, postings, deputations, resignations, retirement, pension papers, employee grievances, reservations for various cadres, grades, and groups of services, and preventing sexual harassment within the Department or Ministry. Recognizes the accountability to provide prompt, accurate, and concise responses to employee queries by referring comprehensively to various FRSR, related rules, acts, policies, executive orders, etc., to satisfy government employees and mitigate factors that could lead to grievances or administrative tribunal cases.",
+    "sub_theme": "Handling Performance Appraisal",
+    "sub_theme_description": "Demonstrates understanding of the Annual Performance Assessment Report process for each Government employee, enabling evaluation of performance and determining their suitability for career progression opportunities such as confirmation, promotion, selection for deputation, or selection for foreign assignments.",
+    "proficiency_levels": [
+      {
+        "level": "Operational",
+        "label": "Understands the APAR process and accurately routes and records appraisal documents"
+      },
+      {
+        "level": "Tactical",
+        "label": "Validates and analyses APAR records to support fair and timely performance decisions"
+      },
+      {
+        "level": "Strategic",
+        "label": "Oversees the APAR framework to ensure consistency, fairness, and legal defensibility"
+      }
+    ]
+  },
+  {
+    "competency_id": "FUN-124",
+    "type": "Functional",
+    "theme": "Government Program Formulation",
+    "theme_description": "Demonstrates knowledge and ability to identify, define, plan, develop, deliver & monitor government programs, schemes to realise the agreed benefits for the citizens within the prescribed timeframe. Oversees and coordinates a group of related projects within a government program to achieve specific benefits and maintain control. Demonstrates the ability in Program Selection, Program Planning, Program/ Project Transitions, Program Implementation, Strategic Program Management, Program Progress Monitoring and Review, Program Analysis, Program Financing, Program/Project Change Management, Benefits Management, Stakeholder Relationships and Collaboration.",
+    "sub_theme": "Research and Need Analysis - Government Program Formulation",
+    "sub_theme_description": "Analyses relevant reports, surveys, papers, etc. to identify the needs, the beneficiaries, returns or strategic benefits to the citizens and the Nation at large (both in tangible and intangible terms).",
+    "proficiency_levels": [
+      {
+        "level": "Operational",
+        "label": "Gathers and organises research to identify citizen needs and program objectives"
+      },
+      {
+        "level": "Tactical",
+        "label": "Synthesises data to develop evidence-based and risk-informed program proposals"
+      },
+      {
+        "level": "Strategic",
+        "label": "Leads research and needs assessments to guide program decisions and maximise citizen impact"
+      }
+    ]
+  },
+  {
+    "competency_id": "FUN-125",
+    "type": "Functional",
+    "theme": "Project Management",
+    "theme_description": "Demonstrates ability to plan phases/stages and identify key activities, dependencies, and milestones for driving projects. Utilises & creates various standard frameworks/mechanisms to determine project mode, vendor selection & engagement, implementation, communication, knowledge transition, and risk mitigation. Evaluates progress against KPIs and ensures adherence to relevant guidelines & policies etc., for ensuring optimisation of resource utilisation, and driving realisation of intended benefit for the intended audience.",
+    "sub_theme": "Project Evaluation",
+    "sub_theme_description": "Evaluate project progress with respect to contractual obligations and various parameters like, governance, communication management, standardisation, Crisis Management Plan, Project Risk Management, Integrated Risk Management, HSE Bottom Line, DCMA 14-point Schedule Health Check, fund release & utilisation, Sustainability (like, Biodegradable, Carbon footprint, Dematerialisation, Design for the Environment (DfE), Environmentally preferable products (EPP), Life-Cycle Assessment (LCA) etc.), Governance Risks, Statutory Risks, Contractual Risks, Operational Risks, Social Bottom Line etc. Proposes necessary adjustments to implementation timelines, utilising efficient and economical methods to accelerate progress.",
+    "proficiency_levels": [
+      {
+        "level": "Operational",
+        "label": "Interprets compliance status of schemes/programs across parameters using prescribed evaluatory frameworks"
+      },
+      {
+        "level": "Tactical",
+        "label": "Synthesises evaluation findings to identify bottlenecks and recommend evidence-based corrections"
+      },
+      {
+        "level": "Strategic",
+        "label": "Institutionalises evaluation standards and assurance mechanisms to strengthen governance"
+      }
+    ]
+  },
+  {
+    "competency_id": "FUN-126",
+    "type": "Functional",
+    "theme": "Citizen Centricity",
+    "theme_description": "Ensures citizens’ welfare and satisfaction by improving the standards of accountable and transparent governance, implementing result-oriented administration through innovative interventions based on design thinking, and enhancing citizen-centric decision-making. Implements Open Government policies and practices, which include collaborating and forming partnerships with informed citizens, leveraging social capital, and promoting participative public service delivery by ensuring freedom and ease of access to information. Establish an efficient framework that ensures the timely and transparent delivery of services by various government departments through awareness of various social, political, economic and technological developments that may impact citizens.",
+    "sub_theme": "Public Grievance Handling",
+    "sub_theme_description": "Demonstrates the capability to receive, assess, process, track, escalate and resolve grievances raised by citizens or stakeholders, using structured mechanisms in accordance with the Centralised Public Grievance Redress And Monitoring System (CPGRAMS) and institutional frameworks. Ensures that every grievance is handled fairly, transparently and efficiently, thus strengthening accountability, enhancing service delivery and maintaining public trust.",
+    "proficiency_levels": [
+      {
+        "level": "Operational",
+        "label": "Understands grievance processes and supports resolution"
+      },
+      {
+        "level": "Tactical",
+        "label": "Analyses and resolves grievances through structured processes"
+      },
+      {
+        "level": "Strategic",
+        "label": "Strengthens institutional grievance systems to enhance accountability, transparency, and citizen trust"
+      }
+    ]
+  },
+  {
+    "competency_id": "FUN-127",
+    "type": "Functional",
+    "theme": "Monitoring & Evaluation",
+    "theme_description": "Demonstrates the ability to develop monitoring and evaluation framework for tracking implementation of central government policies, schemes, and projects for the Department, Ministry or Organisation. Identifies right set of data, information, and relevant parameters to evaluate. Undertakes qualitative and quantitative assessments to determine the progress of a government policy, schemes and project towards pre-specified goals and objectives, and to highlight any alarming gap that may hamper the slated outcomes & outputs. Facilitates in making informed decisions and adjustments to improve policy effectiveness, ensuring policies lead to desired outcomes and benefits. Identify successes, challenges, and lessons learned to enhance future policymaking and implementation processes for the Government of India.",
+    "sub_theme": "Creation of M&E Frameworks",
+    "sub_theme_description": "Demonstrates the ability to collect and collate data based on defined M&E framework and conduct analysis to outline the performance of government programs in accordance with defined objectives and outcomes.",
+    "proficiency_levels": [
+      {
+        "level": "Operational",
+        "label": "Collects and collates program data using prescribed M&E tools and procedures"
+      },
+      {
+        "level": "Tactical",
+        "label": "Applies M&E frameworks to analyse performance, validate data, and support program improvements"
+      },
+      {
+        "level": "Strategic",
+        "label": "Leads evidence-based program monitoring by integrating M&E across schemes and strengthening people, processes, and systems"
+      }
+    ]
+  }
+]

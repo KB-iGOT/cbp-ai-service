@@ -45,10 +45,10 @@ Output: outcome CSV next to the input (or --out) -- one row per content_id with 
         row listing the content_ids removed from it (that detail goes to the log file only).
 
 Usage:
-    python scripts/replace_scorm_courses.py --csv retired.csv                     # dry run
-    python scripts/replace_scorm_courses.py --csv retired.csv --execute
-    python scripts/replace_scorm_courses.py --csv retired.csv --include-approval-items --execute
-    python scripts/replace_scorm_courses.py --csv retired.csv --include-approval-items \
+    python scripts/remove_retired_courses.py --csv retired.csv                     # dry run
+    python scripts/remove_retired_courses.py --csv retired.csv --execute
+    python scripts/remove_retired_courses.py --csv retired.csv --include-approval-items --execute
+    python scripts/remove_retired_courses.py --csv retired.csv --include-approval-items \
         --approval-statuses pending,approved
 
 Requires DATABASE_URL (environment or .env in the cwd / repo root), e.g.
